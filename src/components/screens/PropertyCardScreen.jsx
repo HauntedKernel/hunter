@@ -1,6 +1,252 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 const PropertyCardScreen = ({ onNavigate }) => {
+  const [currentPropertyIndex, setCurrentPropertyIndex] = useState(0)
+  const [propertySelections, setPropertySelections] = useState({})
+  const [touchStart, setTouchStart] = useState(null)
+  const [touchEnd, setTouchEnd] = useState(null)
+  
+  // Mock properties data with color coding
+  const properties = [
+    {
+      id: 1,
+      address: '456 Oak Avenue',
+      city: 'Dallas, TX',
+      price: 489900,
+      beds: 4,
+      baths: 3,
+      sqft: 2380,
+      yearBuilt: 2018,
+      status: 'SOLD',
+      daysOnMarket: 18,
+      pricePerSqft: 206,
+      match: 92,
+      gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      thumbnail: 'linear-gradient(45deg, #667eea, #764ba2)',
+      lifestyleAnalysis: {
+        tags: ['Entertainment Focused', 'Open Concept', 'Outdoor Living', 'Gourmet Kitchen', 'Master Suite'],
+        description: 'Perfect for entertaining with open concept living and gourmet kitchen flowing to covered patio. Master suite with spa-like bathroom and walk-in closet. Premium finishes throughout including hardwood floors and granite countertops.'
+      }
+    },
+    {
+      id: 2,
+      address: '789 Pine Street',
+      city: 'Dallas, TX',
+      price: 445000,
+      beds: 3,
+      baths: 2,
+      sqft: 2100,
+      yearBuilt: 2015,
+      status: 'ACTIVE',
+      daysOnMarket: 12,
+      pricePerSqft: 212,
+      match: 88,
+      gradient: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+      thumbnail: 'linear-gradient(45deg, #f093fb, #f5576c)',
+      lifestyleAnalysis: {
+        tags: ['Modern Design', 'Updated Kitchen', 'Garden View', 'Smart Home', 'Energy Efficient'],
+        description: 'Contemporary home with smart technology and energy-efficient features. Updated kitchen with quartz countertops and stainless appliances. Private garden with mature landscaping perfect for relaxation.'
+      }
+    },
+    {
+      id: 3,
+      address: '321 Maple Drive',
+      city: 'Dallas, TX',
+      price: 525000,
+      beds: 4,
+      baths: 4,
+      sqft: 2650,
+      yearBuilt: 2020,
+      status: 'PENDING',
+      daysOnMarket: 8,
+      pricePerSqft: 198,
+      match: 85,
+      gradient: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+      thumbnail: 'linear-gradient(45deg, #4facfe, #00f2fe)',
+      lifestyleAnalysis: {
+        tags: ['Luxury Living', 'Home Office', 'Walk-in Pantry', 'Multiple Living Areas', 'Premium Finishes'],
+        description: 'Luxury new construction featuring high-end finishes and flexible living spaces. Dedicated home office and multiple living areas. Walk-in pantry and premium appliances throughout.'
+      }
+    },
+    {
+      id: 4,
+      address: '654 Elm Court',
+      city: 'Dallas, TX',
+      price: 399000,
+      beds: 3,
+      baths: 2,
+      sqft: 1950,
+      yearBuilt: 2019,
+      status: 'ACTIVE',
+      daysOnMarket: 22,
+      pricePerSqft: 205,
+      match: 81,
+      gradient: 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
+      thumbnail: 'linear-gradient(45deg, #a8edea, #fed6e3)',
+      lifestyleAnalysis: {
+        tags: ['First-Time Buyer', 'Low Maintenance', 'Open Floor Plan', 'Two-Car Garage', 'Community Pool'],
+        description: 'Perfect starter home with open floor plan and low-maintenance living. Community amenities include pool and playground. Ideal for first-time buyers seeking modern convenience.'
+      }
+    },
+    {
+      id: 5,
+      address: '987 Cedar Lane',
+      city: 'Dallas, TX',
+      price: 575000,
+      beds: 5,
+      baths: 4,
+      sqft: 3100,
+      yearBuilt: 2017,
+      status: 'SOLD',
+      daysOnMarket: 14,
+      pricePerSqft: 185,
+      match: 79,
+      gradient: 'linear-gradient(135deg, #fad0c4 0%, #ffd1ff 100%)',
+      thumbnail: 'linear-gradient(45deg, #fad0c4, #ffd1ff)',
+      lifestyleAnalysis: {
+        tags: ['Family Home', 'Large Lot', 'Game Room', 'Study', 'Three-Car Garage'],
+        description: 'Spacious family home on large lot with room to grow. Dedicated study and game room for family activities. Three-car garage and extensive storage throughout.'
+      }
+    }
+  ]
+  
+  const currentProperty = properties[currentPropertyIndex]
+  
+  const handlePropertySelection = useCallback((action) => {
+    const propertyId = currentProperty.id
+    console.log('handlePropertySelection called:', { action, propertyId, currentPropertyIndex })
+    
+    setPropertySelections(prev => {
+      const newSelections = {
+        ...prev,
+        [propertyId]: action
+      }
+      console.log('Updated selections:', newSelections)
+      return newSelections
+    })
+    
+    // Move to next property if not at the end
+    if (currentPropertyIndex < properties.length - 1) {
+      console.log('Moving to next property:', currentPropertyIndex + 1)
+      setCurrentPropertyIndex(currentPropertyIndex + 1)
+    } else {
+      console.log('Already at last property')
+    }
+  }, [currentProperty.id, currentPropertyIndex, properties.length])
+  
+  // Touch handlers for swipe detection
+  const handleTouchStart = (e) => {
+    console.log('Touch start event triggered!')
+    e.preventDefault()
+    setTouchEnd(null)
+    setTouchStart(e.targetTouches[0].clientX)
+    console.log('Touch start X:', e.targetTouches[0].clientX)
+  }
+
+  const handleTouchMove = (e) => {
+    console.log('Touch move event triggered!')
+    e.preventDefault()
+    setTouchEnd(e.targetTouches[0].clientX)
+    console.log('Touch move X:', e.targetTouches[0].clientX)
+  }
+
+  const handleTouchEnd = () => {
+    console.log('Touch end event triggered!')
+    if (!touchStart || !touchEnd) {
+      console.log('Touch end - missing data:', { touchStart, touchEnd })
+      return
+    }
+    
+    const distance = touchStart - touchEnd
+    const isLeftSwipe = distance > 30  // Reduced from 50 to 30
+    const isRightSwipe = distance < -30 // Reduced from 50 to 30
+    
+    console.log('Touch end - Start:', touchStart, 'End:', touchEnd, 'Distance:', distance)
+
+    if (isLeftSwipe) {
+      console.log('Left swipe detected - declining property')
+      handlePropertySelection('declined')
+    } else if (isRightSwipe) {
+      console.log('Right swipe detected - selecting property')
+      handlePropertySelection('selected')
+    } else {
+      console.log('No swipe detected - distance too small')
+    }
+  }
+
+  // Mouse handlers for desktop testing
+  const handleMouseDown = (e) => {
+    console.log('Mouse down event triggered!')
+    setTouchEnd(null)
+    setTouchStart(e.clientX)
+    console.log('Mouse down X:', e.clientX)
+  }
+
+  const handleMouseMove = (e) => {
+    if (touchStart !== null) {
+      console.log('Mouse move event triggered!')
+      setTouchEnd(e.clientX)
+      console.log('Mouse move X:', e.clientX)
+    }
+  }
+
+  const handleMouseUp = () => {
+    console.log('Mouse up event triggered!')
+    if (!touchStart || !touchEnd) {
+      console.log('Mouse up - missing data:', { touchStart, touchEnd })
+      return
+    }
+    
+    const distance = touchStart - touchEnd
+    const isLeftSwipe = distance > 30  // Reduced from 50 to 30
+    const isRightSwipe = distance < -30 // Reduced from 50 to 30
+    
+    console.log('Mouse up - Start:', touchStart, 'End:', touchEnd, 'Distance:', distance)
+
+    if (isLeftSwipe) {
+      console.log('Left drag detected - declining property')
+      handlePropertySelection('declined')
+    } else if (isRightSwipe) {
+      console.log('Right drag detected - selecting property')
+      handlePropertySelection('selected')
+    } else {
+      console.log('No drag detected - distance too small')
+    }
+    
+    setTouchStart(null)
+    setTouchEnd(null)
+  }
+  
+  const getThumbnailColor = (property) => {
+    const selection = propertySelections[property.id]
+    if (selection === 'selected') {
+      return '#16a34a' // Green for selected
+    } else if (selection === 'declined') {
+      return '#dc2626' // Red for declined
+    }
+    return property.thumbnail // Default color
+  }
+
+  // Add keyboard shortcuts for testing
+  useEffect(() => {
+    const handleKeyPress = (event) => {
+      if (event.key === 'ArrowLeft') {
+        handlePropertySelection('declined')
+      } else if (event.key === 'ArrowRight') {
+        handlePropertySelection('selected')
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyPress)
+    return () => {
+      window.removeEventListener('keydown', handleKeyPress)
+    }
+  }, [handlePropertySelection])
+
+  // Test function to manually trigger selection
+  window.testSelection = (action) => {
+    handlePropertySelection(action)
+  }
   return (
     <div className="screen" style={{
       width: '100%',
@@ -62,36 +308,116 @@ const PropertyCardScreen = ({ onNavigate }) => {
         <div style={{
           fontSize: '18px',
           fontWeight: '700',
-          color: '#1e293b'
-        }}>Property Analysis</div>
+          color: '#1e293b',
+          position: 'absolute',
+          left: '50%',
+          transform: 'translateX(-50%)'
+        }}>Select</div>
+        <div style={{ width: '36px' }}></div>
+      </div>
+      
+      {/* Property Thumbnails Navigation Bar */}
+      <div style={{
+        background: 'white',
+        padding: '12px 20px',
+        borderBottom: '1px solid rgba(226,232,240,0.5)',
+        position: 'sticky',
+        top: '120px',
+        zIndex: 20
+      }}>
         <div style={{
-          background: '#dcfce7',
-          color: '#16a34a',
-          padding: '6px 12px',
-          borderRadius: '12px',
-          fontSize: '13px',
-          fontWeight: '600'
-        }}>92% match</div>
+          display: 'flex',
+          gap: '8px',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}>
+          {properties.map((property, index) => (
+            <div
+              key={property.id}
+              style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '8px',
+                background: getThumbnailColor(property),
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+                border: index === currentPropertyIndex ? '2px solid #3b82f6' : '2px solid transparent',
+                transform: index === currentPropertyIndex ? 'scale(1.1)' : 'scale(1)',
+                position: 'relative',
+                overflow: 'hidden'
+              }}
+              onClick={() => setCurrentPropertyIndex(index)}
+            >
+              {/* Property number */}
+              <div style={{
+                position: 'absolute',
+                top: '2px',
+                left: '2px',
+                background: 'rgba(0,0,0,0.7)',
+                color: 'white',
+                fontSize: '10px',
+                fontWeight: '700',
+                padding: '2px 4px',
+                borderRadius: '4px',
+                minWidth: '14px',
+                textAlign: 'center'
+              }}>
+                {index + 1}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
       
       {/* Scrollable Content */}
-      <div style={{
-        flex: '1',
-        overflowY: 'auto',
-        WebkitOverflowScrolling: 'touch'
-      }}>
-        {/* Property Card */}
-        <div style={{
-          background: 'white',
-          margin: '20px',
-          borderRadius: '24px',
-          boxShadow: '0 12px 32px rgba(0,0,0,0.15), 0 4px 12px rgba(0,0,0,0.1)',
-          overflow: 'hidden'
+      <div 
+        style={{
+          flex: '1',
+          overflowY: 'auto',
+          WebkitOverflowScrolling: 'touch'
         }}>
+        {/* Property Card */}
+        <div 
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onClick={() => console.log('Property card clicked!')}
+          style={{
+            background: 'white',
+            margin: '20px',
+            borderRadius: '24px',
+            boxShadow: '0 12px 32px rgba(0,0,0,0.15), 0 4px 12px rgba(0,0,0,0.1)',
+            border: propertySelections[currentProperty.id] === 'selected' ? '3px solid #16a34a' :
+                    propertySelections[currentProperty.id] === 'declined' ? '3px solid #dc2626' :
+                    'none',
+            overflow: 'hidden',
+            cursor: 'grab',
+            userSelect: 'none',
+            touchAction: 'none' // This should help with touch events
+          }}
+        >
+          {/* Selection Status Banner */}
+          {propertySelections[currentProperty.id] && (
+            <div style={{
+              background: propertySelections[currentProperty.id] === 'selected' ? '#16a34a' : '#dc2626',
+              color: 'white',
+              padding: '8px 16px',
+              textAlign: 'center',
+              fontSize: '14px',
+              fontWeight: '700'
+            }}>
+              {propertySelections[currentProperty.id] === 'selected' ? '✓ SELECTED' : '✗ DECLINED'}
+            </div>
+          )}
+          
+          
           {/* Property Image */}
           <div style={{
             height: '280px',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            background: currentProperty.gradient,
             position: 'relative',
             overflow: 'hidden'
           }}>
@@ -116,14 +442,15 @@ const PropertyCardScreen = ({ onNavigate }) => {
               alignItems: 'flex-start'
             }}>
               <div style={{
-                background: 'rgba(16,185,129,0.9)',
+                background: currentProperty.status === 'SOLD' ? 'rgba(16,185,129,0.9)' : 
+                           currentProperty.status === 'ACTIVE' ? 'rgba(59,130,246,0.9)' : 'rgba(245,158,11,0.9)',
                 color: 'white',
                 padding: '6px 12px',
                 borderRadius: '20px',
                 fontSize: '11px',
                 fontWeight: '700',
                 backdropFilter: 'blur(10px)'
-              }}>SOLD</div>
+              }}>{currentProperty.status}</div>
               <div style={{
                 background: 'rgba(59,130,246,0.9)',
                 color: 'white',
@@ -132,7 +459,7 @@ const PropertyCardScreen = ({ onNavigate }) => {
                 fontSize: '11px',
                 fontWeight: '700',
                 backdropFilter: 'blur(10px)'
-              }}>92% match</div>
+              }}>{currentProperty.match}% match</div>
             </div>
             
             {/* Price */}
@@ -149,13 +476,17 @@ const PropertyCardScreen = ({ onNavigate }) => {
                 fontWeight: '900',
                 marginBottom: '4px',
                 textShadow: '0 2px 8px rgba(0,0,0,0.5)'
-              }}>$489,900</div>
+              }}>${currentProperty.price.toLocaleString()}</div>
               <div style={{
                 fontSize: '12px',
                 fontWeight: '600',
                 opacity: '0.9',
                 textShadow: '0 1px 4px rgba(0,0,0,0.5)'
-              }}>Sold 32 days ago</div>
+              }}>
+                {currentProperty.status === 'SOLD' ? `Sold ${currentProperty.daysOnMarket} days ago` : 
+                 currentProperty.status === 'ACTIVE' ? `Active for ${currentProperty.daysOnMarket} days` :
+                 `Pending for ${currentProperty.daysOnMarket} days`}
+              </div>
             </div>
           </div>
           
@@ -169,7 +500,7 @@ const PropertyCardScreen = ({ onNavigate }) => {
               color: '#1e293b',
               marginBottom: '8px',
               lineHeight: '1.3'
-            }}>456 Oak Avenue, Dallas</div>
+            }}>{currentProperty.address}, {currentProperty.city}</div>
             
             {/* Specs */}
             <div style={{
@@ -186,7 +517,7 @@ const PropertyCardScreen = ({ onNavigate }) => {
                 fontWeight: '500'
               }}>
                 <span style={{ fontSize: '14px' }}>🛏️</span>
-                <span>4 BR</span>
+                <span>{currentProperty.beds} BR</span>
               </div>
               <div style={{
                 display: 'flex',
@@ -197,7 +528,7 @@ const PropertyCardScreen = ({ onNavigate }) => {
                 fontWeight: '500'
               }}>
                 <span style={{ fontSize: '14px' }}>🚿</span>
-                <span>3 BA</span>
+                <span>{currentProperty.baths} BA</span>
               </div>
               <div style={{
                 display: 'flex',
@@ -208,7 +539,7 @@ const PropertyCardScreen = ({ onNavigate }) => {
                 fontWeight: '500'
               }}>
                 <span style={{ fontSize: '14px' }}>📐</span>
-                <span>2,380 sq ft</span>
+                <span>{currentProperty.sqft.toLocaleString()} sq ft</span>
               </div>
               <div style={{
                 display: 'flex',
@@ -219,127 +550,55 @@ const PropertyCardScreen = ({ onNavigate }) => {
                 fontWeight: '500'
               }}>
                 <span style={{ fontSize: '14px' }}>📅</span>
-                <span>Built 2018</span>
+                <span>Built {currentProperty.yearBuilt}</span>
               </div>
             </div>
             
-            {/* Market Insights */}
+            {/* Lifestyle Analysis in Card */}
             <div style={{
-              background: 'rgba(245,158,11,0.1)',
-              borderRadius: '12px',
-              padding: '12px 16px'
+              background: 'linear-gradient(135deg, #dbeafe, #dcfce7)',
+              borderRadius: '16px',
+              padding: '20px',
+              border: '1px solid #3b82f6'
             }}>
               <div style={{
-                fontSize: '12px',
-                fontWeight: '700',
-                color: '#d97706',
-                marginBottom: '6px'
-              }}>Market Insights</div>
+                fontSize: '16px',
+                fontWeight: '800',
+                color: '#1d4ed8',
+                marginBottom: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                <span>🧠</span>
+                <span>Lifestyle Analysis</span>
+              </div>
               <div style={{
                 display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center'
+                flexWrap: 'wrap',
+                gap: '6px',
+                marginBottom: '12px'
               }}>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{
-                    fontSize: '14px',
-                    fontWeight: '700',
-                    color: '#1e293b'
-                  }}>18</div>
-                  <div style={{
-                    fontSize: '10px',
-                    color: '#64748b',
-                    fontWeight: '500'
-                  }}>Days on Market</div>
-                </div>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{
-                    fontSize: '14px',
-                    fontWeight: '700',
-                    color: '#1e293b'
-                  }}>$206</div>
-                  <div style={{
-                    fontSize: '10px',
-                    color: '#64748b',
-                    fontWeight: '500'
-                  }}>Per Sq Ft</div>
-                </div>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{
-                    fontSize: '14px',
-                    fontWeight: '700',
-                    color: '#1e293b'
-                  }}>0.4 mi</div>
-                  <div style={{
-                    fontSize: '10px',
-                    color: '#64748b',
-                    fontWeight: '500'
-                  }}>Distance</div>
-                </div>
+                {currentProperty.lifestyleAnalysis.tags.map((tag, index) => (
+                  <div key={index} style={{
+                    background: '#3b82f6',
+                    color: 'white',
+                    padding: '6px 10px',
+                    borderRadius: '16px',
+                    fontSize: '11px',
+                    fontWeight: '600'
+                  }}>{tag}</div>
+                ))}
+              </div>
+              <div style={{
+                fontSize: '14px',
+                color: '#374151',
+                lineHeight: '1.5',
+                fontStyle: 'italic'
+              }}>
+                {currentProperty.lifestyleAnalysis.description}
               </div>
             </div>
-          </div>
-        </div>
-        
-        {/* Lifestyle Analysis Section */}
-        <div style={{
-          background: 'linear-gradient(135deg, #dbeafe, #dcfce7)',
-          margin: '20px',
-          borderRadius: '20px',
-          padding: '24px',
-          border: '1px solid #3b82f6'
-        }}>
-          <div style={{
-            fontSize: '18px',
-            fontWeight: '800',
-            color: '#1d4ed8',
-            marginBottom: '16px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}>
-            <span>🧠</span>
-            <span>Lifestyle Analysis</span>
-          </div>
-          <div style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: '8px',
-            marginBottom: '16px'
-          }}>
-            {['Entertainment Focused', 'Open Concept', 'Outdoor Living', 'Gourmet Kitchen', 'Master Suite'].map((tag, index) => (
-              <div key={index} style={{
-                background: '#3b82f6',
-                color: 'white',
-                padding: '8px 12px',
-                borderRadius: '20px',
-                fontSize: '12px',
-                fontWeight: '600'
-              }}>{tag}</div>
-            ))}
-          </div>
-          <div style={{
-            fontSize: '15px',
-            color: '#374151',
-            lineHeight: '1.6',
-            fontStyle: 'italic'
-          }}>
-            Perfect for <span style={{
-              background: '#fef3c7',
-              padding: '2px 4px',
-              borderRadius: '4px',
-              fontWeight: '700'
-            }}>entertaining</span> with open concept living and <span style={{
-              background: '#fef3c7',
-              padding: '2px 4px',
-              borderRadius: '4px',
-              fontWeight: '700'
-            }}>gourmet kitchen</span> flowing to covered patio. Master suite with <span style={{
-              background: '#fef3c7',
-              padding: '2px 4px',
-              borderRadius: '4px',
-              fontWeight: '700'
-            }}>spa-like bathroom</span> and walk-in closet. Premium finishes throughout including hardwood floors and granite countertops.
           </div>
         </div>
         
@@ -390,7 +649,7 @@ const PropertyCardScreen = ({ onNavigate }) => {
         {/* Photo Gallery Section */}
         <div style={{
           margin: '20px',
-          marginBottom: '60px'
+          marginBottom: '100px'
         }}>
           <div style={{
             fontSize: '16px',
@@ -436,30 +695,34 @@ const PropertyCardScreen = ({ onNavigate }) => {
               }}>{photo.caption}</div>
             </div>
           ))}
-          
-          {/* Continue Analysis Button */}
-          <div style={{
-            margin: '20px',
-            marginTop: '32px'
-          }}>
-            <div 
-              style={{
-                background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
-                color: 'white',
-                padding: '16px 24px',
-                borderRadius: '16px',
-                textAlign: 'center',
-                fontSize: '16px',
-                fontWeight: '700',
-                cursor: 'pointer',
-                transition: 'all 0.3s ease',
-                boxShadow: '0 8px 24px rgba(59,130,246,0.4)'
-              }}
-              onClick={() => onNavigate('analysis')}
-            >
-              Continue with Deep Analysis
-            </div>
-          </div>
+        </div>
+      </div>
+      
+      {/* Floating Continue Button */}
+      <div style={{
+        position: 'absolute',
+        bottom: '20px',
+        left: '20px',
+        right: '20px',
+        zIndex: 30
+      }}>
+        <div 
+          style={{
+            background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
+            color: 'white',
+            padding: '16px 24px',
+            borderRadius: '16px',
+            textAlign: 'center',
+            fontSize: '16px',
+            fontWeight: '700',
+            cursor: 'pointer',
+            transition: 'all 0.3s ease',
+            boxShadow: '0 8px 24px rgba(59,130,246,0.4)',
+            backdropFilter: 'blur(10px)'
+          }}
+          onClick={() => onNavigate('analysis')}
+        >
+          Continue
         </div>
       </div>
     </div>

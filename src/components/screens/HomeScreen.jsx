@@ -138,7 +138,7 @@ const HomeScreen = ({ onNavigate }) => {
                   color: '#1e293b',
                   marginBottom: '4px',
                   letterSpacing: '-0.2px'
-                }}>Enter Address</div>
+                }}>Address</div>
                 <div className="option-desc" style={{
                   fontSize: '13px',
                   color: '#64748b',
@@ -147,19 +147,24 @@ const HomeScreen = ({ onNavigate }) => {
               </div>
             </div>
             
-            <div className="option-button secondary" style={{
-              background: 'rgba(237,233,254,0.6)',
-              backdropFilter: 'blur(20px)',
-              border: '1px solid rgba(139,92,246,0.3)',
-              borderRadius: '20px',
-              padding: '20px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '18px',
-              textAlign: 'left',
-              position: 'relative',
-              overflow: 'hidden'
-            }}>
+            <div 
+              className="option-button secondary" 
+              style={{
+                background: 'rgba(237,233,254,0.6)',
+                backdropFilter: 'blur(20px)',
+                border: '1px solid rgba(139,92,246,0.3)',
+                borderRadius: '20px',
+                padding: '20px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '18px',
+                textAlign: 'left',
+                position: 'relative',
+                overflow: 'hidden',
+                cursor: 'pointer'
+              }}
+              onClick={() => onNavigate('ar-camera')}
+            >
               <div className="option-icon" style={{
                 fontSize: '24px',
                 width: '52px',
@@ -179,7 +184,7 @@ const HomeScreen = ({ onNavigate }) => {
                   color: '#1e293b',
                   marginBottom: '4px',
                   letterSpacing: '-0.2px'
-                }}>Scan Property</div>
+                }}>Scan</div>
                 <div className="option-desc" style={{
                   fontSize: '13px',
                   color: '#64748b',
@@ -188,19 +193,24 @@ const HomeScreen = ({ onNavigate }) => {
               </div>
             </div>
             
-            <div className="option-button tertiary" style={{
-              background: 'rgba(254,243,199,0.6)',
-              backdropFilter: 'blur(20px)',
-              border: '1px solid rgba(245,158,11,0.3)',
-              borderRadius: '20px',
-              padding: '20px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '18px',
-              textAlign: 'left',
-              position: 'relative',
-              overflow: 'hidden'
-            }}>
+            <div 
+              className="option-button tertiary" 
+              style={{
+                background: 'rgba(254,243,199,0.6)',
+                backdropFilter: 'blur(20px)',
+                border: '1px solid rgba(245,158,11,0.3)',
+                borderRadius: '20px',
+                padding: '20px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '18px',
+                textAlign: 'left',
+                position: 'relative',
+                overflow: 'hidden',
+                cursor: 'pointer'
+              }}
+              onClick={() => onNavigate('documents')}
+            >
               <div className="option-icon" style={{
                 fontSize: '24px',
                 width: '52px',
@@ -220,7 +230,7 @@ const HomeScreen = ({ onNavigate }) => {
                   color: '#1e293b',
                   marginBottom: '4px',
                   letterSpacing: '-0.2px'
-                }}>Document Retrieval</div>
+                }}>Doc</div>
                 <div className="option-desc" style={{
                   fontSize: '13px',
                   color: '#64748b',

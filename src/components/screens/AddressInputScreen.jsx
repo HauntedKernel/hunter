@@ -1,4 +1,105 @@
+import { useState, useEffect } from 'react'
+
 const AddressInputScreen = ({ onNavigate }) => {
+  const [lifestyleIntensities, setLifestyleIntensities] = useState({})
+  const [naturalLanguageInput, setNaturalLanguageInput] = useState('')
+  const [parsedInsights, setParsedInsights] = useState([])
+  const [selectedMode, setSelectedMode] = useState('discovery')
+  
+  const lifestyleFeatures = [
+    { id: 'entertainment', label: 'Entertainment Focused', icon: '🎉', category: 'social' },
+    { id: 'open-concept', label: 'Open Concept', icon: '🏠', category: 'layout' },
+    { id: 'outdoor-living', label: 'Outdoor Living', icon: '🌳', category: 'outdoor' },
+    { id: 'gourmet-kitchen', label: 'Gourmet Kitchen', icon: '👨‍🍳', category: 'kitchen' },
+    { id: 'master-suite', label: 'Master Suite', icon: '🛏️', category: 'bedroom' },
+    { id: 'home-office', label: 'Home Office', icon: '💼', category: 'work' },
+    { id: 'family-friendly', label: 'Family Friendly', icon: '👨‍👩‍👧‍👦', category: 'family' },
+    { id: 'luxury-finishes', label: 'Luxury Finishes', icon: '✨', category: 'luxury' },
+    { id: 'walk-in-closet', label: 'Walk-in Closet', icon: '👗', category: 'storage' },
+    { id: 'multiple-living', label: 'Multiple Living Areas', icon: '🛋️', category: 'layout' },
+    { id: 'downstairs-master', label: 'Downstairs Master', icon: '⬇️', category: 'accessibility' },
+    { id: 'pool-spa', label: 'Pool/Spa', icon: '🏊‍♀️', category: 'outdoor' },
+    { id: 'garage-space', label: 'Large Garage', icon: '🚗', category: 'storage' },
+    { id: 'smart-home', label: 'Smart Home', icon: '📱', category: 'technology' },
+    { id: 'energy-efficient', label: 'Energy Efficient', icon: '🌱', category: 'sustainability' },
+    { id: 'wine-cellar', label: 'Wine Storage', icon: '🍷', category: 'luxury' }
+  ]
+  
+  const updateLifestyleIntensity = (featureId, intensity) => {
+    setLifestyleIntensities(prev => ({
+      ...prev,
+      [featureId]: intensity
+    }))
+  }
+  
+  const parseNaturalLanguage = (input) => {
+    const text = input.toLowerCase()
+    const insights = []
+    
+    // Simple parsing logic for demo
+    if (text.includes('downstairs master') || text.includes('master downstairs')) {
+      insights.push({ type: 'feature', value: 'downstairs-master', confidence: 95, intensity: 85 })
+    }
+    if (text.includes('entertaining') || text.includes('entertain')) {
+      insights.push({ type: 'feature', value: 'entertainment', confidence: 90, intensity: 80 })
+    }
+    if (text.includes('office') || text.includes('work from home')) {
+      insights.push({ type: 'feature', value: 'home-office', confidence: 85, intensity: 75 })
+    }
+    if (text.includes('family') || text.includes('kids') || text.includes('children')) {
+      insights.push({ type: 'feature', value: 'family-friendly', confidence: 88, intensity: 80 })
+    }
+    if (text.includes('open') && (text.includes('concept') || text.includes('floor plan'))) {
+      insights.push({ type: 'feature', value: 'open-concept', confidence: 92, intensity: 85 })
+    }
+    if (text.includes('outdoor') || text.includes('patio') || text.includes('deck')) {
+      insights.push({ type: 'feature', value: 'outdoor-living', confidence: 87, intensity: 75 })
+    }
+    if (text.includes('luxury') || text.includes('high-end') || text.includes('premium')) {
+      insights.push({ type: 'feature', value: 'luxury-finishes', confidence: 85, intensity: 70 })
+    }
+    if (text.includes('pool') || text.includes('spa')) {
+      insights.push({ type: 'feature', value: 'pool-spa', confidence: 90, intensity: 80 })
+    }
+    
+    setParsedInsights(insights)
+    
+    // Auto-set intensities for parsed features
+    const newIntensities = { ...lifestyleIntensities }
+    insights.forEach(insight => {
+      newIntensities[insight.value] = insight.intensity
+    })
+    setLifestyleIntensities(newIntensities)
+  }
+
+  // Auto-parsing with debouncing
+  useEffect(() => {
+    if (naturalLanguageInput.trim().length > 10) {
+      const timeoutId = setTimeout(() => {
+        parseNaturalLanguage(naturalLanguageInput)
+      }, 1000) // 1 second debounce
+      
+      return () => clearTimeout(timeoutId)
+    }
+  }, [naturalLanguageInput])
+  
+  const getIntensityColor = (intensity) => {
+    if (intensity >= 80) return '#dc2626' // Red - Critical
+    if (intensity >= 60) return '#f59e0b' // Orange - High
+    if (intensity >= 40) return '#3b82f6' // Blue - Medium
+    if (intensity >= 20) return '#10b981' // Green - Low
+    return '#e5e7eb' // Gray - None
+  }
+  
+  const getIntensityLabel = (intensity) => {
+    if (intensity >= 80) return 'Critical'
+    if (intensity >= 60) return 'High'
+    if (intensity >= 40) return 'Medium'
+    if (intensity >= 20) return 'Low'
+    return 'None'
+  }
+  
+  const activeFeatures = Object.entries(lifestyleIntensities).filter(([_, intensity]) => intensity > 0)
   return (
     <div className="screen" style={{
       width: '100%',
@@ -76,19 +177,12 @@ const AddressInputScreen = ({ onNavigate }) => {
           marginBottom: '24px'
         }}>
           <div className="input-title" style={{
-            fontSize: '20px',
+            fontSize: '18px',
             fontWeight: '800',
             color: '#1e293b',
-            marginBottom: '8px',
-            textAlign: 'center'
-          }}>Select Client</div>
-          <div className="input-subtitle" style={{
-            fontSize: '14px',
-            color: '#64748b',
             marginBottom: '28px',
-            textAlign: 'center',
-            fontWeight: '500'
-          }}>Choose client for this CMA analysis</div>
+            textAlign: 'center'
+          }}>Client</div>
           
           <div className="client-input-container" style={{
             position: 'relative',
@@ -257,90 +351,61 @@ const AddressInputScreen = ({ onNavigate }) => {
           border: '1px solid rgba(226,232,240,0.5)'
         }}>
           <div className="mode-title" style={{
-            fontSize: '16px',
-            fontWeight: '700',
+            fontSize: '18px',
+            fontWeight: '800',
             color: '#1e293b',
-            marginBottom: '4px',
-            textAlign: 'center'
-          }}>Analysis Mode</div>
-          <div className="mode-subtitle" style={{
-            fontSize: '13px',
-            color: '#64748b',
             marginBottom: '16px',
-            textAlign: 'center',
-            fontWeight: '500'
-          }}>Choose your property search focus</div>
+            textAlign: 'center'
+          }}>Mode</div>
           
           <div className="mode-toggle" style={{
             display: 'flex',
             gap: '8px'
           }}>
-            <div className="mode-option discovery active" style={{
-              flex: '1',
-              padding: '16px 12px',
-              border: '2px solid #3b82f6',
-              borderRadius: '12px',
-              background: 'rgba(59,130,246,0.1)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              cursor: 'pointer',
-              transition: 'all 0.3s ease'
-            }}>
-              <span className="mode-icon" style={{
-                fontSize: '20px',
-                flexShrink: '0'
-              }}>🔍</span>
-              <div className="mode-info" style={{
+            <div 
+              className="mode-option discovery" 
+              style={{
                 flex: '1',
-                textAlign: 'left'
-              }}>
-                <div className="mode-name" style={{
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  color: '#1e293b',
-                  marginBottom: '2px'
-                }}>Discovery</div>
-                <div className="mode-desc" style={{
-                  fontSize: '11px',
-                  color: '#64748b',
-                  fontWeight: '500'
-                }}>Active listings only</div>
-              </div>
+                padding: '16px 12px',
+                border: selectedMode === 'discovery' ? '2px solid #3b82f6' : '2px solid #e2e8f0',
+                borderRadius: '12px',
+                background: selectedMode === 'discovery' ? 'rgba(59,130,246,0.1)' : 'rgba(255,255,255,0.8)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease'
+              }}
+              onClick={() => setSelectedMode('discovery')}
+            >
+              <div className="mode-name" style={{
+                fontSize: '14px',
+                fontWeight: '600',
+                color: '#1e293b'
+              }}>Discovery</div>
             </div>
             
-            <div className="mode-option cma" style={{
-              flex: '1',
-              padding: '16px 12px',
-              border: '2px solid #e2e8f0',
-              borderRadius: '12px',
-              background: 'rgba(255,255,255,0.8)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              cursor: 'pointer',
-              transition: 'all 0.3s ease'
-            }}>
-              <span className="mode-icon" style={{
-                fontSize: '20px',
-                flexShrink: '0'
-              }}>📊</span>
-              <div className="mode-info" style={{
+            <div 
+              className="mode-option cma" 
+              style={{
                 flex: '1',
-                textAlign: 'left'
-              }}>
-                <div className="mode-name" style={{
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  color: '#1e293b',
-                  marginBottom: '2px'
-                }}>CMA Analysis</div>
-                <div className="mode-desc" style={{
-                  fontSize: '11px',
-                  color: '#64748b',
-                  fontWeight: '500'
-                }}>Active + sold properties</div>
-              </div>
+                padding: '16px 12px',
+                border: selectedMode === 'cma' ? '2px solid #3b82f6' : '2px solid #e2e8f0',
+                borderRadius: '12px',
+                background: selectedMode === 'cma' ? 'rgba(59,130,246,0.1)' : 'rgba(255,255,255,0.8)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease'
+              }}
+              onClick={() => setSelectedMode('cma')}
+            >
+              <div className="mode-name" style={{
+                fontSize: '14px',
+                fontWeight: '600',
+                color: '#1e293b'
+              }}>CMA</div>
             </div>
           </div>
         </div>
@@ -354,23 +419,16 @@ const AddressInputScreen = ({ onNavigate }) => {
           border: '1px solid rgba(226,232,240,0.5)'
         }}>
           <div className="input-title" style={{
-            fontSize: '20px',
+            fontSize: '18px',
             fontWeight: '800',
             color: '#1e293b',
-            marginBottom: '8px',
-            textAlign: 'center'
-          }}>Property Address</div>
-          <div className="input-subtitle" style={{
-            fontSize: '14px',
-            color: '#64748b',
             marginBottom: '28px',
-            textAlign: 'center',
-            fontWeight: '500'
-          }}>Enter the address for your CMA analysis</div>
+            textAlign: 'center'
+          }}>Address</div>
           
           <div className="address-input-container" style={{
             position: 'relative',
-            marginBottom: '20px'
+            marginBottom: '24px'
           }}>
             <input 
               type="text" 
@@ -379,7 +437,7 @@ const AddressInputScreen = ({ onNavigate }) => {
               defaultValue="456 Oak Avenue, Dallas"
               style={{
                 width: '100%',
-                padding: '18px 24px',
+                padding: '18px 80px 18px 24px',
                 border: '2px solid #e2e8f0',
                 borderRadius: '16px',
                 fontSize: '16px',
@@ -388,50 +446,41 @@ const AddressInputScreen = ({ onNavigate }) => {
                 transition: 'all 0.3s ease'
               }}
             />
-          </div>
-          
-          <div className="input-actions" style={{
-            display: 'flex',
-            gap: '12px',
-            marginBottom: '24px'
-          }}>
-            <div className="input-action-btn voice-btn" style={{
-              flex: '1',
-              padding: '14px 16px',
-              border: '1px solid #e2e8f0',
-              borderRadius: '12px',
-              background: 'rgba(255,255,255,0.8)',
+            {/* Inline Action Buttons */}
+            <div style={{
+              position: 'absolute',
+              right: '8px',
+              top: '50%',
+              transform: 'translateY(-50%)',
               display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px',
-              cursor: 'pointer',
-              transition: 'all 0.3s ease',
-              fontSize: '14px',
-              fontWeight: '600',
-              color: '#64748b'
+              gap: '4px'
             }}>
-              <span>🎤</span>
-              <span>Voice</span>
-            </div>
-            <div className="input-action-btn gps-btn" style={{
-              flex: '1',
-              padding: '14px 16px',
-              border: '1px solid #e2e8f0',
-              borderRadius: '12px',
-              background: 'rgba(255,255,255,0.8)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px',
-              cursor: 'pointer',
-              transition: 'all 0.3s ease',
-              fontSize: '14px',
-              fontWeight: '600',
-              color: '#64748b'
-            }}>
-              <span className="gps-icon">📍</span>
-              <span>GPS</span>
+              <button style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '8px',
+                border: 'none',
+                background: 'rgba(59,130,246,0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                fontSize: '14px'
+              }}>🎤</button>
+              <button style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '8px',
+                border: 'none',
+                background: 'rgba(59,130,246,0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                fontSize: '14px'
+              }}>📍</button>
             </div>
           </div>
           
@@ -526,7 +575,184 @@ const AddressInputScreen = ({ onNavigate }) => {
               <span>Built 2018</span>
             </div>
           </div>
+        </div>
+        
+        {/* Lifestyle Section */}
+        <div className="lifestyle-section" style={{
+          background: 'rgba(255,255,255,0.95)',
+          backdropFilter: 'blur(20px)',
+          borderRadius: '24px',
+          padding: '28px 24px',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.05)',
+          border: '1px solid rgba(226,232,240,0.5)',
+          marginBottom: '24px'
+        }}>
+          <div style={{
+            fontSize: '18px',
+            fontWeight: '800',
+            color: '#1e293b',
+            marginBottom: '20px',
+            textAlign: 'center'
+          }}>Lifestyle</div>
           
+          {/* Natural Language Input */}
+          <div style={{
+            position: 'relative',
+            marginBottom: '16px'
+          }}>
+            <textarea
+              value={naturalLanguageInput}
+              onChange={(e) => setNaturalLanguageInput(e.target.value)}
+              placeholder="Example: They're looking for a downstairs master, good for entertaining, open concept living with a home office..."
+              style={{
+                width: '100%',
+                minHeight: '100px',
+                padding: '16px 20px',
+                border: '2px solid #e2e8f0',
+                borderRadius: '16px',
+                fontSize: '15px',
+                fontWeight: '500',
+                background: 'rgba(255,255,255,0.9)',
+                transition: 'all 0.3s ease',
+                resize: 'vertical',
+                fontFamily: 'inherit',
+                lineHeight: '1.5'
+              }}
+            />
+          </div>
+          
+          
+          {/* Feature Sliders */}
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '20px'
+          }}>
+            {lifestyleFeatures.map(feature => {
+              const intensity = lifestyleIntensities[feature.id] || 0
+              return (
+                <div key={feature.id} style={{
+                  padding: '16px 20px',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '16px',
+                  background: 'rgba(255,255,255,0.8)',
+                  transition: 'all 0.3s ease'
+                }}>
+                  {/* Feature Header */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: '12px'
+                  }}>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px'
+                    }}>
+                      <span style={{ fontSize: '18px' }}>{feature.icon}</span>
+                      <span style={{
+                        fontSize: '14px',
+                        fontWeight: '600',
+                        color: '#1e293b'
+                      }}>{feature.label}</span>
+                    </div>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}>
+                      <div style={{
+                        fontSize: '12px',
+                        fontWeight: '700',
+                        color: getIntensityColor(intensity),
+                        minWidth: '45px',
+                        textAlign: 'right'
+                      }}>
+                        {intensity}%
+                      </div>
+                      <div style={{
+                        fontSize: '10px',
+                        fontWeight: '600',
+                        color: getIntensityColor(intensity),
+                        background: `${getIntensityColor(intensity)}20`,
+                        padding: '2px 6px',
+                        borderRadius: '8px',
+                        minWidth: '45px',
+                        textAlign: 'center'
+                      }}>
+                        {getIntensityLabel(intensity)}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Slider */}
+                  <div style={{
+                    position: 'relative',
+                    height: '6px',
+                    background: '#e5e7eb',
+                    borderRadius: '3px',
+                    overflow: 'hidden'
+                  }}>
+                    {/* Progress Fill */}
+                    <div style={{
+                      position: 'absolute',
+                      left: 0,
+                      top: 0,
+                      height: '100%',
+                      width: `${intensity}%`,
+                      background: `linear-gradient(90deg, #e5e7eb, ${getIntensityColor(intensity)})`,
+                      borderRadius: '3px',
+                      transition: 'all 0.3s ease'
+                    }}></div>
+                    
+                    {/* Slider Input */}
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={intensity}
+                      onChange={(e) => updateLifestyleIntensity(feature.id, parseInt(e.target.value))}
+                      style={{
+                        position: 'absolute',
+                        top: '-2px',
+                        left: 0,
+                        width: '100%',
+                        height: '10px',
+                        background: 'transparent',
+                        cursor: 'pointer',
+                        appearance: 'none',
+                        WebkitAppearance: 'none'
+                      }}
+                    />
+                  </div>
+                  
+                  {/* Intensity Guide */}
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    marginTop: '8px',
+                    fontSize: '9px',
+                    color: '#94a3b8'
+                  }}>
+                    <span>Not Important</span>
+                    <span>Critical</span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+        
+        {/* Enhanced Start Button */}
+        <div className="input-section" style={{
+          background: 'rgba(255,255,255,0.95)',
+          backdropFilter: 'blur(20px)',
+          borderRadius: '24px',
+          padding: '24px',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.05)',
+          border: '1px solid rgba(226,232,240,0.5)'
+        }}>
           <div 
             className="start-cma-button" 
             style={{
@@ -540,11 +766,14 @@ const AddressInputScreen = ({ onNavigate }) => {
               fontWeight: '700',
               cursor: 'pointer',
               transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-              boxShadow: '0 8px 24px rgba(59,130,246,0.4), 0 2px 8px rgba(0,0,0,0.1)'
+              boxShadow: '0 8px 24px rgba(59,130,246,0.4), 0 2px 8px rgba(0,0,0,0.1)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
             }}
             onClick={() => onNavigate('property')}
           >
-            Start Property Analysis
+            List
           </div>
         </div>
         
@@ -659,6 +888,55 @@ const AddressInputScreen = ({ onNavigate }) => {
           </div>
         </div>
       </div>
+      
+      {/* Custom Slider Styles */}
+      <style jsx>{`
+        input[type="range"] {
+          -webkit-appearance: none;
+          appearance: none;
+          background: transparent;
+          cursor: pointer;
+        }
+        
+        input[type="range"]::-webkit-slider-track {
+          background: transparent;
+          height: 6px;
+        }
+        
+        input[type="range"]::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          appearance: none;
+          background: white;
+          height: 16px;
+          width: 16px;
+          border-radius: 50%;
+          border: 2px solid #3b82f6;
+          cursor: pointer;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+          transition: all 0.2s ease;
+        }
+        
+        input[type="range"]::-webkit-slider-thumb:hover {
+          transform: scale(1.1);
+          box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        
+        input[type="range"]::-moz-range-track {
+          background: transparent;
+          height: 6px;
+          border: none;
+        }
+        
+        input[type="range"]::-moz-range-thumb {
+          background: white;
+          height: 16px;
+          width: 16px;
+          border-radius: 50%;
+          border: 2px solid #3b82f6;
+          cursor: pointer;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+      `}</style>
     </div>
   )
 }

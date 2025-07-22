@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import HomeScreen from './components/screens/HomeScreen'
 import AddressInputScreen from './components/screens/AddressInputScreen'
+import ARCameraScreen from './components/screens/ARCameraScreen'
+import DocumentScreen from './components/screens/DocumentScreen'
 import AnalysisTransitionScreen from './components/screens/AnalysisTransitionScreen'
 import PropertyCardScreen from './components/screens/PropertyCardScreen'
 import ResultsScreen from './components/screens/ResultsScreen'
@@ -18,6 +20,10 @@ function App() {
         return <HomeScreen onNavigate={navigateTo} />
       case 'address':
         return <AddressInputScreen onNavigate={navigateTo} />
+      case 'ar-camera':
+        return <ARCameraScreen onNavigate={navigateTo} />
+      case 'documents':
+        return <DocumentScreen onNavigate={navigateTo} />
       case 'analysis':
         return <AnalysisTransitionScreen onNavigate={navigateTo} />
       case 'property':
