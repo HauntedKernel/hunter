@@ -9,9 +9,13 @@ import ResultsScreen from './components/screens/ResultsScreen'
 
 function App() {
   const [currentScreen, setCurrentScreen] = useState('home')
+  const [analysisMode, setAnalysisMode] = useState('discovery') // 'discovery' or 'cma'
 
-  const navigateTo = (screen) => {
+  const navigateTo = (screen, mode = null) => {
     setCurrentScreen(screen)
+    if (mode) {
+      setAnalysisMode(mode)
+    }
   }
 
   const renderScreen = () => {
@@ -19,7 +23,7 @@ function App() {
       case 'home':
         return <HomeScreen onNavigate={navigateTo} />
       case 'address':
-        return <AddressInputScreen onNavigate={navigateTo} />
+        return <AddressInputScreen onNavigate={navigateTo} onModeChange={setAnalysisMode} />
       case 'ar-camera':
         return <ARCameraScreen onNavigate={navigateTo} />
       case 'documents':
@@ -29,7 +33,7 @@ function App() {
       case 'property':
         return <PropertyCardScreen onNavigate={navigateTo} />
       case 'results':
-        return <ResultsScreen onNavigate={navigateTo} />
+        return <ResultsScreen onNavigate={navigateTo} mode={analysisMode} />
       default:
         return <HomeScreen onNavigate={navigateTo} />
     }

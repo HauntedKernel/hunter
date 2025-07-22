@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 
-const AddressInputScreen = ({ onNavigate }) => {
+const AddressInputScreen = ({ onNavigate, onModeChange }) => {
   const [lifestyleIntensities, setLifestyleIntensities] = useState({})
   const [naturalLanguageInput, setNaturalLanguageInput] = useState('')
   const [parsedInsights, setParsedInsights] = useState([])
@@ -376,7 +376,10 @@ const AddressInputScreen = ({ onNavigate }) => {
                 cursor: 'pointer',
                 transition: 'all 0.3s ease'
               }}
-              onClick={() => setSelectedMode('discovery')}
+              onClick={() => {
+                setSelectedMode('discovery')
+                onModeChange('discovery')
+              }}
             >
               <div className="mode-name" style={{
                 fontSize: '14px',
@@ -399,7 +402,10 @@ const AddressInputScreen = ({ onNavigate }) => {
                 cursor: 'pointer',
                 transition: 'all 0.3s ease'
               }}
-              onClick={() => setSelectedMode('cma')}
+              onClick={() => {
+                setSelectedMode('cma')
+                onModeChange('cma')
+              }}
             >
               <div className="mode-name" style={{
                 fontSize: '14px',
@@ -744,38 +750,6 @@ const AddressInputScreen = ({ onNavigate }) => {
           </div>
         </div>
         
-        {/* Enhanced Start Button */}
-        <div className="input-section" style={{
-          background: 'rgba(255,255,255,0.95)',
-          backdropFilter: 'blur(20px)',
-          borderRadius: '24px',
-          padding: '24px',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.05)',
-          border: '1px solid rgba(226,232,240,0.5)'
-        }}>
-          <div 
-            className="start-cma-button" 
-            style={{
-              width: '100%',
-              padding: '18px 24px',
-              background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '16px',
-              fontSize: '16px',
-              fontWeight: '700',
-              cursor: 'pointer',
-              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-              boxShadow: '0 8px 24px rgba(59,130,246,0.4), 0 2px 8px rgba(0,0,0,0.1)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
-            onClick={() => onNavigate('property')}
-          >
-            List
-          </div>
-        </div>
         
         <div className="recent-section" style={{
           background: 'rgba(255,255,255,0.95)',
@@ -937,6 +911,34 @@ const AddressInputScreen = ({ onNavigate }) => {
           box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
       `}</style>
+      
+      {/* Floating Continue Button */}
+      <div style={{
+        position: 'absolute',
+        bottom: '20px',
+        left: '20px',
+        right: '20px',
+        zIndex: 30
+      }}>
+        <div 
+          style={{
+            background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
+            color: 'white',
+            padding: '16px 24px',
+            borderRadius: '16px',
+            textAlign: 'center',
+            fontSize: '16px',
+            fontWeight: '700',
+            cursor: 'pointer',
+            transition: 'all 0.3s ease',
+            boxShadow: '0 8px 24px rgba(59,130,246,0.4)',
+            backdropFilter: 'blur(10px)'
+          }}
+          onClick={() => onNavigate('property')}
+        >
+          Continue
+        </div>
+      </div>
     </div>
   )
 }
