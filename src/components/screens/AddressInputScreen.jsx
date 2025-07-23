@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react'
+import { Mic, MicOff } from 'lucide-react'
 
 const AddressInputScreen = ({ onNavigate, onModeChange }) => {
   const [lifestyleIntensities, setLifestyleIntensities] = useState({})
   const [naturalLanguageInput, setNaturalLanguageInput] = useState('')
   const [parsedInsights, setParsedInsights] = useState([])
   const [selectedMode, setSelectedMode] = useState('discovery')
+  const [isRecording, setIsRecording] = useState(false)
+  const [recognition, setRecognition] = useState(null)
   
   const lifestyleFeatures = [
     { id: 'entertainment', label: 'Entertainment Focused', icon: '🎉', category: 'social' },
@@ -36,24 +39,40 @@ const AddressInputScreen = ({ onNavigate, onModeChange }) => {
     const text = input.toLowerCase()
     const insights = []
     
-    // Simple parsing logic for demo
+    // Simple parsing logic for demo - values now range from 0-100 with 50 as neutral
     if (text.includes('downstairs master') || text.includes('master downstairs')) {
       insights.push({ type: 'feature', value: 'downstairs-master', confidence: 95, intensity: 85 })
+      updateLifestyleIntensity('downstairs-master', 85)
     }
     if (text.includes('entertaining') || text.includes('entertain')) {
       insights.push({ type: 'feature', value: 'entertainment', confidence: 90, intensity: 80 })
+      updateLifestyleIntensity('entertainment', 80)
     }
     if (text.includes('office') || text.includes('work from home')) {
       insights.push({ type: 'feature', value: 'home-office', confidence: 85, intensity: 75 })
+      updateLifestyleIntensity('home-office', 75)
     }
     if (text.includes('family') || text.includes('kids') || text.includes('children')) {
       insights.push({ type: 'feature', value: 'family-friendly', confidence: 88, intensity: 80 })
+      updateLifestyleIntensity('family-friendly', 80)
     }
     if (text.includes('open') && (text.includes('concept') || text.includes('floor plan'))) {
       insights.push({ type: 'feature', value: 'open-concept', confidence: 92, intensity: 85 })
+      updateLifestyleIntensity('open-concept', 85)
     }
     if (text.includes('outdoor') || text.includes('patio') || text.includes('deck')) {
       insights.push({ type: 'feature', value: 'outdoor-living', confidence: 87, intensity: 75 })
+      updateLifestyleIntensity('outdoor-living', 75)
+    }
+    // Add some negative examples
+    if (text.includes('no pool') || text.includes("don't want pool") || text.includes('hate pools')) {
+      // Assuming there's a pool feature - you can add it to the features list
+      insights.push({ type: 'feature', value: 'pool', confidence: 90, intensity: 10 })
+      updateLifestyleIntensity('pool', 10)
+    }
+    if (text.includes('small kitchen') || text.includes("don't need gourmet")) {
+      insights.push({ type: 'feature', value: 'gourmet-kitchen', confidence: 85, intensity: 30 })
+      updateLifestyleIntensity('gourmet-kitchen', 30)
     }
     if (text.includes('luxury') || text.includes('high-end') || text.includes('premium')) {
       insights.push({ type: 'feature', value: 'luxury-finishes', confidence: 85, intensity: 70 })
@@ -84,22 +103,102 @@ const AddressInputScreen = ({ onNavigate, onModeChange }) => {
   }, [naturalLanguageInput])
   
   const getIntensityColor = (intensity) => {
-    if (intensity >= 80) return '#dc2626' // Red - Critical
-    if (intensity >= 60) return '#f59e0b' // Orange - High
-    if (intensity >= 40) return '#3b82f6' // Blue - Medium
-    if (intensity >= 20) return '#10b981' // Green - Low
-    return '#e5e7eb' // Gray - None
+    if (intensity >= 80) return '#10b981' // Green - Strong Benefit
+    if (intensity >= 65) return '#22c55e' // Light Green - Benefit
+    if (intensity > 50) return '#3b82f6'  // Blue - Mild Benefit
+    if (intensity === 50) return '#6b7280' // Gray - Neutral
+    if (intensity >= 35) return '#f59e0b' // Orange - Mild Detractor
+    if (intensity >= 20) return '#ef4444' // Red - Detractor
+    return '#dc2626' // Dark Red - Strong Detractor
   }
   
   const getIntensityLabel = (intensity) => {
-    if (intensity >= 80) return 'Critical'
-    if (intensity >= 60) return 'High'
-    if (intensity >= 40) return 'Medium'
-    if (intensity >= 20) return 'Low'
-    return 'None'
+    if (intensity >= 80) return 'Strong Benefit'
+    if (intensity >= 65) return 'Benefit'
+    if (intensity > 50) return 'Mild Benefit'
+    if (intensity === 50) return 'Neutral'
+    if (intensity >= 35) return 'Mild Detractor'
+    if (intensity >= 20) return 'Detractor'
+    return 'Strong Detractor'
   }
   
-  const activeFeatures = Object.entries(lifestyleIntensities).filter(([_, intensity]) => intensity > 0)
+  // Voice recording functionality
+  const startRecording = () => {
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+      const newRecognition = new SpeechRecognition()
+      
+      newRecognition.continuous = true
+      newRecognition.interimResults = true
+      newRecognition.lang = 'en-US'
+      
+      newRecognition.onstart = () => {
+        setIsRecording(true)
+      }
+      
+      newRecognition.onresult = (event) => {
+        let finalTranscript = ''
+        
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript
+          }
+        }
+        
+        if (finalTranscript) {
+          const newText = naturalLanguageInput + (naturalLanguageInput ? ' ' : '') + finalTranscript
+          setNaturalLanguageInput(newText)
+        }
+      }
+      
+      newRecognition.onerror = (event) => {
+        console.error('Speech recognition error:', event.error)
+        setIsRecording(false)
+      }
+      
+      newRecognition.onend = () => {
+        setIsRecording(false)
+      }
+      
+      newRecognition.start()
+      setRecognition(newRecognition)
+    } else {
+      alert('Speech recognition not supported in this browser')
+    }
+  }
+
+  const stopRecording = () => {
+    if (recognition) {
+      recognition.stop()
+      setRecognition(null)
+    }
+    setIsRecording(false)
+  }
+
+  const toggleRecording = () => {
+    if (isRecording) {
+      stopRecording()
+    } else {
+      startRecording()
+    }
+  }
+
+  // Add pulse animation CSS
+  useEffect(() => {
+    const style = document.createElement('style')
+    style.textContent = `
+      @keyframes pulse {
+        0% { transform: scale(1); opacity: 1; }
+        50% { transform: scale(1.1); opacity: 0.8; }
+        100% { transform: scale(1); opacity: 1; }
+      }
+    `
+    document.head.appendChild(style)
+    return () => document.head.removeChild(style)
+  }, [])
+
+  const activeFeatures = Object.entries(lifestyleIntensities).filter(([_, intensity]) => intensity !== 50)
   return (
     <div className="screen" style={{
       width: '100%',
@@ -583,7 +682,8 @@ const AddressInputScreen = ({ onNavigate, onModeChange }) => {
           </div>
         </div>
         
-        {/* Lifestyle Section */}
+        {/* Lifestyle Section - Only show in Discovery mode */}
+        {selectedMode === 'discovery' && (
         <div className="lifestyle-section" style={{
           background: 'rgba(255,255,255,0.95)',
           backdropFilter: 'blur(20px)',
@@ -613,7 +713,7 @@ const AddressInputScreen = ({ onNavigate, onModeChange }) => {
               style={{
                 width: '100%',
                 minHeight: '100px',
-                padding: '16px 20px',
+                padding: '16px 50px 16px 20px',
                 border: '2px solid #e2e8f0',
                 borderRadius: '16px',
                 fontSize: '15px',
@@ -625,6 +725,29 @@ const AddressInputScreen = ({ onNavigate, onModeChange }) => {
                 lineHeight: '1.5'
               }}
             />
+            <button
+              onClick={toggleRecording}
+              style={{
+                position: 'absolute',
+                top: '16px',
+                right: '16px',
+                background: isRecording ? '#ef4444' : '#6b7280',
+                color: 'white',
+                border: 'none',
+                borderRadius: '50%',
+                width: '36px',
+                height: '36px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+                animation: isRecording ? 'pulse 1.5s infinite' : 'none'
+              }}
+              title={isRecording ? 'Stop recording' : 'Start voice input'}
+            >
+              {isRecording ? <MicOff size={18} /> : <Mic size={18} />}
+            </button>
           </div>
           
           
@@ -635,7 +758,7 @@ const AddressInputScreen = ({ onNavigate, onModeChange }) => {
             gap: '20px'
           }}>
             {lifestyleFeatures.map(feature => {
-              const intensity = lifestyleIntensities[feature.id] || 0
+              const intensity = lifestyleIntensities[feature.id] || 50
               return (
                 <div key={feature.id} style={{
                   padding: '16px 20px',
@@ -717,7 +840,7 @@ const AddressInputScreen = ({ onNavigate, onModeChange }) => {
                       type="range"
                       min="0"
                       max="100"
-                      value={intensity}
+                      value={intensity || 50}
                       onChange={(e) => updateLifestyleIntensity(feature.id, parseInt(e.target.value))}
                       style={{
                         position: 'absolute',
@@ -749,6 +872,7 @@ const AddressInputScreen = ({ onNavigate, onModeChange }) => {
             })}
           </div>
         </div>
+        )}
         
         
         <div className="recent-section" style={{

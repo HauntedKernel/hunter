@@ -1,9 +1,124 @@
-import { useState } from 'react'
-import { Home, TrendingUp, Calendar, DollarSign, Users, Download, Share, Filter, MapPin, Building } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Home, TrendingUp, Calendar, DollarSign, Users, Download, Share, Filter, MapPin, Building, Mic, MicOff } from 'lucide-react'
 
 const ResultsScreen = ({ onNavigate, mode = 'discovery' }) => {
+  // Add pulse animation CSS
+  useEffect(() => {
+    const style = document.createElement('style')
+    style.textContent = `
+      @keyframes pulse {
+        0% { transform: scale(1); opacity: 1; }
+        50% { transform: scale(1.1); opacity: 0.8; }
+        100% { transform: scale(1); opacity: 1; }
+      }
+    `
+    document.head.appendChild(style)
+    return () => document.head.removeChild(style)
+  }, [])
   const [selectedType, setSelectedType] = useState('sale') // sale, rental
   const [cmaTab, setCmaTab] = useState('subject') // subject, comparables, motivation, negotiation
+  const [issueInput, setIssueInput] = useState('')
+  const [parsedIssues, setParsedIssues] = useState([])
+  const [isRecording, setIsRecording] = useState(false)
+  const [recognition, setRecognition] = useState(null)
+
+  // Save to customer profile functionality
+  const saveToProfile = () => {
+    const timestamp = new Date().toISOString()
+    const saveData = {
+      timestamp,
+      mode,
+      selectedType,
+      ...(mode === 'cma' && {
+        cmaTab,
+        parsedIssues,
+        totalOpportunity: parsedIssues.reduce((sum, issue) => sum + issue.cost, 0),
+        objectiveTotal: parsedIssues.filter(i => i.type === 'objective').reduce((sum, issue) => sum + issue.cost, 0),
+        subjectiveTotal: parsedIssues.filter(i => i.type === 'subjective').reduce((sum, issue) => sum + issue.cost, 0)
+      }),
+      ...(mode === 'discovery' && {
+        savedProperties: discoveryProperties.slice(0, 6) // Save first 6 properties as example
+      })
+    }
+
+    // Get existing saves from localStorage
+    const existingSaves = JSON.parse(localStorage.getItem('customerProfile') || '[]')
+    existingSaves.push(saveData)
+    
+    // Keep only last 50 saves to prevent localStorage bloat
+    const recentSaves = existingSaves.slice(-50)
+    
+    localStorage.setItem('customerProfile', JSON.stringify(recentSaves))
+    
+    // Show success feedback (you could replace with toast/notification)
+    alert(`${mode === 'cma' ? 'CMA Analysis' : 'Property Search'} saved to profile!`)
+  }
+
+  // Voice recording functionality
+  const startRecording = () => {
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+      const newRecognition = new SpeechRecognition()
+      
+      newRecognition.continuous = true
+      newRecognition.interimResults = true
+      newRecognition.lang = 'en-US'
+      
+      newRecognition.onstart = () => {
+        setIsRecording(true)
+      }
+      
+      newRecognition.onresult = (event) => {
+        let finalTranscript = ''
+        let interimTranscript = ''
+        
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript
+          } else {
+            interimTranscript += transcript
+          }
+        }
+        
+        if (finalTranscript) {
+          const newText = issueInput + (issueInput ? ' ' : '') + finalTranscript
+          setIssueInput(newText)
+          handleIssueInputChange(newText)
+        }
+      }
+      
+      newRecognition.onerror = (event) => {
+        console.error('Speech recognition error:', event.error)
+        setIsRecording(false)
+      }
+      
+      newRecognition.onend = () => {
+        setIsRecording(false)
+      }
+      
+      newRecognition.start()
+      setRecognition(newRecognition)
+    } else {
+      alert('Speech recognition not supported in this browser')
+    }
+  }
+
+  const stopRecording = () => {
+    if (recognition) {
+      recognition.stop()
+      setRecognition(null)
+    }
+    setIsRecording(false)
+  }
+
+  const toggleRecording = () => {
+    if (isRecording) {
+      stopRecording()
+    } else {
+      startRecording()
+    }
+  }
 
   // Mock data for different modes
   const discoveryProperties = [
@@ -81,6 +196,119 @@ const ResultsScreen = ({ onNavigate, mode = 'discovery' }) => {
       { address: '456 Pine Ave', rent: 2950, sqft: 2400 },
       { address: '789 Elm Dr', rent: 2800, sqft: 2350 }
     ]
+  }
+
+  // Comprehensive negotiation database with realistic pricing
+  const negotiationDatabase = {
+    // OBJECTIVE ISSUES (Structural/Mechanical/Safety)
+    roof: {
+      patterns: [
+        { regex: /roof\s*(leak|patch|repair\s*small|spot\s*repair)/i, scale: 'partial', baseCost: 1500, description: 'Roof patch/small repair' },
+        { regex: /partial\s*roof|section\s*of\s*roof|half\s*roof/i, scale: 'partial', baseCost: 8500, description: 'Partial roof replacement' },
+        { regex: /(new|replace|full)\s*roof|roof\s*(replacement|needs?\s*replacing)/i, scale: 'full', baseCost: 18500, description: 'Full roof replacement' },
+        { regex: /roof/i, scale: 'full', baseCost: 18500, description: 'Roof replacement' } // default
+      ],
+      type: 'objective',
+      category: 'Roof',
+      sqftMultiplier: 7.75 // per sqft for full replacement
+    },
+    
+    foundation: {
+      patterns: [
+        { regex: /minor\s*foundation|small\s*crack|foundation\s*crack/i, scale: 'minor', baseCost: 3500, description: 'Minor foundation repair' },
+        { regex: /foundation\s*(issue|problem|repair)/i, scale: 'moderate', baseCost: 8500, description: 'Foundation repairs' },
+        { regex: /major\s*foundation|foundation\s*replacement/i, scale: 'major', baseCost: 25000, description: 'Major foundation work' }
+      ],
+      type: 'objective',
+      category: 'Foundation'
+    },
+    
+    electrical: {
+      patterns: [
+        { regex: /outlet|switch|electrical\s*fixture/i, scale: 'minor', baseCost: 350, description: 'Electrical fixture repair' },
+        { regex: /electrical\s*panel|breaker|200\s*amp/i, scale: 'moderate', baseCost: 4500, description: 'Electrical panel upgrade' },
+        { regex: /rewire|whole\s*house\s*electrical/i, scale: 'major', baseCost: 12000, description: 'Full electrical rewiring' }
+      ],
+      type: 'objective',
+      category: 'Electrical'
+    },
+    
+    plumbing: {
+      patterns: [
+        { regex: /faucet|toilet|sink\s*repair/i, scale: 'minor', baseCost: 450, description: 'Plumbing fixture repair' },
+        { regex: /water\s*heater/i, scale: 'moderate', baseCost: 2200, description: 'Water heater replacement' },
+        { regex: /pipe|plumbing\s*repair/i, scale: 'moderate', baseCost: 3500, description: 'Plumbing repairs' },
+        { regex: /repipe|whole\s*house\s*plumbing/i, scale: 'major', baseCost: 8500, description: 'Full house repiping' }
+      ],
+      type: 'objective',
+      category: 'Plumbing'
+    },
+    
+    hvac: {
+      patterns: [
+        { regex: /ac\s*repair|furnace\s*repair|hvac\s*service/i, scale: 'minor', baseCost: 650, description: 'HVAC service/repair' },
+        { regex: /ac\s*unit|furnace|hvac\s*replacement/i, scale: 'full', baseCost: 7500, description: 'HVAC system replacement' },
+        { regex: /hvac|heating|cooling|air\s*conditioning/i, scale: 'full', baseCost: 7500, description: 'HVAC replacement' }
+      ],
+      type: 'objective',
+      category: 'HVAC'
+    },
+    
+    windows: {
+      patterns: [
+        { regex: /(one|1|single)\s*window/i, scale: 'single', baseCost: 650, description: 'Single window replacement' },
+        { regex: /(few|some|several)\s*windows?/i, scale: 'partial', baseCost: 2500, description: 'Several windows replacement' },
+        { regex: /all\s*windows?|windows?\s*throughout/i, scale: 'full', baseCost: 8500, description: 'All windows replacement' },
+        { regex: /windows?/i, scale: 'partial', baseCost: 2500, description: 'Window replacement' }
+      ],
+      type: 'objective',
+      category: 'Windows'
+    },
+  }
+
+  const parseIssues = (text) => {
+    const found = []
+    const lowerText = text.toLowerCase()
+    
+    // Check each category in the database
+    Object.entries(negotiationDatabase).forEach(([key, category]) => {
+      // Check each pattern in the category
+      for (const pattern of category.patterns) {
+        if (pattern.regex.test(lowerText)) {
+          // Calculate adjusted cost based on property specifics
+          let adjustedCost = pattern.baseCost
+          
+          // Highland Park premium (10-15% depending on type)
+          const locationMultiplier = category.type === 'objective' ? 1.1 : 1.15
+          adjustedCost = Math.round(adjustedCost * locationMultiplier)
+          
+          // Add to found issues (avoid duplicates)
+          if (!found.some(f => f.category === category.category)) {
+            found.push({
+              type: category.type,
+              category: category.category,
+              description: pattern.description,
+              cost: adjustedCost,
+              scale: pattern.scale,
+              id: Math.random().toString(36).substr(2, 9)
+            })
+          }
+          break // Use first matching pattern
+        }
+      }
+    })
+    
+    return found
+  }
+
+  const handleIssueInputChange = (text) => {
+    setIssueInput(text)
+    if (text.trim()) {
+      const parsed = parseIssues(text)
+      setParsedIssues(parsed)
+    } else {
+      setParsedIssues([])
+    }
   }
 
   const PropertyCard = ({ property }) => (
@@ -330,9 +558,9 @@ const ResultsScreen = ({ onNavigate, mode = 'discovery' }) => {
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: '8px'
-                }}>
+                }} onClick={saveToProfile}>
                   <Download size={18} />
-                  Save Properties
+                  Save to Profile
                 </button>
                 <button style={{
                   background: 'white',
@@ -414,9 +642,9 @@ const ResultsScreen = ({ onNavigate, mode = 'discovery' }) => {
                   overflow: 'hidden'
                 }}>
                   {[
-                    { id: 'subject', label: 'Subject Property', icon: '🏠' },
-                    { id: 'comparables', label: 'Comparables', icon: '📋' },
-                    { id: 'negotiation', label: 'Intelligence', icon: '🤝' }
+                    { id: 'subject', label: 'Subject Property' },
+                    { id: 'comparables', label: 'Comparables' },
+                    { id: 'negotiation', label: 'Intelligence' }
                   ].map(tab => (
                     <button
                       key={tab.id}
@@ -438,7 +666,6 @@ const ResultsScreen = ({ onNavigate, mode = 'discovery' }) => {
                       }}
                       onClick={() => setCmaTab(tab.id)}
                     >
-                      <span style={{ fontSize: '14px' }}>{tab.icon}</span>
                       <span>{tab.label}</span>
                     </button>
                   ))}
@@ -620,15 +847,7 @@ const ResultsScreen = ({ onNavigate, mode = 'discovery' }) => {
                         alignItems: 'center',
                         gap: '8px'
                       }}>
-                        🎯 Subject Property Seller Motivation
-                        <span style={{
-                          background: '#dcfce7',
-                          color: '#16a34a',
-                          padding: '4px 8px',
-                          borderRadius: '12px',
-                          fontSize: '11px',
-                          fontWeight: '600'
-                        }}>AI-Powered</span>
+                        Subject Property Seller Motivation
                       </h3>
 
                       {/* High Motivation Property */}
@@ -706,7 +925,7 @@ const ResultsScreen = ({ onNavigate, mode = 'discovery' }) => {
                         alignItems: 'center',
                         gap: '8px'
                       }}>
-                        📋 Selected Comparables
+                        Selected Comparables
                         <span style={{
                           background: '#e0f2fe',
                           color: '#0284c7',
@@ -803,15 +1022,7 @@ const ResultsScreen = ({ onNavigate, mode = 'discovery' }) => {
                         alignItems: 'center',
                         gap: '8px'
                       }}>
-                        🤝 Negotiation Intelligence
-                        <span style={{
-                          background: '#fef3c7',
-                          color: '#d97706',
-                          padding: '4px 8px',
-                          borderRadius: '12px',
-                          fontSize: '11px',
-                          fontWeight: '600'
-                        }}>Deal Optimizer</span>
+                        Negotiation Intelligence
                       </h3>
 
                       {/* Neighborhood Intelligence */}
@@ -827,7 +1038,7 @@ const ResultsScreen = ({ onNavigate, mode = 'discovery' }) => {
                           fontWeight: '700',
                           color: '#1e293b',
                           marginBottom: '12px'
-                        }}>🧠 Highland Park Neighborhood Intelligence</h4>
+                        }}>Highland Park Neighborhood Intelligence</h4>
                         <div style={{
                           display: 'grid',
                           gridTemplateColumns: 'repeat(2, 1fr)',
@@ -880,7 +1091,7 @@ const ResultsScreen = ({ onNavigate, mode = 'discovery' }) => {
                         </div>
                       </div>
 
-                      {/* Natural Language Parser */}
+                      {/* Issues Parser */}
                       <div style={{
                         background: 'rgba(139,92,246,0.05)',
                         borderRadius: '12px',
@@ -892,20 +1103,9 @@ const ResultsScreen = ({ onNavigate, mode = 'discovery' }) => {
                           fontSize: '16px',
                           fontWeight: '700',
                           color: '#1e293b',
-                          marginBottom: '12px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px'
+                          marginBottom: '12px'
                         }}>
-                          🤖 AI Issue Parser
-                          <span style={{
-                            background: '#8b5cf6',
-                            color: 'white',
-                            padding: '4px 8px',
-                            borderRadius: '6px',
-                            fontSize: '10px',
-                            fontWeight: '600'
-                          }}>BETA</span>
+                          Issues
                         </h4>
                         
                         <div style={{
@@ -913,10 +1113,13 @@ const ResultsScreen = ({ onNavigate, mode = 'discovery' }) => {
                           border: '2px dashed #d1d5db',
                           borderRadius: '8px',
                           padding: '12px',
-                          marginBottom: '12px'
+                          marginBottom: '12px',
+                          position: 'relative'
                         }}>
                           <textarea
-                            placeholder="Describe issues or preferences (e.g., 'needs new roof', 'wants different paint', 'foundation concerns', 'outdated kitchen')..."
+                            placeholder="Describe property issues and defects (e.g., 'needs new roof', 'foundation concerns', 'HVAC problems', 'electrical issues')..."
+                            value={issueInput}
+                            onChange={(e) => handleIssueInputChange(e.target.value)}
                             style={{
                               width: '100%',
                               minHeight: '60px',
@@ -925,27 +1128,52 @@ const ResultsScreen = ({ onNavigate, mode = 'discovery' }) => {
                               fontSize: '13px',
                               color: '#374151',
                               backgroundColor: 'transparent',
-                              resize: 'vertical'
+                              resize: 'vertical',
+                              paddingRight: '40px'
                             }}
                           />
+                          <button
+                            onClick={toggleRecording}
+                            style={{
+                              position: 'absolute',
+                              top: '12px',
+                              right: '12px',
+                              background: isRecording ? '#ef4444' : '#6b7280',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '50%',
+                              width: '32px',
+                              height: '32px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              transition: 'all 0.3s ease',
+                              animation: isRecording ? 'pulse 1.5s infinite' : 'none'
+                            }}
+                            title={isRecording ? 'Stop recording' : 'Start voice input'}
+                          >
+                            {isRecording ? <MicOff size={16} /> : <Mic size={16} />}
+                          </button>
                         </div>
                         
                         <div style={{
                           display: 'flex',
                           gap: '8px',
                           flexWrap: 'wrap',
-                          marginBottom: '12px'
+                          marginBottom: parsedIssues.length > 0 ? '16px' : '0'
                         }}>
                           {[
                             'needs new roof',
                             'foundation issues', 
-                            'wants modern paint',
-                            'outdated kitchen',
-                            'carpet replacement',
-                            'electrical upgrade'
+                            'HVAC problems',
+                            'electrical issues',
+                            'plumbing leaks',
+                            'window replacement needed'
                           ].map((phrase, index) => (
                             <button
                               key={index}
+                              onClick={() => handleIssueInputChange(issueInput + (issueInput ? ', ' : '') + phrase)}
                               style={{
                                 padding: '4px 8px',
                                 borderRadius: '6px',
@@ -960,30 +1188,79 @@ const ResultsScreen = ({ onNavigate, mode = 'discovery' }) => {
                           ))}
                         </div>
 
-                        {/* Parsed Results Preview */}
-                        <div style={{
-                          background: 'rgba(139,92,246,0.1)',
-                          borderRadius: '8px',
-                          padding: '12px',
-                          fontSize: '12px'
-                        }}>
+                        {/* Live Parsed Results */}
+                        {parsedIssues.length > 0 && (
                           <div style={{
-                            fontWeight: '600',
-                            color: '#7c3aed',
-                            marginBottom: '8px'
-                          }}>🎯 Auto-Parsed Example:</div>
-                          <div style={{ display: 'grid', gap: '4px' }}>
-                            <div style={{ color: '#dc2626' }}>
-                              • <strong>Objective</strong>: "needs new roof" → -$18,500 (2,380 sqft × $7.75/sqft + labor)
+                            background: '#ffffff',
+                            borderRadius: '8px',
+                            padding: '12px',
+                            border: '1px solid #e5e7eb'
+                          }}>
+                            <div style={{
+                              fontWeight: '600',
+                              color: '#1e293b',
+                              marginBottom: '12px',
+                              fontSize: '14px'
+                            }}>Parsed Issues:</div>
+                            <div style={{ display: 'grid', gap: '8px' }}>
+                              {parsedIssues.map((issue) => (
+                                <div key={issue.id} style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  padding: '8px 12px',
+                                  background: '#f8fafc',
+                                  borderRadius: '6px',
+                                  borderLeft: `4px solid ${issue.type === 'objective' ? '#dc2626' : '#8b5cf6'}`
+                                }}>
+                                  <div>
+                                    <div style={{
+                                      fontSize: '13px',
+                                      fontWeight: '600',
+                                      color: '#1e293b'
+                                    }}>{issue.category}</div>
+                                    <div style={{
+                                      fontSize: '11px',
+                                      color: '#64748b'
+                                    }}>{issue.description}</div>
+                                    <div style={{
+                                      fontSize: '10px',
+                                      color: issue.type === 'objective' ? '#dc2626' : '#8b5cf6',
+                                      fontWeight: '600',
+                                      textTransform: 'uppercase'
+                                    }}>{issue.type}</div>
+                                  </div>
+                                  <div style={{
+                                    fontSize: '14px',
+                                    fontWeight: '700',
+                                    color: issue.type === 'objective' ? '#dc2626' : '#8b5cf6'
+                                  }}>-${issue.cost.toLocaleString()}</div>
+                                </div>
+                              ))}
                             </div>
-                            <div style={{ color: '#8b5cf6' }}>
-                              • <strong>Subjective</strong>: "wants modern paint" → -$7,100 (2,380 sqft × $3/sqft interior)
-                            </div>
-                            <div style={{ color: '#f59e0b' }}>
-                              • <strong>Context</strong>: Highland Park 2018 build suggests premium materials/labor
+                            
+                            {/* Total */}
+                            <div style={{
+                              marginTop: '12px',
+                              paddingTop: '12px',
+                              borderTop: '1px solid #e5e7eb',
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center'
+                            }}>
+                              <div style={{
+                                fontSize: '14px',
+                                fontWeight: '600',
+                                color: '#1e293b'
+                              }}>Total Estimated Impact:</div>
+                              <div style={{
+                                fontSize: '16px',
+                                fontWeight: '900',
+                                color: '#dc2626'
+                              }}>-${parsedIssues.reduce((total, issue) => total + issue.cost, 0).toLocaleString()}</div>
                             </div>
                           </div>
-                        </div>
+                        )}
                       </div>
 
                       {/* Total Opportunity */}
@@ -999,7 +1276,7 @@ const ResultsScreen = ({ onNavigate, mode = 'discovery' }) => {
                           fontWeight: '900',
                           color: '#dc2626',
                           marginBottom: '4px'
-                        }}>$23,500</div>
+                        }}>${(parsedIssues.reduce((sum, issue) => sum + issue.cost, 0)).toLocaleString()}</div>
                         <div style={{
                           fontSize: '14px',
                           fontWeight: '600',
@@ -1009,7 +1286,7 @@ const ResultsScreen = ({ onNavigate, mode = 'discovery' }) => {
                         <div style={{
                           fontSize: '12px',
                           color: '#64748b'
-                        }}>Objective Issues: $18,500 • Subjective Items: $5,000</div>
+                        }}>Property Issues: ${parsedIssues.filter(i => i.type === 'objective').reduce((sum, issue) => sum + issue.cost, 0).toLocaleString()}</div>
                       </div>
 
                       {/* Objective Issues */}
@@ -1033,26 +1310,21 @@ const ResultsScreen = ({ onNavigate, mode = 'discovery' }) => {
                             alignItems: 'center',
                             gap: '8px'
                           }}>
-                            <span style={{ fontSize: '16px' }}>🔧</span>
                             <span style={{
                               fontSize: '16px',
                               fontWeight: '700',
                               color: '#1e293b'
-                            }}>Objective Issues</span>
+                            }}>Property Issues</span>
                           </div>
                           <span style={{
                             fontSize: '16px',
                             fontWeight: '700',
                             color: '#dc2626'
-                          }}>$18,500</span>
+                          }}>${parsedIssues.filter(i => i.type === 'objective').reduce((sum, issue) => sum + issue.cost, 0).toLocaleString()}</span>
                         </div>
 
                         <div style={{ display: 'grid', gap: '12px' }}>
-                          {[
-                            { name: 'Roof Condition', desc: '6-year-old roof with documented leak repairs in 2023', value: '-$12,000', impact: 'high' },
-                            { name: 'Electrical Panel', desc: 'Original 2018 panel not upgraded to 200-amp', value: '-$4,500', impact: 'medium' },
-                            { name: 'Window Efficiency', desc: 'Single-pane windows in secondary bedrooms', value: '-$2,000', impact: 'low' }
-                          ].map((issue, index) => (
+                          {parsedIssues.filter(i => i.type === 'objective').map((issue, index) => (
                             <div key={index} style={{
                               display: 'flex',
                               alignItems: 'flex-start',
@@ -1068,97 +1340,24 @@ const ResultsScreen = ({ onNavigate, mode = 'discovery' }) => {
                                   fontWeight: '600',
                                   color: '#1e293b',
                                   marginBottom: '2px'
-                                }}>{issue.name}</div>
+                                }}>{issue.description}</div>
                                 <div style={{
                                   fontSize: '11px',
                                   color: '#64748b',
                                   lineHeight: '1.3'
-                                }}>{issue.desc}</div>
+                                }}>{issue.category} - {issue.scale}</div>
                               </div>
                               <div style={{
                                 fontSize: '14px',
                                 fontWeight: '700',
                                 color: '#dc2626',
                                 flexShrink: 0
-                              }}>{issue.value}</div>
+                              }}>-${issue.cost.toLocaleString()}</div>
                             </div>
                           ))}
                         </div>
                       </div>
 
-                      {/* Subjective Preferences */}
-                      <div style={{
-                        background: '#f8fafc',
-                        borderRadius: '12px',
-                        padding: '16px',
-                        marginBottom: '16px',
-                        borderLeft: '4px solid #8b5cf6'
-                      }}>
-                        <div style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          marginBottom: '12px',
-                          paddingBottom: '8px',
-                          borderBottom: '1px solid #e2e8f0'
-                        }}>
-                          <div style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px'
-                          }}>
-                            <span style={{ fontSize: '16px' }}>🎨</span>
-                            <span style={{
-                              fontSize: '16px',
-                              fontWeight: '700',
-                              color: '#1e293b'
-                            }}>Subjective Preferences</span>
-                          </div>
-                          <span style={{
-                            fontSize: '16px',
-                            fontWeight: '700',
-                            color: '#8b5cf6'
-                          }}>$5,000</span>
-                        </div>
-
-                        <div style={{ display: 'grid', gap: '12px' }}>
-                          {[
-                            { name: 'Interior Paint', desc: 'Bold accent walls and dated color schemes', value: '-$2,500' },
-                            { name: 'Light Fixtures', desc: 'Builder-grade fixtures throughout', value: '-$1,500' },
-                            { name: 'Carpet Replacement', desc: 'Beige carpet trending toward hardwood', value: '-$1,000' }
-                          ].map((issue, index) => (
-                            <div key={index} style={{
-                              display: 'flex',
-                              alignItems: 'flex-start',
-                              gap: '12px',
-                              padding: '12px',
-                              background: '#ffffff',
-                              borderRadius: '8px',
-                              borderLeft: '4px solid #8b5cf6'
-                            }}>
-                              <div style={{ flex: 1 }}>
-                                <div style={{
-                                  fontSize: '13px',
-                                  fontWeight: '600',
-                                  color: '#1e293b',
-                                  marginBottom: '2px'
-                                }}>{issue.name}</div>
-                                <div style={{
-                                  fontSize: '11px',
-                                  color: '#64748b',
-                                  lineHeight: '1.3'
-                                }}>{issue.desc}</div>
-                              </div>
-                              <div style={{
-                                fontSize: '14px',
-                                fontWeight: '700',
-                                color: '#8b5cf6',
-                                flexShrink: 0
-                              }}>{issue.value}</div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
 
                       {/* Strategy Recommendations */}
                       <div style={{
@@ -1173,7 +1372,6 @@ const ResultsScreen = ({ onNavigate, mode = 'discovery' }) => {
                           gap: '8px',
                           marginBottom: '12px'
                         }}>
-                          <span style={{ fontSize: '16px' }}>🎯</span>
                           <span style={{
                             fontSize: '14px',
                             fontWeight: '700',
@@ -1341,42 +1539,59 @@ const ResultsScreen = ({ onNavigate, mode = 'discovery' }) => {
             <div style={{ marginTop: '32px', marginBottom: '40px' }}>
               <div style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(2, 1fr)',
-                gap: '12px'
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap: '8px'
               }}>
-                <button style={{
-                  background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
+                <button onClick={saveToProfile} style={{
+                  background: 'linear-gradient(135deg, #10b981, #059669)',
                   color: 'white',
-                  padding: '16px',
+                  padding: '12px 8px',
                   borderRadius: '12px',
                   border: 'none',
-                  fontSize: '14px',
+                  fontSize: '12px',
                   fontWeight: '700',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: '8px'
+                  gap: '4px'
                 }}>
-                  <Download size={18} />
-                  Download PDF
+                  <Download size={16} />
+                  Save
+                </button>
+                <button style={{
+                  background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
+                  color: 'white',
+                  padding: '12px 8px',
+                  borderRadius: '12px',
+                  border: 'none',
+                  fontSize: '12px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '4px'
+                }}>
+                  <Download size={16} />
+                  PDF
                 </button>
                 <button style={{
                   background: 'white',
                   color: '#3b82f6',
-                  padding: '16px',
+                  padding: '12px 8px',
                   borderRadius: '12px',
                   border: '2px solid #3b82f6',
-                  fontSize: '14px',
+                  fontSize: '12px',
                   fontWeight: '700',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: '8px'
+                  gap: '4px'
                 }}>
-                  <Share size={18} />
-                  Share Report
+                  <Share size={16} />
+                  Share
                 </button>
               </div>
             </div>
