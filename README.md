@@ -311,7 +311,114 @@ src/
 
 ---
 
-**Last Updated**: July 23, 2025  
-**Development Session**: Voice integration, CMA streamlining, negotiation intelligence  
-**Status**: Production-ready MVP with patent-worthy innovations  
-**Next Phase**: Backend integration, contractor API connections, mobile deployment
+---
+
+## Major Development Session - July 25, 2025
+
+### 🎯 Key Focus: Property Card Swipe & AR Camera Enhancement
+
+#### Property Card Screen Improvements
+- **Swipe Gesture Implementation**: Added smart gesture detection that differentiates between vertical scroll and horizontal swipe
+- **Direction Locking**: System detects initial touch direction and locks behavior (horizontal = swipe, vertical = scroll)
+- **Visual Enhancements**: Added property icons (🏠, 🏡, 🏘️, 🏰, 🏆) to thumbnail navigation
+- **Touch Sensitivity**: Improved swipe detection with direction-aware thresholds
+- **Status**: Reverted to stable version after scroll/swipe conflict issues
+
+#### AR Camera Screen Complete Transformation
+- **From Property Detection to Lifestyle Analysis**: Complete paradigm shift in functionality
+- **Real Camera Implementation**: Added getUserMedia API with multiple fallback attempts
+- **Voice Input Integration**: Added speech recognition for lifestyle preferences during scanning
+- **UI Streamlining**: Consolidated to compact horizontal input bar at bottom
+- **Action Button**: Large green button for direct navigation to property cards
+
+#### Technical Challenges & Solutions
+
+**1. Swipe/Scroll Conflict**
+- **Issue**: Vertical scrolling was triggering horizontal swipes
+- **Attempted Fix**: Smart gesture detection with direction locking
+- **Result**: Still conflicting - reverted to GitHub save point
+- **Current State**: Swipe limited to image area only
+
+**2. Camera Access Issues**
+- **Issue**: "Camera not supported" on Android Chrome
+- **Debugging Steps**:
+  - Added legacy getUserMedia fallbacks
+  - Multiple constraint configurations (environment, any, basic)
+  - Added onloadedmetadata handlers
+  - Still unresolved - likely HTTPS requirement
+
+**3. UI Real Estate**
+- **Issue**: Text overlays blocking camera view
+- **Solution**: Removed all instruction text, moved input to bottom
+- **Result**: Clean camera interface with minimal UI obstruction
+
+#### Voice Recognition Features
+- **Continuous Recognition**: Records while button held
+- **Visual Feedback**: Red recording indicator with pulse animation
+- **Text Integration**: Voice input appends to text field seamlessly
+- **Placeholder Updates**: "Listening..." during recording
+
+#### Current AR Screen Flow
+1. Camera attempts to initialize with fallbacks
+2. User can input lifestyle preferences via voice or text
+3. Large action button navigates directly to property cards
+4. Analysis data stored in localStorage for cross-screen persistence
+
+### 📱 Mobile Testing & Network Access
+- **Network Dev Server**: Configured with `--host` flag
+- **Access URL**: http://192.168.1.73:3000
+- **Phone Testing**: Enabled for same-network devices
+- **Known Issues**: Camera requires HTTPS on mobile browsers
+
+### 🔧 Technical Implementation Details
+
+#### Camera Initialization Strategy
+```javascript
+// Attempt order:
+1. Modern API with back camera
+2. Any available camera
+3. Basic video constraints
+4. Legacy getUserMedia fallback
+```
+
+#### Gesture Detection Algorithm
+```javascript
+// Smart direction detection
+if (deltaX > deltaY * 1.5) → horizontal intent
+if (deltaY > deltaX * 1.5) → vertical intent
+// Lock behavior based on initial direction
+```
+
+### 📊 Current Status Summary
+
+#### Working Features ✅
+- Property card display with all details
+- Property icon differentiation
+- Voice input on AR screen
+- Keyboard navigation (arrow keys)
+- Network access for mobile testing
+- Direct navigation button to property cards
+
+#### In Progress 🔄
+- Camera access on mobile browsers
+- Perfect swipe/scroll discrimination
+- HTTPS setup for getUserMedia
+
+#### Known Limitations ⚠️
+- Camera requires HTTPS on Chrome/Safari
+- Swipe gestures limited to image area
+- No actual image analysis (placeholder only)
+
+### 🚀 Next Steps
+1. **HTTPS Setup**: Required for camera on mobile
+2. **Swipe Refinement**: Better touch handling algorithm
+3. **Camera Fallbacks**: WebRTC alternatives
+4. **Backend Integration**: Real property matching
+5. **Analysis Engine**: Actual lifestyle feature detection
+
+---
+
+**Last Updated**: July 25, 2025  
+**Development Session**: Property card swipe fixes, AR camera real implementation, voice input, UI streamlining  
+**Status**: Core features working, camera access needs HTTPS, swipe needs refinement  
+**Next Phase**: HTTPS setup, enhanced gesture detection, backend integration

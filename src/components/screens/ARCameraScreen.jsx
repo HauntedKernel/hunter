@@ -1,47 +1,254 @@
-import { useState, useEffect } from 'react'
-import { Camera, X, RotateCcw, Zap, MapPin, Loader } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Camera, X, RotateCcw, Zap, MapPin, Loader, Mic, MicOff } from 'lucide-react'
 
 const ARCameraScreen = ({ onNavigate }) => {
-  const [isScanning, setIsScanning] = useState(false)
-  const [detectedProperty, setDetectedProperty] = useState(null)
-  const [scanProgress, setScanProgress] = useState(0)
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [analysisComplete, setAnalysisComplete] = useState(false)
+  const [analysisProgress, setAnalysisProgress] = useState(0)
+  const [detectedFeatures, setDetectedFeatures] = useState([])
+  const [cameraStream, setCameraStream] = useState(null)
+  const [cameraError, setCameraError] = useState(null)
+  const [isRecording, setIsRecording] = useState(false)
+  const [lifestyleInput, setLifestyleInput] = useState('')
+  const [recognition, setRecognition] = useState(null)
+  const [retryAttempts, setRetryAttempts] = useState(0)
+  const videoRef = useRef(null)
 
-  // Simulate AR scanning process
+  const retryCamera = () => {
+    console.log('Manual camera retry...')
+    setCameraError(null)
+    setCameraStream(null)
+    setRetryAttempts(prev => prev + 1)
+  }
+
+  // Initialize camera with multiple fallback attempts
   useEffect(() => {
-    if (isScanning) {
-      const interval = setInterval(() => {
-        setScanProgress(prev => {
-          const newProgress = prev + 2
-          if (newProgress >= 100) {
-            setIsScanning(false)
-            setDetectedProperty({
-              address: '456 Oak Avenue',
-              city: 'Dallas, TX',
-              confidence: 94
+    const initCamera = async () => {
+      console.log('Attempting to initialize camera...')
+      
+      // Check if getUserMedia is supported with better detection
+      if (!navigator.mediaDevices) {
+        if (navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia) {
+          console.log('Using legacy getUserMedia')
+          // Try legacy getUserMedia as fallback
+          const getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia
+          try {
+            const stream = await new Promise((resolve, reject) => {
+              getUserMedia.call(navigator, { video: true }, resolve, reject)
             })
+            setCameraStream(stream)
+            setCameraError(null)
+            if (videoRef.current) {
+              videoRef.current.srcObject = stream
+              videoRef.current.onloadedmetadata = () => {
+                videoRef.current.play().catch(e => console.log('Video play error:', e))
+              }
+            }
+            return
+          } catch (error) {
+            console.error('Legacy camera failed:', error)
+            setCameraError('Camera access failed - please allow permissions')
+            return
+          }
+        } else {
+          setCameraError('Camera not supported - try Chrome or Safari')
+          return
+        }
+      }
+      
+      if (!navigator.mediaDevices.getUserMedia) {
+        setCameraError('Camera API not available - check browser settings')
+        return
+      }
+
+      try {
+        // First attempt: back camera with specific constraints
+        console.log('Trying back camera...')
+        let stream = await navigator.mediaDevices.getUserMedia({
+          video: { 
+            facingMode: 'environment',
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          },
+          audio: false
+        })
+        
+        console.log('Back camera success!')
+        setCameraStream(stream)
+        setCameraError(null)
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream
+          // Force video to load and play
+          videoRef.current.onloadedmetadata = () => {
+            videoRef.current.play().catch(e => console.log('Video play error:', e))
+          }
+        }
+        return
+        
+      } catch (error) {
+        console.error('Back camera failed:', error)
+        
+        try {
+          // Second attempt: any camera
+          console.log('Trying any camera...')
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { 
+              width: { ideal: 1280 },
+              height: { ideal: 720 }
+            },
+            audio: false
+          })
+          
+          console.log('Any camera success!')
+          setCameraStream(stream)
+          setCameraError(null)
+          if (videoRef.current) {
+            videoRef.current.srcObject = stream
+            videoRef.current.onloadedmetadata = () => {
+              videoRef.current.play().catch(e => console.log('Video play error:', e))
+            }
+          }
+          return
+          
+        } catch (error2) {
+          console.error('Any camera failed:', error2)
+          
+          try {
+            // Third attempt: basic video only
+            console.log('Trying basic video...')
+            const stream = await navigator.mediaDevices.getUserMedia({
+              video: true,
+              audio: false
+            })
+            
+            console.log('Basic video success!')
+            setCameraStream(stream)
+            setCameraError(null)
+            if (videoRef.current) {
+              videoRef.current.srcObject = stream
+              videoRef.current.onloadedmetadata = () => {
+                videoRef.current.play().catch(e => console.log('Video play error:', e))
+              }
+            }
+            return
+            
+          } catch (error3) {
+            console.error('All camera attempts failed:', error3)
+            setCameraError(`Camera error: ${error3.name} - ${error3.message}. Try refreshing or using a different browser.`)
+          }
+        }
+      }
+    }
+
+    // Add a small delay to ensure DOM is ready
+    const timer = setTimeout(initCamera, 100)
+
+    // Cleanup camera on unmount
+    return () => {
+      clearTimeout(timer)
+      if (cameraStream) {
+        console.log('Cleaning up camera stream')
+        cameraStream.getTracks().forEach(track => track.stop())
+      }
+    }
+  }, [retryAttempts]) // Re-run when retry is triggered
+
+  // Initialize speech recognition
+  useEffect(() => {
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+      const recognitionInstance = new SpeechRecognition()
+      
+      recognitionInstance.continuous = true
+      recognitionInstance.interimResults = true
+      recognitionInstance.lang = 'en-US'
+      
+      recognitionInstance.onresult = (event) => {
+        let finalTranscript = ''
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript
+          }
+        }
+        if (finalTranscript) {
+          setLifestyleInput(prev => prev + ' ' + finalTranscript)
+        }
+      }
+      
+      recognitionInstance.onerror = (event) => {
+        console.error('Speech recognition error:', event.error)
+        setIsRecording(false)
+      }
+      
+      recognitionInstance.onend = () => {
+        setIsRecording(false)
+      }
+      
+      setRecognition(recognitionInstance)
+    }
+  }, [])
+
+  // Simulate lifestyle analysis process
+  useEffect(() => {
+    if (isAnalyzing) {
+      const interval = setInterval(() => {
+        setAnalysisProgress(prev => {
+          const newProgress = prev + 3
+          if (newProgress >= 100) {
+            setIsAnalyzing(false)
+            setAnalysisComplete(true)
+            // Simulate detected lifestyle features
+            setDetectedFeatures([
+              'Open concept layout',
+              'Large kitchen island', 
+              'Natural light',
+              'Outdoor living space',
+              'Modern finishes'
+            ])
             clearInterval(interval)
             return 100
           }
           return newProgress
         })
-      }, 50)
+      }, 80)
       return () => clearInterval(interval)
     }
-  }, [isScanning])
+  }, [isAnalyzing])
 
-  const startScan = () => {
-    setIsScanning(true)
-    setScanProgress(0)
-    setDetectedProperty(null)
+  const startAnalysis = () => {
+    setIsAnalyzing(true)
+    setAnalysisProgress(0)
+    setAnalysisComplete(false)
+    setDetectedFeatures([])
   }
 
-  const resetScan = () => {
-    setIsScanning(false)
-    setScanProgress(0)
-    setDetectedProperty(null)
+  const resetAnalysis = () => {
+    setIsAnalyzing(false)
+    setAnalysisProgress(0) 
+    setAnalysisComplete(false)
+    setDetectedFeatures([])
   }
 
-  const confirmProperty = () => {
+  const toggleRecording = () => {
+    if (!recognition) return
+    
+    if (isRecording) {
+      recognition.stop()
+      setIsRecording(false)
+    } else {
+      recognition.start()
+      setIsRecording(true)
+    }
+  }
+
+  const findMatches = () => {
+    // Store both voice input and detected visual features
+    const analysisData = {
+      voiceInput: lifestyleInput,
+      visualFeatures: detectedFeatures,
+      timestamp: new Date().toISOString()
+    }
+    localStorage.setItem('arAnalysisData', JSON.stringify(analysisData))
     onNavigate('property')
   }
 
@@ -112,7 +319,7 @@ const ARCameraScreen = ({ onNavigate }) => {
           fontWeight: '700',
           color: 'white',
           textShadow: '0 2px 8px rgba(0,0,0,0.5)'
-        }}>AR Property Scan</div>
+        }}>AR Lifestyle Analysis</div>
         <div 
           className="reset-button" 
           style={{
@@ -127,31 +334,98 @@ const ARCameraScreen = ({ onNavigate }) => {
             cursor: 'pointer',
             border: '1px solid rgba(255,255,255,0.1)'
           }}
-          onClick={resetScan}
+          onClick={resetAnalysis}
         >
           <RotateCcw size={18} color="white" />
         </div>
       </div>
       
-      {/* Camera Placeholder */}
+      {/* Camera Feed */}
       <div style={{
         flex: 1,
         position: 'relative',
-        background: 'linear-gradient(45deg, #1a1a1a, #2a2a2a)',
+        background: '#000000',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center'
       }}>
-        {/* Camera Feed Simulation */}
-        <div style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          opacity: 0.3
-        }}></div>
+        {/* Real Camera Video */}
+        {cameraStream && !cameraError ? (
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              transform: 'scaleX(-1)' // Mirror the video for better UX
+            }}
+          />
+        ) : (
+          <>
+            {/* Fallback Camera Simulation */}
+            <div style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              opacity: 0.3
+            }}></div>
+            
+            {/* Camera Error Message */}
+            {cameraError && (
+              <div style={{
+                position: 'absolute',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                background: 'rgba(220, 38, 38, 0.9)',
+                color: 'white',
+                padding: '16px 20px',
+                borderRadius: '12px',
+                textAlign: 'center',
+                fontSize: '13px',
+                fontWeight: '600',
+                zIndex: 15,
+                maxWidth: '300px'
+              }}>
+                <div style={{ marginBottom: '12px' }}>
+                  {cameraError}
+                </div>
+                <button
+                  onClick={retryCamera}
+                  style={{
+                    background: 'rgba(255,255,255,0.2)',
+                    border: '1px solid rgba(255,255,255,0.3)',
+                    color: 'white',
+                    padding: '8px 16px',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    marginRight: '8px'
+                  }}
+                >
+                  Retry Camera
+                </button>
+                <div style={{ 
+                  marginTop: '8px', 
+                  fontSize: '11px', 
+                  opacity: 0.8 
+                }}>
+                  Attempts: {retryAttempts + 1}
+                </div>
+              </div>
+            )}
+          </>
+        )}
         
         {/* Scanning Grid Overlay */}
         <div style={{
@@ -165,7 +439,7 @@ const ARCameraScreen = ({ onNavigate }) => {
             linear-gradient(90deg, rgba(59,130,246,0.3) 1px, transparent 1px)
           `,
           backgroundSize: '30px 30px',
-          animation: isScanning ? 'pulse 2s infinite' : 'none',
+          animation: isAnalyzing ? 'pulse 2s infinite' : 'none',
           zIndex: 10
         }}></div>
         
@@ -177,7 +451,7 @@ const ARCameraScreen = ({ onNavigate }) => {
           borderRadius: '16px',
           position: 'relative',
           zIndex: 20,
-          animation: isScanning ? 'scan-pulse 1.5s infinite' : 'none'
+          animation: isAnalyzing ? 'scan-pulse 1.5s infinite' : 'none'
         }}>
           {/* Corner markers */}
           {[
@@ -204,15 +478,15 @@ const ARCameraScreen = ({ onNavigate }) => {
             height: '20px',
             border: '2px solid #3b82f6',
             borderRadius: '50%',
-            animation: isScanning ? 'pulse 1s infinite' : 'none'
+            animation: isAnalyzing ? 'pulse 1s infinite' : 'none'
           }}></div>
         </div>
         
-        {/* Scanning Progress */}
-        {isScanning && (
+        {/* Analysis Progress */}
+        {isAnalyzing && (
           <div style={{
             position: 'absolute',
-            bottom: '160px',
+            bottom: '300px',
             left: '50%',
             transform: 'translateX(-50%)',
             background: 'rgba(0,0,0,0.7)',
@@ -229,12 +503,94 @@ const ARCameraScreen = ({ onNavigate }) => {
               color: 'white',
               fontSize: '14px',
               fontWeight: '600'
-            }}>Scanning... {scanProgress}%</span>
+            }}>Analyzing lifestyle features... {analysisProgress}%</span>
           </div>
         )}
         
-        {/* Property Detection Result */}
-        {detectedProperty && (
+        {/* Bottom Action Button */}
+        <div style={{
+          position: 'absolute',
+          bottom: '30px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 25
+        }}>
+          <button
+            onClick={() => onNavigate('property')}
+            style={{
+              background: 'linear-gradient(135deg, #16a34a, #15803d)',
+              border: 'none',
+              borderRadius: '50%',
+              width: '80px',
+              height: '80px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              boxShadow: '0 8px 24px rgba(22,163,74,0.4)',
+              transition: 'all 0.3s ease'
+            }}
+          >
+            <Zap size={32} color="white" />
+          </button>
+        </div>
+
+        {/* Compact Lifestyle Input - Moved to Bottom */}
+        <div style={{
+          position: 'absolute',
+          bottom: '140px',
+          left: '20px',
+          right: '20px',
+          background: 'rgba(0,0,0,0.8)',
+          backdropFilter: 'blur(10px)',
+          borderRadius: '12px',
+          padding: '12px',
+          border: '1px solid rgba(255,255,255,0.1)',
+          zIndex: 25,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px'
+        }}>
+          <button
+            onClick={toggleRecording}
+            style={{
+              background: isRecording ? '#ef4444' : '#3b82f6',
+              border: 'none',
+              borderRadius: '50%',
+              width: '36px',
+              height: '36px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              transition: 'all 0.3s ease',
+              animation: isRecording ? 'pulse 1.5s infinite' : 'none',
+              flexShrink: 0
+            }}
+          >
+            {isRecording ? <MicOff size={18} color="white" /> : <Mic size={18} color="white" />}
+          </button>
+          
+          <input
+            type="text"
+            value={lifestyleInput}
+            onChange={(e) => setLifestyleInput(e.target.value)}
+            placeholder={isRecording ? "Listening..." : "Describe preferences..."}
+            style={{
+              flex: 1,
+              background: 'rgba(255,255,255,0.1)',
+              border: '1px solid rgba(255,255,255,0.2)',
+              borderRadius: '8px',
+              padding: '8px 12px',
+              color: 'white',
+              fontSize: '14px',
+              outline: 'none'
+            }}
+          />
+        </div>
+
+        {/* Lifestyle Analysis Results */}
+        {analysisComplete && (
           <div style={{
             position: 'absolute',
             bottom: '120px',
@@ -252,25 +608,55 @@ const ARCameraScreen = ({ onNavigate }) => {
               display: 'flex',
               alignItems: 'center',
               gap: '12px',
-              marginBottom: '8px'
+              marginBottom: '12px'
             }}>
-              <MapPin size={20} color="white" />
+              <Zap size={20} color="white" />
               <div style={{
                 color: 'white',
                 fontSize: '16px',
                 fontWeight: '700'
-              }}>Property Detected!</div>
+              }}>Analysis Complete!</div>
             </div>
-            <div style={{
-              color: 'white',
-              fontSize: '14px',
-              marginBottom: '4px'
-            }}>{detectedProperty.address}</div>
+            
             <div style={{
               color: 'rgba(255,255,255,0.9)',
               fontSize: '12px',
               marginBottom: '12px'
-            }}>{detectedProperty.city} • {detectedProperty.confidence}% confidence</div>
+            }}>Detected lifestyle features:</div>
+            
+            <div style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '6px',
+              marginBottom: '12px'
+            }}>
+              {detectedFeatures.map((feature, index) => (
+                <span key={index} style={{
+                  background: 'rgba(255,255,255,0.2)',
+                  color: 'white',
+                  padding: '4px 8px',
+                  borderRadius: '12px',
+                  fontSize: '11px',
+                  fontWeight: '600'
+                }}>
+                  {feature}
+                </span>
+              ))}
+            </div>
+            
+            {lifestyleInput && (
+              <div style={{
+                background: 'rgba(255,255,255,0.1)',
+                borderRadius: '8px',
+                padding: '8px 12px',
+                marginBottom: '12px',
+                fontSize: '12px',
+                color: 'rgba(255,255,255,0.9)'
+              }}>
+                <strong>Voice input:</strong> {lifestyleInput.substring(0, 80)}{lifestyleInput.length > 80 ? '...' : ''}
+              </div>
+            )}
+            
             <button 
               style={{
                 width: '100%',
@@ -283,78 +669,17 @@ const ARCameraScreen = ({ onNavigate }) => {
                 fontWeight: '700',
                 cursor: 'pointer'
               }}
-              onClick={confirmProperty}
+              onClick={findMatches}
             >
-              Continue with Property Analysis
+              Find Matching Properties
             </button>
           </div>
         )}
       </div>
       
-      {/* Bottom Controls */}
-      <div style={{
-        position: 'absolute',
-        bottom: '40px',
-        left: '20px',
-        right: '20px',
-        display: 'flex',
-        justifyContent: 'center',
-        zIndex: 30
-      }}>
-        {!isScanning && !detectedProperty && (
-          <button 
-            style={{
-              width: '80px',
-              height: '80px',
-              borderRadius: '50%',
-              background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
-              border: '4px solid rgba(255,255,255,0.3)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              boxShadow: '0 8px 32px rgba(59,130,246,0.4)',
-              transition: 'all 0.3s ease'
-            }}
-            onClick={startScan}
-            onMouseDown={(e) => e.target.style.transform = 'scale(0.95)'}
-            onMouseUp={(e) => e.target.style.transform = 'scale(1)'}
-          >
-            <Camera size={32} color="white" />
-          </button>
-        )}
-      </div>
+      {/* Bottom spacing */}
+      <div style={{ height: '80px' }}></div>
       
-      {/* Instructions */}
-      {!isScanning && !detectedProperty && (
-        <div style={{
-          position: 'absolute',
-          bottom: '140px',
-          left: '20px',
-          right: '20px',
-          textAlign: 'center',
-          zIndex: 25
-        }}>
-          <div style={{
-            background: 'rgba(0,0,0,0.7)',
-            backdropFilter: 'blur(10px)',
-            padding: '16px 20px',
-            borderRadius: '16px',
-            border: '1px solid rgba(255,255,255,0.1)'
-          }}>
-            <div style={{
-              color: 'white',
-              fontSize: '16px',
-              fontWeight: '700',
-              marginBottom: '4px'
-            }}>Point camera at property</div>
-            <div style={{
-              color: 'rgba(255,255,255,0.8)',
-              fontSize: '14px'
-            }}>Align the building within the viewfinder</div>
-          </div>
-        </div>
-      )}
       
       <style jsx>{`
         @keyframes pulse {

@@ -1,14 +1,11 @@
 import { useState, useEffect, useCallback } from 'react'
+import { GestureProvider } from '../../contexts/GestureContext'
+import SwipeableCard from '../SwipeableCard'
 
 const PropertyCardScreen = ({ onNavigate }) => {
   const [currentPropertyIndex, setCurrentPropertyIndex] = useState(0)
   const [propertySelections, setPropertySelections] = useState({})
-  const [touchStart, setTouchStart] = useState(null)
-  const [touchEnd, setTouchEnd] = useState(null)
-  const [touchStartY, setTouchStartY] = useState(null)
-  const [touchEndY, setTouchEndY] = useState(null)
-  const [touchStartTime, setTouchStartTime] = useState(null)
-  const [initialTouchDirection, setInitialTouchDirection] = useState(null)
+  const [showDetail, setShowDetail] = useState(false)
   
   // Mock properties data with color coding
   const properties = [
@@ -27,7 +24,6 @@ const PropertyCardScreen = ({ onNavigate }) => {
       match: 92,
       gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
       thumbnail: 'linear-gradient(45deg, #667eea, #764ba2)',
-      icon: '🏠',
       lifestyleAnalysis: {
         tags: ['Entertainment Focused', 'Open Concept', 'Outdoor Living', 'Gourmet Kitchen', 'Master Suite'],
         description: 'Perfect for entertaining with open concept living and gourmet kitchen flowing to covered patio. Master suite with spa-like bathroom and walk-in closet. Premium finishes throughout including hardwood floors and granite countertops.'
@@ -48,7 +44,6 @@ const PropertyCardScreen = ({ onNavigate }) => {
       match: 88,
       gradient: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
       thumbnail: 'linear-gradient(45deg, #f093fb, #f5576c)',
-      icon: '🏡',
       lifestyleAnalysis: {
         tags: ['Modern Design', 'Updated Kitchen', 'Garden View', 'Smart Home', 'Energy Efficient'],
         description: 'Contemporary home with smart technology and energy-efficient features. Updated kitchen with quartz countertops and stainless appliances. Private garden with mature landscaping perfect for relaxation.'
@@ -69,7 +64,6 @@ const PropertyCardScreen = ({ onNavigate }) => {
       match: 85,
       gradient: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
       thumbnail: 'linear-gradient(45deg, #4facfe, #00f2fe)',
-      icon: '🏘️',
       lifestyleAnalysis: {
         tags: ['Luxury Living', 'Home Office', 'Walk-in Pantry', 'Multiple Living Areas', 'Premium Finishes'],
         description: 'Luxury new construction featuring high-end finishes and flexible living spaces. Dedicated home office and multiple living areas. Walk-in pantry and premium appliances throughout.'
@@ -90,7 +84,6 @@ const PropertyCardScreen = ({ onNavigate }) => {
       match: 81,
       gradient: 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
       thumbnail: 'linear-gradient(45deg, #a8edea, #fed6e3)',
-      icon: '🏰',
       lifestyleAnalysis: {
         tags: ['First-Time Buyer', 'Low Maintenance', 'Open Floor Plan', 'Two-Car Garage', 'Community Pool'],
         description: 'Perfect starter home with open floor plan and low-maintenance living. Community amenities include pool and playground. Ideal for first-time buyers seeking modern convenience.'
@@ -111,7 +104,6 @@ const PropertyCardScreen = ({ onNavigate }) => {
       match: 79,
       gradient: 'linear-gradient(135deg, #fad0c4 0%, #ffd1ff 100%)',
       thumbnail: 'linear-gradient(45deg, #fad0c4, #ffd1ff)',
-      icon: '🏆',
       lifestyleAnalysis: {
         tags: ['Family Home', 'Large Lot', 'Game Room', 'Study', 'Three-Car Garage'],
         description: 'Spacious family home on large lot with room to grow. Dedicated study and game room for family activities. Three-car garage and extensive storage throughout.'
@@ -143,180 +135,87 @@ const PropertyCardScreen = ({ onNavigate }) => {
     }
   }, [currentProperty.id, currentPropertyIndex, properties.length])
   
-  // Advanced gesture detection that determines intent early
+  // Touch handlers for swipe detection
   const handleTouchStart = (e) => {
     console.log('Touch start event triggered!')
-    const startX = e.targetTouches[0].clientX
-    const startY = e.targetTouches[0].clientY
-    const startTime = Date.now()
-    
+    e.preventDefault()
     setTouchEnd(null)
-    setTouchEndY(null)
-    setTouchStart(startX)
-    setTouchStartY(startY)
-    setTouchStartTime(startTime)
-    setInitialTouchDirection(null)
-    
-    console.log('Touch start X:', startX, 'Y:', startY, 'Time:', startTime)
+    setTouchStart(e.targetTouches[0].clientX)
+    console.log('Touch start X:', e.targetTouches[0].clientX)
   }
 
   const handleTouchMove = (e) => {
-    if (!touchStart || !touchStartY) return
-    
-    const currentX = e.targetTouches[0].clientX
-    const currentY = e.targetTouches[0].clientY
-    const deltaX = Math.abs(currentX - touchStart)
-    const deltaY = Math.abs(currentY - touchStartY)
-    
-    // Determine initial direction if not set and there's enough movement
-    if (!initialTouchDirection && (deltaX > 10 || deltaY > 10)) {
-      if (deltaX > deltaY * 1.5) {
-        setInitialTouchDirection('horizontal')
-        console.log('Initial direction: HORIZONTAL')
-        // Prevent default scrolling for horizontal gestures
-        e.preventDefault()
-      } else if (deltaY > deltaX * 1.5) {
-        setInitialTouchDirection('vertical')
-        console.log('Initial direction: VERTICAL')
-        // Allow normal scrolling for vertical gestures
-      }
-    }
-    
-    // If we determined this is a horizontal gesture, prevent scrolling
-    if (initialTouchDirection === 'horizontal') {
-      e.preventDefault()
-    }
-    
-    setTouchEnd(currentX)
-    setTouchEndY(currentY)
-    console.log('Touch move X:', currentX, 'Y:', currentY, 'Direction:', initialTouchDirection)
+    console.log('Touch move event triggered!')
+    e.preventDefault()
+    setTouchEnd(e.targetTouches[0].clientX)
+    console.log('Touch move X:', e.targetTouches[0].clientX)
   }
 
   const handleTouchEnd = () => {
     console.log('Touch end event triggered!')
-    if (!touchStart || !touchEnd || !touchStartY || !touchEndY || !touchStartTime) {
-      console.log('Touch end - missing data')
+    if (!touchStart || !touchEnd) {
+      console.log('Touch end - missing data:', { touchStart, touchEnd })
       return
     }
     
-    const horizontalDistance = touchStart - touchEnd
-    const verticalDistance = touchStartY - touchEndY
-    const horizontalMovement = Math.abs(horizontalDistance)
-    const verticalMovement = Math.abs(verticalDistance)
-    const touchDuration = Date.now() - touchStartTime
+    const distance = touchStart - touchEnd
+    const isLeftSwipe = distance > 30  // Reduced from 50 to 30
+    const isRightSwipe = distance < -30 // Reduced from 50 to 30
     
-    console.log('Gesture analysis:', {
-      horizontalDistance,
-      verticalDistance,
-      horizontalMovement,
-      verticalMovement,
-      touchDuration,
-      initialDirection: initialTouchDirection
-    })
-    
-    // Only process swipes if we detected horizontal intent
-    if (initialTouchDirection === 'horizontal') {
-      const minSwipeDistance = 60
-      const maxDuration = 800 // Max 800ms for a swipe
-      
-      if (horizontalMovement > minSwipeDistance && touchDuration < maxDuration) {
-        const isLeftSwipe = horizontalDistance > 0
-        const isRightSwipe = horizontalDistance < 0
-        
-        if (isLeftSwipe) {
-          console.log('Left swipe confirmed - declining property')
-          handlePropertySelection('declined')
-        } else if (isRightSwipe) {
-          console.log('Right swipe confirmed - selecting property')
-          handlePropertySelection('selected')
-        }
-      } else {
-        console.log('Horizontal gesture too short or too slow - no action')
-      }
+    console.log('Touch end - Start:', touchStart, 'End:', touchEnd, 'Distance:', distance)
+
+    if (isLeftSwipe) {
+      console.log('Left swipe detected - declining property')
+      handlePropertySelection('declined')
+    } else if (isRightSwipe) {
+      console.log('Right swipe detected - selecting property')
+      handlePropertySelection('selected')
     } else {
-      console.log('Vertical scroll detected - no swipe action')
+      console.log('No swipe detected - distance too small')
     }
-    
-    // Reset states
-    setInitialTouchDirection(null)
   }
 
-  // Mouse handlers with same smart detection
+  // Mouse handlers for desktop testing
   const handleMouseDown = (e) => {
     console.log('Mouse down event triggered!')
-    const startX = e.clientX
-    const startY = e.clientY
-    const startTime = Date.now()
-    
     setTouchEnd(null)
-    setTouchEndY(null)
-    setTouchStart(startX)
-    setTouchStartY(startY)
-    setTouchStartTime(startTime)
-    setInitialTouchDirection(null)
-    
-    console.log('Mouse down X:', startX, 'Y:', startY)
+    setTouchStart(e.clientX)
+    console.log('Mouse down X:', e.clientX)
   }
 
   const handleMouseMove = (e) => {
-    if (!touchStart || !touchStartY) return
-    
-    const currentX = e.clientX
-    const currentY = e.clientY
-    const deltaX = Math.abs(currentX - touchStart)
-    const deltaY = Math.abs(currentY - touchStartY)
-    
-    // Determine initial direction for mouse (same logic as touch)
-    if (!initialTouchDirection && (deltaX > 10 || deltaY > 10)) {
-      if (deltaX > deltaY * 1.5) {
-        setInitialTouchDirection('horizontal')
-        console.log('Mouse initial direction: HORIZONTAL')
-      } else if (deltaY > deltaX * 1.5) {
-        setInitialTouchDirection('vertical')
-        console.log('Mouse initial direction: VERTICAL')
-      }
+    if (touchStart !== null) {
+      console.log('Mouse move event triggered!')
+      setTouchEnd(e.clientX)
+      console.log('Mouse move X:', e.clientX)
     }
-    
-    setTouchEnd(currentX)
-    setTouchEndY(currentY)
   }
 
   const handleMouseUp = () => {
     console.log('Mouse up event triggered!')
-    if (!touchStart || !touchEnd || !touchStartY || !touchEndY || !touchStartTime) {
-      console.log('Mouse up - missing data')
+    if (!touchStart || !touchEnd) {
+      console.log('Mouse up - missing data:', { touchStart, touchEnd })
       return
     }
     
-    const horizontalDistance = touchStart - touchEnd
-    const horizontalMovement = Math.abs(horizontalDistance)
-    const touchDuration = Date.now() - touchStartTime
+    const distance = touchStart - touchEnd
+    const isLeftSwipe = distance > 30  // Reduced from 50 to 30
+    const isRightSwipe = distance < -30 // Reduced from 50 to 30
     
-    // Same logic as touch - only process if horizontal intent detected
-    if (initialTouchDirection === 'horizontal') {
-      const minSwipeDistance = 60
-      const maxDuration = 800
-      
-      if (horizontalMovement > minSwipeDistance && touchDuration < maxDuration) {
-        const isLeftSwipe = horizontalDistance > 0
-        const isRightSwipe = horizontalDistance < 0
-        
-        if (isLeftSwipe) {
-          console.log('Left drag confirmed - declining property')
-          handlePropertySelection('declined')
-        } else if (isRightSwipe) {
-          console.log('Right drag confirmed - selecting property')
-          handlePropertySelection('selected')
-        }
-      }
+    console.log('Mouse up - Start:', touchStart, 'End:', touchEnd, 'Distance:', distance)
+
+    if (isLeftSwipe) {
+      console.log('Left drag detected - declining property')
+      handlePropertySelection('declined')
+    } else if (isRightSwipe) {
+      console.log('Right drag detected - selecting property')
+      handlePropertySelection('selected')
+    } else {
+      console.log('No drag detected - distance too small')
     }
     
-    // Reset all states
     setTouchStart(null)
     setTouchEnd(null)
-    setTouchStartY(null)
-    setTouchEndY(null)
-    setInitialTouchDirection(null)
   }
   
   const getThumbnailColor = (property) => {
@@ -408,22 +307,13 @@ const PropertyCardScreen = ({ onNavigate }) => {
           onClick={() => onNavigate('address')}
         >←</div>
         <div style={{
-          fontSize: '16px',
+          fontSize: '18px',
           fontWeight: '700',
           color: '#1e293b',
           position: 'absolute',
           left: '50%',
-          transform: 'translateX(-50%)',
-          textAlign: 'center'
-        }}>
-          <div>Select</div>
-          <div style={{
-            fontSize: '11px',
-            fontWeight: '500',
-            color: '#64748b',
-            marginTop: '2px'
-          }}>← Swipe anywhere →</div>
-        </div>
+          transform: 'translateX(-50%)'
+        }}>Select</div>
         <div style={{ width: '36px' }}></div>
       </div>
       
@@ -446,45 +336,32 @@ const PropertyCardScreen = ({ onNavigate }) => {
             <div
               key={property.id}
               style={{
-                width: '40px',
-                height: '40px',
-                borderRadius: '50%',
+                width: '32px',
+                height: '32px',
+                borderRadius: '8px',
                 background: getThumbnailColor(property),
                 cursor: 'pointer',
                 transition: 'all 0.3s ease',
-                border: index === currentPropertyIndex ? '3px solid #3b82f6' : '3px solid transparent',
-                transform: index === currentPropertyIndex ? 'scale(1.15)' : 'scale(1)',
+                border: index === currentPropertyIndex ? '2px solid #3b82f6' : '2px solid transparent',
+                transform: index === currentPropertyIndex ? 'scale(1.1)' : 'scale(1)',
                 position: 'relative',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: index === currentPropertyIndex ? '0 4px 12px rgba(59,130,246,0.3)' : 'none'
+                overflow: 'hidden'
               }}
               onClick={() => setCurrentPropertyIndex(index)}
             >
-              {/* Property icon */}
-              <span style={{ 
-                fontSize: '18px',
-                filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))'
-              }}>
-                {property.icon}
-              </span>
-              {/* Property number in corner */}
+              {/* Property number */}
               <div style={{
                 position: 'absolute',
-                top: '-2px',
-                right: '-2px',
-                width: '16px',
-                height: '16px',
-                background: '#3b82f6',
+                top: '2px',
+                left: '2px',
+                background: 'rgba(0,0,0,0.7)',
                 color: 'white',
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
                 fontSize: '10px',
                 fontWeight: '700',
-                border: '2px solid white'
+                padding: '2px 4px',
+                borderRadius: '4px',
+                minWidth: '14px',
+                textAlign: 'center'
               }}>
                 {index + 1}
               </div>
@@ -500,7 +377,7 @@ const PropertyCardScreen = ({ onNavigate }) => {
           overflowY: 'auto',
           WebkitOverflowScrolling: 'touch'
         }}>
-        {/* Property Card - Smart Gesture Detection */}
+        {/* Property Card */}
         <div 
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
@@ -508,6 +385,7 @@ const PropertyCardScreen = ({ onNavigate }) => {
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
+          onClick={() => console.log('Property card clicked!')}
           style={{
             background: 'white',
             margin: '20px',
@@ -518,7 +396,8 @@ const PropertyCardScreen = ({ onNavigate }) => {
                     'none',
             overflow: 'hidden',
             cursor: 'grab',
-            userSelect: 'none'
+            userSelect: 'none',
+            touchAction: 'none' // This should help with touch events
           }}
         >
           {/* Selection Status Banner */}
