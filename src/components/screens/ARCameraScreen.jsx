@@ -256,7 +256,7 @@ const ARCameraScreen = ({ onNavigate }) => {
     <div className="screen" style={{
       width: '100%',
       height: '100%',
-      background: '#000000',
+      background: 'transparent', // Changed from black
       borderRadius: '41px',
       position: 'relative',
       overflow: 'hidden',
@@ -275,7 +275,7 @@ const ARCameraScreen = ({ onNavigate }) => {
         color: 'white',
         background: 'rgba(0,0,0,0.3)',
         backdropFilter: 'blur(10px)',
-        zIndex: 30
+        zIndex: 50
       }}>
         <span>9:41</span>
         <span>••••• </span>
@@ -294,7 +294,7 @@ const ARCameraScreen = ({ onNavigate }) => {
         top: '44px',
         left: 0,
         right: 0,
-        zIndex: 30
+        zIndex: 50
       }}>
         <div 
           className="back-button" 
@@ -344,7 +344,7 @@ const ARCameraScreen = ({ onNavigate }) => {
       <div style={{
         flex: 1,
         position: 'relative',
-        background: '#000000',
+        background: 'transparent', // Changed from black to transparent
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center'
@@ -363,21 +363,13 @@ const ARCameraScreen = ({ onNavigate }) => {
               width: '100%',
               height: '100%',
               objectFit: 'cover',
-              transform: 'scaleX(-1)' // Mirror the video for better UX
+              transform: 'scaleX(-1)', // Mirror the video for better UX
+              zIndex: 0 // Put video at base layer
             }}
           />
         ) : (
           <>
-            {/* Fallback Camera Simulation */}
-            <div style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              opacity: 0.3
-            }}></div>
+            {/* Fallback Camera Simulation - Removed */}
             
             {/* Camera Error Message */}
             {cameraError && (
@@ -427,8 +419,8 @@ const ARCameraScreen = ({ onNavigate }) => {
           </>
         )}
         
-        {/* Scanning Grid Overlay */}
-        <div style={{
+        {/* Scanning Grid Overlay - Removed for cleaner view */}
+        {/* <div style={{
           position: 'absolute',
           top: 0,
           left: 0,
@@ -441,10 +433,10 @@ const ARCameraScreen = ({ onNavigate }) => {
           backgroundSize: '30px 30px',
           animation: isAnalyzing ? 'pulse 2s infinite' : 'none',
           zIndex: 10
-        }}></div>
+        }}></div> */}
         
-        {/* Center Viewfinder */}
-        <div style={{
+        {/* Center Viewfinder - Removed for cleaner view */}
+        {/* <div style={{
           width: '240px',
           height: '180px',
           border: '2px solid rgba(59,130,246,0.8)',
@@ -453,7 +445,6 @@ const ARCameraScreen = ({ onNavigate }) => {
           zIndex: 20,
           animation: isAnalyzing ? 'scan-pulse 1.5s infinite' : 'none'
         }}>
-          {/* Corner markers */}
           {[
             { top: '-2px', left: '-2px', borderTop: '4px solid #3b82f6', borderLeft: '4px solid #3b82f6' },
             { top: '-2px', right: '-2px', borderTop: '4px solid #3b82f6', borderRight: '4px solid #3b82f6' },
@@ -468,7 +459,6 @@ const ARCameraScreen = ({ onNavigate }) => {
             }}></div>
           ))}
           
-          {/* Center crosshair */}
           <div style={{
             position: 'absolute',
             top: '50%',
@@ -480,7 +470,7 @@ const ARCameraScreen = ({ onNavigate }) => {
             borderRadius: '50%',
             animation: isAnalyzing ? 'pulse 1s infinite' : 'none'
           }}></div>
-        </div>
+        </div> */}
         
         {/* Analysis Progress */}
         {isAnalyzing && (
@@ -507,38 +497,10 @@ const ARCameraScreen = ({ onNavigate }) => {
           </div>
         )}
         
-        {/* Bottom Action Button */}
+        {/* Combined Bottom Controls */}
         <div style={{
           position: 'absolute',
           bottom: '30px',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          zIndex: 25
-        }}>
-          <button
-            onClick={() => onNavigate('property')}
-            style={{
-              background: 'linear-gradient(135deg, #16a34a, #15803d)',
-              border: 'none',
-              borderRadius: '50%',
-              width: '80px',
-              height: '80px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              boxShadow: '0 8px 24px rgba(22,163,74,0.4)',
-              transition: 'all 0.3s ease'
-            }}
-          >
-            <Zap size={32} color="white" />
-          </button>
-        </div>
-
-        {/* Compact Lifestyle Input - Moved to Bottom */}
-        <div style={{
-          position: 'absolute',
-          bottom: '140px',
           left: '20px',
           right: '20px',
           background: 'rgba(0,0,0,0.8)',
@@ -551,6 +513,23 @@ const ARCameraScreen = ({ onNavigate }) => {
           alignItems: 'center',
           gap: '12px'
         }}>
+          <input
+            type="text"
+            value={lifestyleInput}
+            onChange={(e) => setLifestyleInput(e.target.value)}
+            placeholder={isRecording ? "Listening..." : "Describe preferences..."}
+            style={{
+              flex: 1,
+              background: 'rgba(255,255,255,0.1)',
+              border: '1px solid rgba(255,255,255,0.2)',
+              borderRadius: '8px',
+              padding: '8px 12px',
+              color: 'white',
+              fontSize: '14px',
+              outline: 'none'
+            }}
+          />
+          
           <button
             onClick={toggleRecording}
             style={{
@@ -571,29 +550,32 @@ const ARCameraScreen = ({ onNavigate }) => {
             {isRecording ? <MicOff size={18} color="white" /> : <Mic size={18} color="white" />}
           </button>
           
-          <input
-            type="text"
-            value={lifestyleInput}
-            onChange={(e) => setLifestyleInput(e.target.value)}
-            placeholder={isRecording ? "Listening..." : "Describe preferences..."}
+          <button
+            onClick={() => onNavigate('property')}
             style={{
-              flex: 1,
-              background: 'rgba(255,255,255,0.1)',
-              border: '1px solid rgba(255,255,255,0.2)',
-              borderRadius: '8px',
-              padding: '8px 12px',
-              color: 'white',
-              fontSize: '14px',
-              outline: 'none'
+              background: 'linear-gradient(135deg, #16a34a, #15803d)',
+              border: 'none',
+              borderRadius: '50%',
+              width: '36px',
+              height: '36px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              boxShadow: '0 4px 12px rgba(22,163,74,0.4)',
+              transition: 'all 0.3s ease',
+              flexShrink: 0
             }}
-          />
+          >
+            <Zap size={18} color="white" />
+          </button>
         </div>
 
         {/* Lifestyle Analysis Results */}
         {analysisComplete && (
           <div style={{
             position: 'absolute',
-            bottom: '120px',
+            bottom: '100px',
             left: '20px',
             right: '20px',
             background: 'rgba(16,185,129,0.95)',

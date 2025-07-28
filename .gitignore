@@ -46,3 +46,7 @@ coverage/
 
 # Claude specific
 .claude/
+
+# SSL certificates
+.cert/
+*.pem
