@@ -208,16 +208,38 @@ const ARCameraScreen = ({ onNavigate }) => {
   }
 
   return (
-    <div className="screen" style={{
+    <div style={{
       width: '100%',
       height: '100%',
-      background: 'transparent', // Changed from black
-      borderRadius: '41px',
+      background: '#000',
       position: 'relative',
       overflow: 'hidden',
       display: 'flex',
       flexDirection: 'column'
     }}>
+      {/* Status Bar - Dark for camera */}
+      <div style={{
+        height: '44px',
+        background: 'rgba(0,0,0,0.8)',
+        color: 'white',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '0 20px',
+        fontSize: '14px',
+        fontWeight: '600',
+        flexShrink: 0,
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 50
+      }}>
+        <span>9:41</span>
+        <span>•••••</span>
+        <span>100% 🔋</span>
+      </div>
+
       {/* Close Button */}
       <div 
         className="back-button" 
@@ -321,7 +343,7 @@ const ARCameraScreen = ({ onNavigate }) => {
         {/* Combined Bottom Controls */}
         <div style={{
           position: 'absolute',
-          bottom: '30px',
+          bottom: '50px',
           left: '20px',
           right: '20px',
           background: 'rgba(0,0,0,0.8)',

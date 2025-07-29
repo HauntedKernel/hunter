@@ -1,82 +1,14 @@
 const HomeScreen = ({ onNavigate }) => {
   return (
-    <div className="screen" style={{
+    <div style={{
       width: '100%',
       height: '100%',
       background: 'linear-gradient(180deg, #fafafa 0%, #f1f5f9 100%)',
-      borderRadius: '41px',
       position: 'relative',
-      overflow: 'hidden',
+      overflow: 'auto',
       display: 'flex',
       flexDirection: 'column'
     }}>
-      <div className="status-bar" style={{
-        height: '44px',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: '0 20px',
-        fontSize: '14px',
-        fontWeight: '600',
-        color: '#1e293b'
-      }}>
-        <span>9:41</span>
-        <span>••••• </span>
-        <span>100% 🔋</span>
-      </div>
-      
-      <div className="header" style={{
-        padding: '24px 20px',
-        background: 'rgba(255,255,255,0.95)',
-        backdropFilter: 'blur(20px)',
-        margin: '0',
-        borderRadius: '0',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
-      }}>
-        <div className="logo" style={{
-          fontSize: '32px',
-          fontWeight: '900',
-          background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
-          marginBottom: '20px',
-          letterSpacing: '-0.5px'
-        }}>FlashStack</div>
-        <div className="agent-info" style={{
-          background: 'rgba(248,250,252,0.8)',
-          backdropFilter: 'blur(10px)',
-          padding: '14px 18px',
-          borderRadius: '16px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-          border: '1px solid rgba(226,232,240,0.5)'
-        }}>
-          <div className="agent-avatar" style={{
-            width: '44px',
-            height: '44px',
-            borderRadius: '50%',
-            background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'white',
-            fontWeight: '700',
-            fontSize: '16px'
-          }}>JD</div>
-          <div className="agent-details" style={{ flex: '1' }}>
-            <div className="agent-name" style={{
-              fontSize: '14px',
-              fontWeight: '600',
-              color: '#1e293b'
-            }}>Jane Doe</div>
-            <div className="agent-company" style={{
-              fontSize: '12px',
-              color: '#64748b'
-            }}>Rocket Realty</div>
-          </div>
-        </div>
-      </div>
       
       <div className="main-content" style={{
         padding: '24px 20px 40px 20px',
@@ -236,6 +168,98 @@ const HomeScreen = ({ onNavigate }) => {
                   color: '#64748b',
                   fontWeight: '500'
                 }}>Get disclosures only</div>
+              </div>
+            </div>
+            
+            <div 
+              className="option-button clients" 
+              style={{
+                background: 'rgba(254,240,138,0.6)',
+                backdropFilter: 'blur(20px)',
+                border: '1px solid rgba(245,158,11,0.3)',
+                borderRadius: '20px',
+                padding: '20px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '18px',
+                textAlign: 'left',
+                position: 'relative',
+                overflow: 'hidden',
+                cursor: 'pointer'
+              }}
+              onClick={() => onNavigate('clients')}
+            >
+              <div className="option-icon" style={{
+                fontSize: '24px',
+                width: '52px',
+                height: '52px',
+                borderRadius: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'rgba(255,255,255,0.9)',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.15), 0 1px 3px rgba(0,0,0,0.1)',
+                backdropFilter: 'blur(10px)'
+              }}>👥</div>
+              <div className="option-text">
+                <div className="option-title" style={{
+                  fontSize: '17px',
+                  fontWeight: '700',
+                  color: '#1e293b',
+                  marginBottom: '4px',
+                  letterSpacing: '-0.2px'
+                }}>Clients</div>
+                <div className="option-desc" style={{
+                  fontSize: '13px',
+                  color: '#64748b',
+                  fontWeight: '500'
+                }}>Manage your clients</div>
+              </div>
+            </div>
+            
+            <div 
+              className="option-button sets" 
+              style={{
+                background: 'rgba(209,250,229,0.6)',
+                backdropFilter: 'blur(20px)',
+                border: '1px solid rgba(16,185,129,0.3)',
+                borderRadius: '20px',
+                padding: '20px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '18px',
+                textAlign: 'left',
+                position: 'relative',
+                overflow: 'hidden',
+                cursor: 'pointer'
+              }}
+              onClick={() => onNavigate('cmas')}
+            >
+              <div className="option-icon" style={{
+                fontSize: '24px',
+                width: '52px',
+                height: '52px',
+                borderRadius: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'rgba(255,255,255,0.9)',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.15), 0 1px 3px rgba(0,0,0,0.1)',
+                backdropFilter: 'blur(10px)'
+              }}>📊</div>
+              <div className="option-text">
+                <div className="option-title" style={{
+                  fontSize: '17px',
+                  fontWeight: '700',
+                  color: '#1e293b',
+                  marginBottom: '4px',
+                  letterSpacing: '-0.2px'
+                }}>My Sets</div>
+                <div className="option-desc" style={{
+                  fontSize: '13px',
+                  color: '#64748b',
+                  fontWeight: '500'
+                }}>CMAs & Discovery sets</div>
               </div>
             </div>
           </div>
