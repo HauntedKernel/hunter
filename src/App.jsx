@@ -75,7 +75,7 @@ function App() {
   }
 
   // Don't show header on certain screens
-  const screensWithoutHeader = ['ar-camera', 'analysis', 'property', 'results', 'share']
+  const screensWithoutHeader = ['ar-camera', 'analysis', 'property', 'results', 'share', 'documents']
 
   return (
     <div className="app">
@@ -85,10 +85,27 @@ function App() {
           height: '100%',
           background: '#fff',
           borderRadius: '32px',
-          overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column'
         }}>
+          
+          {/* Global Status Bar */}
+          <div className="status-bar" style={{
+            height: '44px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: '0 20px',
+            color: '#1e293b',
+            background: 'linear-gradient(180deg, #fafafa 0%, #f1f5f9 100%)',
+            borderRadius: '32px 32px 0 0',
+            fontSize: '14px',
+            fontWeight: '600'
+          }}>
+            <span>9:41</span>
+            <span>••••• </span>
+            <span>100% 🔋</span>
+          </div>
           
           {/* Header with Menu */}
           {!screensWithoutHeader.includes(currentScreen) && (
@@ -106,13 +123,18 @@ function App() {
                 padding: '0 20px',
                 flexShrink: 0
               }}>
-                <div style={{
-                  fontSize: '24px',
-                  fontWeight: '700',
-                  background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent'
-                }}>
+                <div 
+                  style={{
+                    fontSize: '24px',
+                    fontWeight: '700',
+                    background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    cursor: 'pointer',
+                    userSelect: 'none'
+                  }}
+                  onClick={() => setCurrentScreen('home')}
+                >
                   FlashStack
                 </div>
                 <UserMenu onNavigate={navigateTo} />
@@ -130,6 +152,9 @@ function App() {
           </div>
         </div>
       </div>
+      
+      {/* Portal container for dropdowns */}
+      <div id="portal-root"></div>
     </div>
   )
 }

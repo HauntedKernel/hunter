@@ -125,7 +125,7 @@ const AnalysisTransitionScreen = ({ onNavigate, onComplete }) => {
   }
 
   return (
-    <div className="screen" style={{
+    <div style={{
       width: '100%',
       height: '100%',
       background: 'linear-gradient(180deg, #0f172a 0%, #1e293b 100%)',

@@ -350,7 +350,7 @@ const PropertyCardScreen = ({ onNavigate }) => {
     handlePropertySelection(action)
   }
   return (
-    <div className="screen" style={{
+    <div style={{
       width: '100%',
       height: '100%',
       background: 'linear-gradient(180deg, #fafafa 0%, #f1f5f9 100%)',
