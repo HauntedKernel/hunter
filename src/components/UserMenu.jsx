@@ -86,11 +86,11 @@ const UserMenu = ({ onNavigate }) => {
           style={{
             position: 'absolute',
             top: '44px',
-            right: 0,
+            right: '-4px',
             background: 'white',
             borderRadius: '12px',
             boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
-            minWidth: '200px',
+            width: '160px',
             padding: '8px',
             zIndex: 1000,
             animation: 'slideDown 0.2s ease',

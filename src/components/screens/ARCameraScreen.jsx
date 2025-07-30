@@ -204,7 +204,7 @@ const ARCameraScreen = ({ onNavigate }) => {
       timestamp: new Date().toISOString()
     }
     localStorage.setItem('arAnalysisData', JSON.stringify(analysisData))
-    onNavigate('property')
+    onNavigate('analysis', 'discovery')
   }
 
   return (
@@ -217,35 +217,13 @@ const ARCameraScreen = ({ onNavigate }) => {
       display: 'flex',
       flexDirection: 'column'
     }}>
-      {/* Status Bar - Dark for camera */}
-      <div style={{
-        height: '44px',
-        background: 'rgba(0,0,0,0.8)',
-        color: 'white',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: '0 20px',
-        fontSize: '14px',
-        fontWeight: '600',
-        flexShrink: 0,
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        zIndex: 50
-      }}>
-        <span>9:41</span>
-        <span>•••••</span>
-        <span>100% 🔋</span>
-      </div>
 
       {/* Close Button */}
       <div 
         className="back-button" 
         style={{
           position: 'absolute',
-          top: '60px',
+          top: '20px',
           left: '20px',
           width: '36px',
           height: '36px',
@@ -399,8 +377,8 @@ const ARCameraScreen = ({ onNavigate }) => {
               background: 'linear-gradient(135deg, #16a34a, #15803d)',
               border: 'none',
               borderRadius: '50%',
-              width: '36px',
-              height: '36px',
+              width: '40px',
+              height: '40px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -410,7 +388,7 @@ const ARCameraScreen = ({ onNavigate }) => {
               flexShrink: 0
             }}
           >
-            <Zap size={18} color="white" />
+            <Zap size={20} color="white" />
           </button>
         </div>
 

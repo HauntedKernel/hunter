@@ -354,31 +354,11 @@ const PropertyCardScreen = ({ onNavigate }) => {
       width: '100%',
       height: '100%',
       background: 'linear-gradient(180deg, #fafafa 0%, #f1f5f9 100%)',
-      borderRadius: '41px',
       position: 'relative',
       overflow: 'hidden',
       display: 'flex',
       flexDirection: 'column'
     }}>
-      {/* Status Bar */}
-      <div className="status-bar" style={{
-        height: '44px',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: '0 20px',
-        fontSize: '14px',
-        fontWeight: '600',
-        color: '#1e293b',
-        position: 'sticky',
-        top: 0,
-        background: 'white',
-        zIndex: 20
-      }}>
-        <span>9:41</span>
-        <span>••••• </span>
-        <span>100% 🔋</span>
-      </div>
       
       {/* Header */}
       <div className="header-bar" style={{
@@ -389,7 +369,7 @@ const PropertyCardScreen = ({ onNavigate }) => {
         justifyContent: 'space-between',
         borderBottom: '1px solid rgba(226,232,240,0.5)',
         position: 'sticky',
-        top: '44px',
+        top: '0',
         zIndex: 20
       }}>
         <div 
@@ -433,7 +413,7 @@ const PropertyCardScreen = ({ onNavigate }) => {
         padding: '12px 20px',
         borderBottom: '1px solid rgba(226,232,240,0.5)',
         position: 'sticky',
-        top: '120px',
+        top: '76px',
         zIndex: 20
       }}>
         <div style={{
@@ -847,6 +827,7 @@ const PropertyCardScreen = ({ onNavigate }) => {
           Continue
         </div>
       </div>
+
     </div>
   )
 }

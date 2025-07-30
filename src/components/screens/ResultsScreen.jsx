@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
-import { Home, TrendingUp, Calendar, DollarSign, Users, Download, Share, Filter, MapPin, Building, Mic, MicOff } from 'lucide-react'
+import { Home, TrendingUp, Calendar, DollarSign, Users, Download, Share, Filter, MapPin, Building, Mic, MicOff, Link, Copy, Check } from 'lucide-react'
+import { shareSessionService, buildShareableReportData } from '../../services/ShareSessionService.js'
+import { customerService } from '../../services/CustomerService.js'
 
 const ResultsScreen = ({ onNavigate, mode = 'discovery' }) => {
   // Add pulse animation CSS
@@ -22,37 +24,269 @@ const ResultsScreen = ({ onNavigate, mode = 'discovery' }) => {
   const [isRecording, setIsRecording] = useState(false)
   const [recognition, setRecognition] = useState(null)
 
-  // Save to customer profile functionality
-  const saveToProfile = () => {
-    const timestamp = new Date().toISOString()
-    const saveData = {
-      timestamp,
-      mode,
-      selectedType,
-      ...(mode === 'cma' && {
-        cmaTab,
-        parsedIssues,
-        totalOpportunity: parsedIssues.reduce((sum, issue) => sum + issue.cost, 0),
-        objectiveTotal: parsedIssues.filter(i => i.type === 'objective').reduce((sum, issue) => sum + issue.cost, 0),
-        subjectiveTotal: parsedIssues.filter(i => i.type === 'subjective').reduce((sum, issue) => sum + issue.cost, 0)
-      }),
-      ...(mode === 'discovery' && {
-        savedProperties: discoveryProperties.slice(0, 6) // Save first 6 properties as example
-      })
-    }
+  // Share link functionality
+  const [isGeneratingLink, setIsGeneratingLink] = useState(false)
+  const [shareResult, setShareResult] = useState(null)
+  const [showShareModal, setShowShareModal] = useState(false)
+  const [linkCopied, setLinkCopied] = useState(false)
+  const [selectedCustomer, setSelectedCustomer] = useState(() => {
+    // Get selected customer from localStorage, fallback to default
+    return localStorage.getItem('selectedCustomer') || 'John & Jane Smith'
+  })
+  
+  // Mock customer profiles for selection
+  const customerProfiles = [
+    'John & Jane Smith',
+    'Michael & Sarah Johnson', 
+    'David & Lisa Chen',
+    'Robert & Maria Garcia',
+    'James & Jennifer Wilson'
+  ]
 
-    // Get existing saves from localStorage
-    const existingSaves = JSON.parse(localStorage.getItem('customerProfile') || '[]')
-    existingSaves.push(saveData)
+  const generateShareLink = async () => {
+    setIsGeneratingLink(true)
     
-    // Keep only last 50 saves to prevent localStorage bloat
-    const recentSaves = existingSaves.slice(-50)
-    
-    localStorage.setItem('customerProfile', JSON.stringify(recentSaves))
-    
-    // Show success feedback (you could replace with toast/notification)
-    alert(`${mode === 'cma' ? 'CMA Analysis' : 'Property Search'} saved to profile!`)
+    try {
+      // Build report data based on current mode and selections
+      const properties = mode === 'discovery' ? discoveryProperties.slice(0, 6) : discoveryProperties.slice(0, 3)
+      const subjectProperty = {
+        address: '456 Oak Avenue, Dallas, TX',
+        beds: 4,
+        baths: 3,
+        sqft: 2380,
+        price: mode === 'cma' ? 485000 : null
+      }
+      
+      // Enhanced CMA data with comparables and intelligence
+      const cmaComparables = [
+        { address: '458 Oak Avenue', specs: '4 BR • 3 BA • 2,420 sq ft', condition: 'Excellent condition • New roof 2023', price: 515000, date: 'Sold 15 days ago', status: 'sold', sqft: 2420, beds: 4, baths: 3, pricePerSqFt: 213 },
+        { address: '442 Elm Street', specs: '4 BR • 2.5 BA • 2,290 sq ft', condition: 'Good condition • Original roof (12 years)', price: 478000, date: 'Sold 28 days ago', status: 'sold', sqft: 2290, beds: 4, baths: 2.5, pricePerSqFt: 209 },
+        { address: '523 Pine Road', specs: '3 BR • 3 BA • 2,340 sq ft', condition: 'Good condition • Recent updates', price: 465000, date: 'Sold 45 days ago', status: 'sold', sqft: 2340, beds: 3, baths: 3, pricePerSqFt: 199 },
+        { address: '612 Maple Drive', specs: '4 BR • 3 BA • 2,450 sq ft', condition: 'Fair condition • Needs cosmetic work', price: 445000, date: 'Sold 38 days ago', status: 'sold', sqft: 2450, beds: 4, baths: 3, pricePerSqFt: 182 },
+        { address: '789 Cedar Lane', specs: '4 BR • 2.5 BA • 2,380 sq ft', condition: 'Excellent condition • Move-in ready', price: 495000, date: 'Sold 22 days ago', status: 'sold', sqft: 2380, beds: 4, baths: 2.5, pricePerSqFt: 208 },
+        { address: '334 Birch Street', specs: '3 BR • 3 BA • 2,180 sq ft', condition: 'Good condition • Minor repairs needed', price: 458000, date: 'Sold 33 days ago', status: 'sold', sqft: 2180, beds: 3, baths: 3, pricePerSqFt: 210 }
+      ]
+
+      const additionalData = {
+        customerName: selectedCustomer,
+        agentName: 'Sarah Johnson',
+        agentCompany: 'Premier Realty',
+        agentEmail: 'sarah@premierrealty.com',
+        agentPhone: '(214) 555-0123',
+        ...(mode === 'cma' && {
+          comparables: cmaComparables,
+          priceRecommendation: {
+            low: 465000,
+            recommended: 485000,
+            high: 505000
+          },
+          marketStats: {
+            avgDaysOnMarket: 18,
+            saleToListRatio: 98.2,
+            pricePerSqFt: 205
+          },
+          negotiationIntelligence: parsedIssues.length > 0 ? {
+            issues: parsedIssues,
+            totalOpportunity: parsedIssues.reduce((sum, issue) => sum + issue.cost, 0),
+            neighborhoodStats: {
+              avgDaysOnMarket: 18,
+              medianPrice: 485000,
+              priceGrowth: 3.2,
+              marketPace: 'Fast'
+            },
+            sellerMotivation: {
+              score: 88,
+              factors: [
+                { icon: '🏠', text: 'Already purchased replacement home' },
+                { icon: '📅', text: 'Carrying two mortgages for 45 days' },
+                { icon: '💰', text: 'Motivated to close quickly' },
+                { icon: '🔧', text: 'Disclosed roof issues suggest transparency' }
+              ]
+            }
+          } : {
+            neighborhoodStats: {
+              avgDaysOnMarker: 18,
+              medianPrice: 485000,
+              priceGrowth: 3.2,
+              marketPace: 'Fast'
+            },
+            sellerMotivation: {
+              score: 88,
+              factors: [
+                { icon: '🏠', text: 'Already purchased replacement home' },
+                { icon: '📅', text: 'Carrying two mortgages for 45 days' },
+                { icon: '💰', text: 'Motivated to close quickly' },
+                { icon: '🔧', text: 'Disclosed roof issues suggest transparency' }
+              ]
+            }
+          }
+        }),
+        ...(selectedType === 'rental' && {
+          rentalEstimate: {
+            monthly: 2800,
+            annual: 33600
+          },
+          investmentMetrics: {
+            capRate: 6.2,
+            cashOnCash: 8.2,
+            paybackPeriod: 12
+          }
+        })
+      }
+
+      const reportData = buildShareableReportData(
+        selectedType === 'rental' ? 'rental' : mode,
+        mode === 'cma' ? cmaComparables : properties,
+        subjectProperty,
+        additionalData
+      )
+
+      // Create share session
+      const result = await shareSessionService.createShareSession(reportData, {
+        expirationDays: 30,
+        maxAccess: null // No access limit
+      })
+
+      if (result.success) {
+        setShareResult(result)
+        setShowShareModal(true)
+      } else {
+        alert('Failed to generate share link. Please try again.')
+      }
+
+    } catch (error) {
+      console.error('Share link generation failed:', error)
+      alert('Failed to generate share link. Please try again.')
+    } finally {
+      setIsGeneratingLink(false)
+    }
   }
+
+  const copyShareLink = async () => {
+    if (shareResult?.shareUrl) {
+      try {
+        await navigator.clipboard.writeText(shareResult.shareUrl)
+        setLinkCopied(true)
+        setTimeout(() => setLinkCopied(false), 2000)
+      } catch (error) {
+        console.error('Failed to copy link:', error)
+        // Fallback for browsers that don't support clipboard API
+        const textArea = document.createElement('textarea')
+        textArea.value = shareResult.shareUrl
+        document.body.appendChild(textArea)
+        textArea.select()
+        document.execCommand('copy')
+        document.body.removeChild(textArea)
+        setLinkCopied(true)
+        setTimeout(() => setLinkCopied(false), 2000)
+      }
+    }
+  }
+
+  const closeShareModal = () => {
+    setShowShareModal(false)
+    setShareResult(null)
+    setLinkCopied(false)
+  }
+
+  const viewShareLink = () => {
+    if (shareResult?.shareUrl) {
+      window.open(shareResult.shareUrl, '_blank')
+    }
+  }
+
+  // Save to customer profile functionality
+  const saveToProfile = async () => {
+    try {
+      // Create or find customer
+      const customerId = customerService.createCustomer({
+        name: selectedCustomer,
+        email: '', // Could be enhanced to collect email
+        phone: ''  // Could be enhanced to collect phone
+      })
+
+      // Generate session title and get property count
+      const propertyCount = mode === 'discovery' ? 6 : 3
+      const sessionTitle = customerService.generateSessionTitle(mode, '456 Oak Avenue')
+
+      // Generate share link first
+      const shareLink = await generateShareLinkForSave()
+
+      // Save session to customer profile
+      const sessionData = {
+        sessionType: mode,
+        title: sessionTitle,
+        shareUrl: shareLink,
+        propertyCount: propertyCount
+      }
+
+      const savedSession = customerService.saveSession(customerId, sessionData)
+      
+      // Show success feedback
+      alert(`${mode === 'discovery' ? 'Discovery Report' : 'CMA Analysis'} saved to ${selectedCustomer}'s profile!`)
+      
+      console.log('Session saved:', savedSession)
+      
+    } catch (error) {
+      console.error('Failed to save session:', error)
+      alert('Failed to save session. Please try again.')
+    }
+  }
+
+  // Helper function to generate share link without showing modal
+  const generateShareLinkForSave = async () => {
+    try {
+      // Build report data based on current mode and selections
+      const properties = mode === 'discovery' ? discoveryProperties.slice(0, 6) : discoveryProperties.slice(0, 3)
+      const subjectProperty = {
+        address: '456 Oak Avenue, Dallas, TX',
+        beds: 4,
+        baths: 3,
+        sqft: 2380,
+        price: mode === 'cma' ? 485000 : null
+      }
+      
+      const cmaComparables = [
+        { address: '458 Oak Avenue', specs: '4 BR • 3 BA • 2,420 sq ft', condition: 'Excellent condition • New roof 2023', price: 515000, date: 'Sold 15 days ago', status: 'sold', sqft: 2420, beds: 4, baths: 3, pricePerSqFt: 213 },
+        { address: '442 Elm Street', specs: '4 BR • 2.5 BA • 2,290 sq ft', condition: 'Good condition • Original roof (12 years)', price: 478000, date: 'Sold 28 days ago', status: 'sold', sqft: 2290, beds: 4, baths: 2.5, pricePerSqFt: 209 },
+        { address: '523 Pine Road', specs: '3 BR • 3 BA • 2,340 sq ft', condition: 'Good condition • Recent updates', price: 465000, date: 'Sold 45 days ago', status: 'sold', sqft: 2340, beds: 3, baths: 3, pricePerSqFt: 199 }
+      ]
+
+      const additionalData = {
+        customerName: selectedCustomer,
+        agentName: 'Sarah Johnson',
+        agentCompany: 'Premier Realty',
+        agentEmail: 'sarah@premierrealty.com',
+        agentPhone: '(214) 555-0123',
+        ...(mode === 'cma' && {
+          comparables: cmaComparables,
+          priceRecommendation: {
+            low: 465000,
+            recommended: 485000,
+            high: 505000
+          },
+          marketStats: {
+            avgDaysOnMarket: 18,
+            saleToListRatio: 98.2,
+            pricePerSqFt: 205
+          },
+          negotiationIntelligence: parsedIssues.length > 0 ? {
+            issues: parsedIssues,
+            totalOpportunity: parsedIssues.reduce((sum, issue) => sum + issue.cost, 0)
+          } : null
+        })
+      }
+
+      const reportData = buildShareableReportData(subjectProperty, properties, mode, additionalData)
+      const result = await shareSessionService.createShareSession(reportData)
+      
+      return result.success ? result.shareUrl : null
+    } catch (error) {
+      console.error('Failed to generate share link for save:', error)
+      return null
+    }
+  }
+
 
   // Voice recording functionality
   const startRecording = () => {
@@ -416,21 +650,6 @@ const ResultsScreen = ({ onNavigate, mode = 'discovery' }) => {
       display: 'flex',
       flexDirection: 'column'
     }}>
-      {/* Status Bar */}
-      <div className="status-bar" style={{
-        height: '44px',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: '0 20px',
-        fontSize: '14px',
-        fontWeight: '600',
-        color: '#1e293b'
-      }}>
-        <span>9:41</span>
-        <span>••••• </span>
-        <span>100% 🔋</span>
-      </div>
       
       {/* Header */}
       <div className="header-bar" style={{
@@ -542,42 +761,63 @@ const ResultsScreen = ({ onNavigate, mode = 'discovery' }) => {
             <div style={{ marginTop: '32px', marginBottom: '40px' }}>
               <div style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(2, 1fr)',
+                gridTemplateColumns: 'repeat(3, 1fr)',
                 gap: '12px'
               }}>
-                <button style={{
-                  background: 'linear-gradient(135deg, #10b981, #047857)',
+                <button onClick={saveToProfile} style={{
+                  background: 'linear-gradient(135deg, #10b981, #059669)',
                   color: 'white',
-                  padding: '16px',
+                  padding: '12px 8px',
                   borderRadius: '12px',
                   border: 'none',
-                  fontSize: '14px',
+                  fontSize: '12px',
                   fontWeight: '700',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: '8px'
-                }} onClick={saveToProfile}>
-                  <Download size={18} />
-                  Save to Profile
+                  gap: '4px'
+                }}>
+                  <Download size={16} />
+                  Save
+                </button>
+                <button 
+                  onClick={generateShareLink}
+                  disabled={isGeneratingLink}
+                  style={{
+                    background: isGeneratingLink ? '#94a3b8' : 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
+                    color: 'white',
+                    padding: '12px 8px',
+                    borderRadius: '12px',
+                    border: 'none',
+                    fontSize: '12px',
+                    fontWeight: '700',
+                    cursor: isGeneratingLink ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '4px',
+                    opacity: isGeneratingLink ? 0.7 : 1
+                  }}>
+                  <Link size={16} />
+                  {isGeneratingLink ? 'Creating...' : 'Link'}
                 </button>
                 <button style={{
                   background: 'white',
-                  color: '#10b981',
-                  padding: '16px',
+                  color: '#3b82f6',
+                  padding: '12px 8px',
                   borderRadius: '12px',
-                  border: '2px solid #10b981',
-                  fontSize: '14px',
+                  border: '2px solid #3b82f6',
+                  fontSize: '12px',
                   fontWeight: '700',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: '8px'
+                  gap: '4px'
                 }}>
-                  <Share size={18} />
-                  Share List
+                  <Share size={16} />
+                  Share
                 </button>
               </div>
             </div>
@@ -1559,22 +1799,26 @@ const ResultsScreen = ({ onNavigate, mode = 'discovery' }) => {
                   <Download size={16} />
                   Save
                 </button>
-                <button style={{
-                  background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
-                  color: 'white',
-                  padding: '12px 8px',
-                  borderRadius: '12px',
-                  border: 'none',
-                  fontSize: '12px',
-                  fontWeight: '700',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '4px'
-                }}>
-                  <Download size={16} />
-                  PDF
+                <button 
+                  onClick={generateShareLink}
+                  disabled={isGeneratingLink}
+                  style={{
+                    background: isGeneratingLink ? '#94a3b8' : 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
+                    color: 'white',
+                    padding: '12px 8px',
+                    borderRadius: '12px',
+                    border: 'none',
+                    fontSize: '12px',
+                    fontWeight: '700',
+                    cursor: isGeneratingLink ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '4px',
+                    opacity: isGeneratingLink ? 0.7 : 1
+                  }}>
+                  <Link size={16} />
+                  {isGeneratingLink ? 'Creating...' : 'Link'}
                 </button>
                 <button style={{
                   background: 'white',
@@ -1598,6 +1842,262 @@ const ResultsScreen = ({ onNavigate, mode = 'discovery' }) => {
           </div>
         )}
       </div>
+
+      {/* Share Modal */}
+      {showShareModal && shareResult && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '20px'
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: '16px',
+            padding: '24px',
+            maxWidth: '90%',
+            width: '100%',
+            maxHeight: '80vh',
+            overflowY: 'auto',
+            position: 'relative'
+          }}>
+            {/* Close button */}
+            <button 
+              onClick={closeShareModal}
+              style={{
+                position: 'absolute',
+                top: '16px',
+                right: '16px',
+                background: 'transparent',
+                border: 'none',
+                fontSize: '24px',
+                cursor: 'pointer',
+                color: '#64748b',
+                width: '32px',
+                height: '32px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >×</button>
+            
+            {/* Modal content */}
+            <div style={{ textAlign: 'center' }}>
+              <div style={{
+                fontSize: '24px',
+                marginBottom: '8px'
+              }}>🔗</div>
+              <h3 style={{
+                fontSize: '20px',
+                fontWeight: '700',
+                color: '#1e293b',
+                marginBottom: '8px'
+              }}>
+                Share Link Created!
+              </h3>
+              <p style={{
+                fontSize: '14px',
+                color: '#64748b',
+                marginBottom: '16px'
+              }}>
+                Share this link with your client to view the {mode === 'discovery' ? 'property discovery' : selectedType === 'rental' ? 'rental analysis' : 'CMA report'}
+              </p>
+              
+              {/* Customer Selection */}
+              <div style={{
+                marginBottom: '20px',
+                textAlign: 'left'
+              }}>
+                <label style={{
+                  display: 'block',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  color: '#374151',
+                  marginBottom: '6px'
+                }}>Customer Profile:</label>
+                <select 
+                  value={selectedCustomer}
+                  onChange={(e) => {
+                    setSelectedCustomer(e.target.value)
+                    localStorage.setItem('selectedCustomer', e.target.value)
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    borderRadius: '6px',
+                    border: '1px solid #d1d5db',
+                    fontSize: '14px',
+                    color: '#374151',
+                    background: 'white'
+                  }}
+                >
+                  {customerProfiles.map(customer => (
+                    <option key={customer} value={customer}>{customer}</option>
+                  ))}
+                </select>
+              </div>
+              
+              {/* Share URL */}
+              <div style={{
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: '8px',
+                padding: '12px',
+                marginBottom: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                <input 
+                  type="text" 
+                  value={shareResult.shareUrl}
+                  readOnly
+                  style={{
+                    flex: 1,
+                    background: 'transparent',
+                    border: 'none',
+                    fontSize: '12px',
+                    color: '#374151',
+                    outline: 'none'
+                  }}
+                />
+                <button 
+                  onClick={copyShareLink}
+                  style={{
+                    background: linkCopied ? '#10b981' : '#3b82f6',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    padding: '8px 12px',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    transition: 'background 0.3s ease'
+                  }}
+                >
+                  {linkCopied ? <Check size={14} /> : <Copy size={14} />}
+                  {linkCopied ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+              
+              {/* Share info */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(2, 1fr)',
+                gap: '16px',
+                marginBottom: '24px'
+              }}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{
+                    fontSize: '16px',
+                    fontWeight: '700',
+                    color: '#1e293b'
+                  }}>30 days</div>
+                  <div style={{
+                    fontSize: '12px',
+                    color: '#64748b'
+                  }}>Expires in</div>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{
+                    fontSize: '16px',
+                    fontWeight: '700',
+                    color: '#1e293b'
+                  }}>Unlimited</div>
+                  <div style={{
+                    fontSize: '12px',
+                    color: '#64748b'
+                  }}>Access</div>
+                </div>
+              </div>
+              
+              {/* Action buttons */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap: '8px',
+                justifyContent: 'center'
+              }}>
+                <button 
+                  onClick={viewShareLink}
+                  style={{
+                    background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    padding: '12px 8px',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  <span style={{ fontSize: '16px' }}>👁️</span>
+                  View
+                </button>
+                <button 
+                  onClick={() => {
+                    if (navigator.share) {
+                      navigator.share({
+                        title: `FlashStack ${mode === 'discovery' ? 'Property Discovery' : selectedType === 'rental' ? 'Rental Analysis' : 'CMA Report'}`,
+                        text: `Check out this ${mode === 'discovery' ? 'property discovery' : selectedType === 'rental' ? 'rental analysis' : 'CMA report'} for ${selectedCustomer}`,
+                        url: shareResult.shareUrl
+                      })
+                    } else {
+                      copyShareLink()
+                    }
+                  }}
+                  style={{
+                    background: 'linear-gradient(135deg, #10b981, #059669)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    padding: '12px 8px',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  <Share size={14} />
+                  Share
+                </button>
+                <button 
+                  onClick={closeShareModal}
+                  style={{
+                    background: 'white',
+                    color: '#64748b',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '8px',
+                    padding: '12px 8px',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

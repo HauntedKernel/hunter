@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { ArrowLeft, Mail, Key, Save, Plus, Search, Phone, Calendar, Trash2, Eye, Download, Filter } from 'lucide-react'
+import CustomerListScreen from './CustomerListScreen'
+import CustomerProfileScreen from './CustomerProfileScreen'
 
 // Profile Screen
 export const ProfileScreen = ({ onNavigate }) => {
@@ -30,25 +32,6 @@ export const ProfileScreen = ({ onNavigate }) => {
       height: '100%',
       overflow: 'auto'
     }}>
-      {/* Back Button */}
-      <button
-        onClick={() => onNavigate('home')}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          background: 'transparent',
-          border: 'none',
-          fontSize: '16px',
-          fontWeight: '600',
-          color: '#3b82f6',
-          cursor: 'pointer',
-          marginBottom: '24px'
-        }}
-      >
-        <ArrowLeft size={20} />
-        Back
-      </button>
 
       <h1 style={{ fontSize: '24px', fontWeight: '700', marginBottom: '24px' }}>My Profile</h1>
 
@@ -249,159 +232,36 @@ export const ProfileScreen = ({ onNavigate }) => {
   )
 }
 
-// Clients Screen
+// Clients Screen - Customer Profile Management
 export const ClientsScreen = ({ onNavigate }) => {
-  const [searchQuery, setSearchQuery] = useState('')
-  const [clients] = useState([
-    { id: 1, name: 'Sarah Johnson', email: 'sarah.j@email.com', phone: '(555) 234-5678', lastCMA: '2025-07-15', status: 'Active' },
-    { id: 2, name: 'Michael Chen', email: 'mchen@email.com', phone: '(555) 345-6789', lastCMA: '2025-07-20', status: 'Active' },
-    { id: 3, name: 'Emily Rodriguez', email: 'emily.r@email.com', phone: '(555) 456-7890', lastCMA: '2025-06-30', status: 'Inactive' },
-    { id: 4, name: 'David Kim', email: 'dkim@email.com', phone: '(555) 567-8901', lastCMA: '2025-07-25', status: 'Active' },
-    { id: 5, name: 'Lisa Thompson', email: 'lisa.t@email.com', phone: '(555) 678-9012', lastCMA: '2025-07-10', status: 'Active' }
-  ])
+  const [currentView, setCurrentView] = useState('list') // 'list' or 'profile'
+  const [selectedCustomer, setSelectedCustomer] = useState(null)
 
-  const filteredClients = clients.filter(client =>
-    client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    client.email.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  const openCustomerProfile = (customer) => {
+    setSelectedCustomer(customer)
+    setCurrentView('profile')
+  }
+
+  const goBackToList = () => {
+    setCurrentView('list')
+    setSelectedCustomer(null)
+  }
+
+  if (currentView === 'profile' && selectedCustomer) {
+    return (
+      <CustomerProfileScreen 
+        customer={selectedCustomer}
+        onNavigate={onNavigate}
+        onBack={goBackToList}
+      />
+    )
+  }
 
   return (
-    <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto', height: '100%', overflow: 'auto' }}>
-      {/* Back Button */}
-      <button
-        onClick={() => onNavigate('home')}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          background: 'transparent',
-          border: 'none',
-          fontSize: '16px',
-          fontWeight: '600',
-          color: '#3b82f6',
-          cursor: 'pointer',
-          marginBottom: '24px'
-        }}
-      >
-        <ArrowLeft size={20} />
-        Back
-      </button>
-
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '24px', fontWeight: '700' }}>Clients</h1>
-        <button
-          style={{
-            padding: '10px 20px',
-            background: '#10b981',
-            color: 'white',
-            border: 'none',
-            borderRadius: '8px',
-            fontSize: '14px',
-            fontWeight: '600',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}
-        >
-          <Plus size={18} />
-          Add Client
-        </button>
-      </div>
-
-      {/* Search Bar */}
-      <div style={{ position: 'relative', marginBottom: '24px' }}>
-        <Search size={20} style={{ position: 'absolute', left: '12px', top: '12px', color: '#64748b' }} />
-        <input
-          type="text"
-          placeholder="Search clients..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          style={{
-            width: '100%',
-            padding: '12px 12px 12px 44px',
-            border: '1px solid #e5e7eb',
-            borderRadius: '8px',
-            fontSize: '14px'
-          }}
-        />
-      </div>
-
-      {/* Client List */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        {filteredClients.map(client => (
-          <div
-            key={client.id}
-            style={{
-              background: 'white',
-              border: '1px solid #e5e7eb',
-              borderRadius: '12px',
-              padding: '16px',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)'
-              e.currentTarget.style.transform = 'translateY(-2px)'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.boxShadow = 'none'
-              e.currentTarget.style.transform = 'translateY(0)'
-            }}
-          >
-            <div>
-              <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '4px' }}>{client.name}</h3>
-              <div style={{ display: 'flex', gap: '16px', fontSize: '14px', color: '#64748b' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <Mail size={14} />
-                  {client.email}
-                </span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <Phone size={14} />
-                  {client.phone}
-                </span>
-              </div>
-              <div style={{ marginTop: '8px', fontSize: '12px', color: '#64748b' }}>
-                Last CMA: {new Date(client.lastCMA).toLocaleDateString()}
-              </div>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <span style={{
-                padding: '4px 12px',
-                background: client.status === 'Active' ? '#dcfce7' : '#fee2e2',
-                color: client.status === 'Active' ? '#16a34a' : '#dc2626',
-                borderRadius: '20px',
-                fontSize: '12px',
-                fontWeight: '600'
-              }}>
-                {client.status}
-              </span>
-              <button
-                style={{
-                  padding: '8px',
-                  background: 'transparent',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  // Delete client logic
-                }}
-              >
-                <Trash2 size={16} color="#dc2626" />
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
+    <CustomerListScreen 
+      onNavigate={onNavigate}
+      onSelectCustomer={openCustomerProfile}
+    />
   )
 }
 
@@ -430,25 +290,6 @@ export const CMAsScreen = ({ onNavigate }) => {
 
   return (
     <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto', height: '100%', overflow: 'auto' }}>
-      {/* Back Button */}
-      <button
-        onClick={() => onNavigate('home')}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          background: 'transparent',
-          border: 'none',
-          fontSize: '16px',
-          fontWeight: '600',
-          color: '#3b82f6',
-          cursor: 'pointer',
-          marginBottom: '24px'
-        }}
-      >
-        <ArrowLeft size={20} />
-        Back
-      </button>
 
       <h1 style={{ fontSize: '24px', fontWeight: '700', marginBottom: '24px' }}>My Sets</h1>
 
@@ -589,25 +430,6 @@ export const SettingsScreen = ({ onNavigate }) => {
 
   return (
     <div style={{ padding: '20px', maxWidth: '600px', margin: '0 auto', height: '100%', overflow: 'auto' }}>
-      {/* Back Button */}
-      <button
-        onClick={() => onNavigate('home')}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          background: 'transparent',
-          border: 'none',
-          fontSize: '16px',
-          fontWeight: '600',
-          color: '#3b82f6',
-          cursor: 'pointer',
-          marginBottom: '24px'
-        }}
-      >
-        <ArrowLeft size={20} />
-        Back
-      </button>
 
       <h1 style={{ fontSize: '24px', fontWeight: '700', marginBottom: '24px' }}>Settings</h1>
 

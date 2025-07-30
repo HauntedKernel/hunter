@@ -8,6 +8,22 @@ const AddressInputScreen = ({ onNavigate, onModeChange }) => {
   const [selectedMode, setSelectedMode] = useState('discovery')
   const [isRecording, setIsRecording] = useState(false)
   const [recognition, setRecognition] = useState(null)
+  const [selectedCustomer, setSelectedCustomer] = useState('John & Jane Smith')
+  
+  // Customer profiles for selection
+  const customerProfiles = [
+    { name: 'John & Jane Smith', details: 'Last CMA: 2 weeks ago • First Time Buyers', avatar: 'JS', icon: '🏠' },
+    { name: 'Michael & Sarah Johnson', details: 'Last CMA: 1 month ago • Investment Profile', avatar: 'MJ', icon: '💼' },
+    { name: 'Williams Estate', details: 'Last CMA: 3 months ago • Luxury Profile', avatar: 'WE', icon: '🏰' },
+    { name: 'David & Lisa Chen', details: 'New client • Relocation Profile', avatar: 'DC', icon: '🚛' },
+    { name: 'Robert & Maria Garcia', details: 'Last CMA: 6 months ago • Upgrade Profile', avatar: 'RG', icon: '⬆️' }
+  ]
+  
+  const selectCustomer = (customer) => {
+    setSelectedCustomer(customer.name)
+    // Save to localStorage for use in other screens
+    localStorage.setItem('selectedCustomer', customer.name)
+  }
   
   const lifestyleFeatures = [
     { id: 'entertainment', label: 'Entertainment Focused', icon: '🎉', category: 'social' },
@@ -204,58 +220,12 @@ const AddressInputScreen = ({ onNavigate, onModeChange }) => {
       width: '100%',
       height: '100%',
       background: 'linear-gradient(180deg, #fafafa 0%, #f1f5f9 100%)',
-      borderRadius: '41px',
       position: 'relative',
       overflow: 'hidden',
       display: 'flex',
       flexDirection: 'column'
     }}>
-      <div className="status-bar" style={{
-        height: '44px',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: '0 20px',
-        fontSize: '14px',
-        fontWeight: '600',
-        color: '#1e293b'
-      }}>
-        <span>9:41</span>
-        <span>••••• </span>
-        <span>100% 🔋</span>
-      </div>
       
-      <div className="header-bar" style={{
-        padding: '16px 20px',
-        background: 'rgba(255,255,255,0.95)',
-        backdropFilter: 'blur(20px)',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '16px',
-        borderBottom: '1px solid rgba(226,232,240,0.5)'
-      }}>
-        <div 
-          className="back-button" 
-          style={{
-            width: '36px',
-            height: '36px',
-            borderRadius: '50%',
-            background: 'rgba(248,250,252,0.8)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '18px',
-            cursor: 'pointer',
-            transition: 'all 0.3s ease'
-          }}
-          onClick={() => onNavigate('home')}
-        >←</div>
-        <div className="screen-title" style={{
-          fontSize: '18px',
-          fontWeight: '700',
-          color: '#1e293b'
-        }}>Client & Property Setup</div>
-      </div>
       
       <div className="main-content" style={{
         flex: '1',
@@ -331,112 +301,50 @@ const AddressInputScreen = ({ onNavigate, onModeChange }) => {
             overflow: 'hidden',
             marginBottom: '20px'
           }}>
-            <div className="client-suggestion active" style={{
-              padding: '16px 20px',
-              borderBottom: '1px solid #f1f5f9',
-              cursor: 'pointer',
-              transition: 'all 0.3s ease',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              background: 'rgba(59,130,246,0.1)',
-              borderLeft: '4px solid #3b82f6'
-            }}>
-              <div className="client-avatar" style={{
-                width: '44px',
-                height: '44px',
-                borderRadius: '50%',
-                background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'white',
-                fontWeight: '700',
-                fontSize: '14px'
-              }}>JF</div>
-              <div className="client-info" style={{ flex: '1' }}>
-                <div className="client-name" style={{
-                  fontSize: '15px',
-                  fontWeight: '600',
-                  color: '#1e293b',
-                  marginBottom: '4px'
-                }}>Johnson Family</div>
-                <div className="client-details" style={{
-                  fontSize: '12px',
-                  color: '#64748b'
-                }}>Last CMA: 2 weeks ago • Family Profile</div>
+            {customerProfiles.map((customer, index) => (
+              <div 
+                key={customer.name}
+                className={`client-suggestion ${selectedCustomer === customer.name ? 'active' : ''}`}
+                style={{
+                  padding: '16px 20px',
+                  borderBottom: index < customerProfiles.length - 1 ? '1px solid #f1f5f9' : 'none',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  background: selectedCustomer === customer.name ? 'rgba(59,130,246,0.1)' : 'transparent',
+                  borderLeft: selectedCustomer === customer.name ? '4px solid #3b82f6' : '4px solid transparent'
+                }}
+                onClick={() => selectCustomer(customer)}
+              >
+                <div className="client-avatar" style={{
+                  width: '44px',
+                  height: '44px',
+                  borderRadius: '50%',
+                  background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'white',
+                  fontWeight: '700',
+                  fontSize: '14px'
+                }}>{customer.avatar}</div>
+                <div className="client-info" style={{ flex: '1' }}>
+                  <div className="client-name" style={{
+                    fontSize: '15px',
+                    fontWeight: '600',
+                    color: '#1e293b',
+                    marginBottom: '4px'
+                  }}>{customer.name}</div>
+                  <div className="client-details" style={{
+                    fontSize: '12px',
+                    color: '#64748b'
+                  }}>{customer.details}</div>
+                </div>
+                <div className="client-status" style={{ fontSize: '20px' }}>{customer.icon}</div>
               </div>
-              <div className="client-status" style={{ fontSize: '20px' }}>👨‍👩‍👧‍👦</div>
-            </div>
-            <div className="client-suggestion" style={{
-              padding: '16px 20px',
-              borderBottom: '1px solid #f1f5f9',
-              cursor: 'pointer',
-              transition: 'all 0.3s ease',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px'
-            }}>
-              <div className="client-avatar" style={{
-                width: '44px',
-                height: '44px',
-                borderRadius: '50%',
-                background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'white',
-                fontWeight: '700',
-                fontSize: '14px'
-              }}>SI</div>
-              <div className="client-info" style={{ flex: '1' }}>
-                <div className="client-name" style={{
-                  fontSize: '15px',
-                  fontWeight: '600',
-                  color: '#1e293b',
-                  marginBottom: '4px'
-                }}>Smith Investment LLC</div>
-                <div className="client-details" style={{
-                  fontSize: '12px',
-                  color: '#64748b'
-                }}>Last CMA: 1 month ago • Investment Profile</div>
-              </div>
-              <div className="client-status" style={{ fontSize: '20px' }}>💼</div>
-            </div>
-            <div className="client-suggestion" style={{
-              padding: '16px 20px',
-              cursor: 'pointer',
-              transition: 'all 0.3s ease',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px'
-            }}>
-              <div className="client-avatar" style={{
-                width: '44px',
-                height: '44px',
-                borderRadius: '50%',
-                background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'white',
-                fontWeight: '700',
-                fontSize: '14px'
-              }}>WE</div>
-              <div className="client-info" style={{ flex: '1' }}>
-                <div className="client-name" style={{
-                  fontSize: '15px',
-                  fontWeight: '600',
-                  color: '#1e293b',
-                  marginBottom: '4px'
-                }}>Williams Estate</div>
-                <div className="client-details" style={{
-                  fontSize: '12px',
-                  color: '#64748b'
-                }}>Last CMA: 3 months ago • Luxury Profile</div>
-              </div>
-              <div className="client-status" style={{ fontSize: '20px' }}>🏰</div>
-            </div>
+            ))}
           </div>
         </div>
         

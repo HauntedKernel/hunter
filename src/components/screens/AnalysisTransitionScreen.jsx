@@ -129,28 +129,12 @@ const AnalysisTransitionScreen = ({ onNavigate, onComplete }) => {
       width: '100%',
       height: '100%',
       background: 'linear-gradient(180deg, #0f172a 0%, #1e293b 100%)',
-      borderRadius: '41px',
       position: 'relative',
       overflow: 'hidden',
       display: 'flex',
       flexDirection: 'column',
       color: 'white'
     }}>
-      {/* Status Bar */}
-      <div className="status-bar" style={{
-        height: '44px',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: '0 20px',
-        fontSize: '14px',
-        fontWeight: '600',
-        color: 'white'
-      }}>
-        <span>9:41</span>
-        <span>••••• </span>
-        <span>100% 🔋</span>
-      </div>
       
       {/* Header */}
       <div className="header-bar" style={{
