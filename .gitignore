@@ -50,3 +50,6 @@ coverage/
 # SSL certificates
 .cert/
 *.pem
+
+# Archives
+/archive/
