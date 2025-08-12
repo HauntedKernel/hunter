@@ -23,6 +23,13 @@ const ResultsScreen = ({ onNavigate, mode = 'discovery' }) => {
   const [parsedIssues, setParsedIssues] = useState([])
   const [isRecording, setIsRecording] = useState(false)
   const [recognition, setRecognition] = useState(null)
+  
+  // Subject property details
+  const [subjectInput, setSubjectInput] = useState('')
+  const [parsedSubjectDetails, setParsedSubjectDetails] = useState([
+    { icon: '🎨', title: 'Interior Updates', desc: 'Wants new paint in 20x30 living room', type: 'planned' },
+    { icon: '🔧', title: 'Kitchen Renovation', desc: 'Updated granite countertops and stainless appliances', type: 'completed' }
+  ])
 
   // Share link functionality
   const [isGeneratingLink, setIsGeneratingLink] = useState(false)
@@ -500,11 +507,150 @@ const ResultsScreen = ({ onNavigate, mode = 'discovery' }) => {
     },
   }
 
+  // Parse subject property details from natural language
+  const parseSubjectDetails = (input) => {
+    const text = input.toLowerCase()
+    const details = []
+    
+    // Paint/Interior
+    if (text.includes('paint') || text.includes('painting')) {
+      const roomMatch = text.match(/(\d+x\d+|\d+\s*x\s*\d+)\s*(\w+\s*\w*\s*room|\w+)/i)
+      const room = roomMatch ? roomMatch[0] : 'interior spaces'
+      details.push({
+        icon: '🎨',
+        title: 'Interior Paint',
+        desc: `Wants new paint in ${room}`,
+        type: 'planned'
+      })
+    }
+    
+    // Kitchen updates
+    if (text.includes('kitchen') || text.includes('countertop') || text.includes('appliance')) {
+      details.push({
+        icon: '🔧',
+        title: 'Kitchen Updates',
+        desc: 'Kitchen renovation with updated countertops and appliances',
+        type: text.includes('want') || text.includes('need') ? 'planned' : 'completed'
+      })
+    }
+    
+    // Flooring
+    if (text.includes('floor') || text.includes('carpet') || text.includes('hardwood') || text.includes('tile')) {
+      details.push({
+        icon: '🏠',
+        title: 'Flooring',
+        desc: `Flooring updates: ${text.match(/\b\w*floor\w*|\b\w*carpet\w*|\b\w*hardwood\w*|\b\w*tile\w*/gi)?.[0] || 'flooring improvements'}`,
+        type: text.includes('want') || text.includes('need') ? 'planned' : 'completed'
+      })
+    }
+    
+    // Bathroom
+    if (text.includes('bathroom') || text.includes('bath')) {
+      details.push({
+        icon: '🚿',
+        title: 'Bathroom Updates',
+        desc: 'Bathroom renovation or updates',
+        type: text.includes('want') || text.includes('need') ? 'planned' : 'completed'
+      })
+    }
+    
+    // Windows/Doors
+    if (text.includes('window') || text.includes('door')) {
+      details.push({
+        icon: '🪟',
+        title: 'Windows & Doors',
+        desc: 'Window or door improvements',
+        type: text.includes('want') || text.includes('need') ? 'planned' : 'completed'
+      })
+    }
+    
+    return details
+  }
+  
+  // Handle subject input changes
+  const handleSubjectInputChange = (value) => {
+    setSubjectInput(value)
+    if (value.trim()) {
+      const parsed = parseSubjectDetails(value)
+      // Merge with existing details, avoiding duplicates
+      const existing = parsedSubjectDetails.filter(detail => 
+        !parsed.some(p => p.title === detail.title)
+      )
+      setParsedSubjectDetails([...existing, ...parsed])
+    }
+  }
+
   const parseIssues = (text) => {
     const found = []
     const lowerText = text.toLowerCase()
     
-    // Check each category in the database
+    // Parse subjective issues (desires, wants, preferences)
+    const parseSubjectiveIssues = (text) => {
+      const subjective = []
+      
+      // Paint/Interior desires
+      if (text.includes('paint') || text.includes('painting')) {
+        const roomMatch = text.match(/(\d+x\d+|\d+\s*x\s*\d+)\s*(\w+\s*\w*\s*room|\w+)/i)
+        const room = roomMatch ? roomMatch[0] : 'interior spaces'
+        const sqft = roomMatch ? parseInt(roomMatch[1].replace('x', '')) * parseInt(roomMatch[1].split('x')[1]) : 400
+        subjective.push({
+          type: 'subjective',
+          category: 'Interior',
+          issue: `Wants new paint in ${room}`,
+          cost: Math.min(sqft * 3, 2500), // $3 per sqft, max $2500
+          severity: 'cosmetic',
+          description: `Owner desires fresh paint for ${room}`,
+          negotiable: true
+        })
+      }
+      
+      // Kitchen desires
+      if (text.includes('kitchen') && (text.includes('want') || text.includes('update') || text.includes('remodel'))) {
+        subjective.push({
+          type: 'subjective',
+          category: 'Kitchen',
+          issue: 'Wants kitchen updates',
+          cost: 15000,
+          severity: 'moderate',
+          description: 'Owner desires kitchen improvements',
+          negotiable: true
+        })
+      }
+      
+      // Flooring desires
+      if ((text.includes('floor') || text.includes('carpet') || text.includes('hardwood')) && 
+          (text.includes('want') || text.includes('replace') || text.includes('update'))) {
+        subjective.push({
+          type: 'subjective',
+          category: 'Flooring',
+          issue: 'Wants flooring updates',
+          cost: 8000,
+          severity: 'moderate',
+          description: 'Owner desires new flooring',
+          negotiable: true
+        })
+      }
+      
+      // Bathroom desires
+      if (text.includes('bathroom') && (text.includes('want') || text.includes('update') || text.includes('remodel'))) {
+        subjective.push({
+          type: 'subjective',
+          category: 'Bathroom',
+          issue: 'Wants bathroom updates',
+          cost: 12000,
+          severity: 'moderate',
+          description: 'Owner desires bathroom improvements',
+          negotiable: true
+        })
+      }
+      
+      return subjective
+    }
+    
+    // Add subjective issues
+    found.push(...parseSubjectiveIssues(lowerText))
+    
+    // Check each category in the database for objective issues
     Object.entries(negotiationDatabase).forEach(([key, category]) => {
       // Check each pattern in the category
       for (const pattern of category.patterns) {
@@ -1011,6 +1157,72 @@ const ResultsScreen = ({ onNavigate, mode = 'discovery' }) => {
                             }}></div>
                             <span style={{ color: '#d97706', fontWeight: '600' }}>Seller's disclosure analyzed</span>
                           </div>
+                        </div>
+                      </div>
+
+                      {/* Subject Property Details & Improvements */}
+                      <div style={{
+                        background: '#f0fdf4',
+                        borderRadius: '12px',
+                        padding: '16px',
+                        marginBottom: '16px',
+                        borderLeft: '4px solid #10b981'
+                      }}>
+                        <h4 style={{
+                          fontSize: '16px',
+                          fontWeight: '700',
+                          color: '#1e293b',
+                          marginBottom: '12px'
+                        }}>🏠 Property Details & Improvements</h4>
+                        
+                        <div style={{ display: 'grid', gap: '12px' }}>
+                          {parsedSubjectDetails.map((item, index) => (
+                            <div key={index} style={{
+                              display: 'flex',
+                              alignItems: 'flex-start',
+                              gap: '8px'
+                            }}>
+                              <div style={{
+                                width: '20px',
+                                height: '20px',
+                                borderRadius: '10px',
+                                background: item.type === 'planned' ? '#fef3c7' : '#dcfce7',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '10px',
+                                flexShrink: 0,
+                                marginTop: '1px'
+                              }}>{item.icon}</div>
+                              <div style={{ flex: 1 }}>
+                                <div style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '8px',
+                                  marginBottom: '2px'
+                                }}>
+                                  <div style={{
+                                    fontSize: '13px',
+                                    fontWeight: '600',
+                                    color: '#1e293b'
+                                  }}>{item.title}</div>
+                                  <div style={{
+                                    fontSize: '10px',
+                                    padding: '2px 6px',
+                                    borderRadius: '4px',
+                                    background: item.type === 'planned' ? '#fbbf24' : '#10b981',
+                                    color: 'white',
+                                    fontWeight: '600'
+                                  }}>{item.type === 'planned' ? 'PLANNED' : 'DONE'}</div>
+                                </div>
+                                <div style={{
+                                  fontSize: '12px',
+                                  color: '#64748b',
+                                  lineHeight: '1.4'
+                                }}>{item.desc}</div>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
 
@@ -1525,7 +1737,10 @@ const ResultsScreen = ({ onNavigate, mode = 'discovery' }) => {
                         <div style={{
                           fontSize: '12px',
                           color: '#64748b'
-                        }}>Property Issues: ${parsedIssues.filter(i => i.type === 'objective').reduce((sum, issue) => sum + issue.cost, 0).toLocaleString()}</div>
+                        }}>
+                          Objective Issues: ${parsedIssues.filter(i => i.type === 'objective').reduce((sum, issue) => sum + issue.cost, 0).toLocaleString()} • 
+                          Subjective Issues: ${parsedIssues.filter(i => i.type === 'subjective').reduce((sum, issue) => sum + issue.cost, 0).toLocaleString()}
+                        </div>
                       </div>
 
                       {/* Objective Issues */}
@@ -1597,6 +1812,74 @@ const ResultsScreen = ({ onNavigate, mode = 'discovery' }) => {
                         </div>
                       </div>
 
+                      {/* Subjective Issues */}
+                      {parsedIssues.filter(i => i.type === 'subjective').length > 0 && (
+                        <div style={{
+                          background: '#fef7ff',
+                          borderRadius: '12px',
+                          padding: '16px',
+                          marginBottom: '16px',
+                          borderLeft: '4px solid #8b5cf6'
+                        }}>
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            marginBottom: '12px',
+                            paddingBottom: '8px',
+                            borderBottom: '1px solid #e2e8f0'
+                          }}>
+                            <div style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px'
+                            }}>
+                              <span style={{
+                                fontSize: '16px',
+                                fontWeight: '700',
+                                color: '#1e293b'
+                              }}>Seller Desires & Preferences</span>
+                            </div>
+                            <span style={{
+                              fontSize: '16px',
+                              fontWeight: '700',
+                              color: '#8b5cf6'
+                            }}>-${parsedIssues.filter(i => i.type === 'subjective').reduce((sum, issue) => sum + issue.cost, 0).toLocaleString()}</span>
+                          </div>
+                          
+                          <div style={{ display: 'grid', gap: '8px' }}>
+                            {parsedIssues.filter(issue => issue.type === 'subjective').map((issue, index) => (
+                              <div key={index} style={{
+                                display: 'flex',
+                                alignItems: 'flex-start',
+                                justifyContent: 'space-between',
+                                gap: '12px',
+                                padding: '8px 0'
+                              }}>
+                                <div style={{ flex: 1 }}>
+                                  <div style={{
+                                    fontSize: '13px',
+                                    fontWeight: '600',
+                                    color: '#1e293b',
+                                    marginBottom: '2px'
+                                  }}>{issue.issue}</div>
+                                  <div style={{
+                                    fontSize: '11px',
+                                    color: '#64748b',
+                                    lineHeight: '1.3'
+                                  }}>{issue.description} - {issue.negotiable ? 'Negotiable' : 'Non-negotiable'}</div>
+                                </div>
+                                <div style={{
+                                  fontSize: '14px',
+                                  fontWeight: '700',
+                                  color: '#8b5cf6',
+                                  flexShrink: 0
+                                }}>-${issue.cost.toLocaleString()}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Strategy Recommendations */}
                       <div style={{

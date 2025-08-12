@@ -1,11 +1,12 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
-import fs from 'fs'
+import basicSsl from '@vitejs/plugin-basic-ssl'
 
 export default defineConfig({
   plugins: [
     react(),
+    basicSsl(),
     VitePWA({
       registerType: 'autoUpdate',
       workbox: {
@@ -21,25 +22,23 @@ export default defineConfig({
         orientation: 'portrait',
         icons: [
           {
-            src: 'pwa-192.png',
+            src: 'pwa-192.svg',
             sizes: '192x192',
-            type: 'image/png'
+            type: 'image/svg+xml'
           },
           {
-            src: 'pwa-512.png',
+            src: 'pwa-512.svg',
             sizes: '512x512',
-            type: 'image/png'
+            type: 'image/svg+xml'
           }
         ]
       }
     })
   ],
   server: {
-    https: {
-      key: fs.readFileSync('./.cert/key.pem'),
-      cert: fs.readFileSync('./.cert/cert.pem'),
-    },
-    host: true,
-    port: 3000
+    https: true,
+    host: '0.0.0.0',
+    port: 5173,
+    strictPort: false
   }
 })

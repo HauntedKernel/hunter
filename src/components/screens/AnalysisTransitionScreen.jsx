@@ -58,12 +58,12 @@ const AnalysisTransitionScreen = ({ onNavigate, onComplete }) => {
         if (newProgress >= 100) {
           clearInterval(timer)
           // Auto-navigate to results after completion
-          setTimeout(() => onNavigate('results'), 1500)
+          setTimeout(() => onNavigate('results'), 500)
         }
         
         return Math.min(newProgress, 100)
       })
-    }, 120) // Completes in ~12 seconds
+    }, 30) // Completes in ~3 seconds
 
     return () => clearInterval(timer)
   }, [onNavigate])
@@ -271,7 +271,7 @@ const AnalysisTransitionScreen = ({ onNavigate, onComplete }) => {
               gap: '12px',
               padding: '8px 0',
               opacity: progress > (currentStage * 33 + (index + 1) * 8) ? 1 : 0.3,
-              transition: 'opacity 0.3s ease'
+              transition: 'opacity 0.1s ease'
             }}>
               {progress > (currentStage * 33 + (index + 1) * 8) ? (
                 <CheckCircle size={16} color="#10b981" />
