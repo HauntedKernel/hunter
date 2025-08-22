@@ -9,6 +9,8 @@ import ResultsScreen from './components/screens/ResultsScreen'
 import ShareViewScreen from './components/screens/ShareViewScreen'
 import UserMenu from './components/UserMenu'
 import { ProfileScreen, ClientsScreen, CMAsScreen, SettingsScreen } from './components/screens/MenuScreens'
+import SellersDashboardScreen from './components/screens/SellersDashboardScreen'
+import SellerIntelligenceResultsScreen from './components/screens/SellerIntelligenceResultsScreen'
 
 function App() {
   const [currentScreen, setCurrentScreen] = useState('home')
@@ -69,6 +71,10 @@ function App() {
         return <CMAsScreen onNavigate={navigateTo} />
       case 'settings':
         return <SettingsScreen onNavigate={navigateTo} />
+      case 'seller_intelligence_area':
+        return <SellersDashboardScreen onNavigate={navigateTo} />
+      case 'seller_intelligence_results':
+        return <SellerIntelligenceResultsScreen onNavigate={navigateTo} />
       default:
         return <HomeScreen onNavigate={navigateTo} />
     }

@@ -172,6 +172,64 @@ const HomeScreen = ({ onNavigate }) => {
             </div>
             
             <div 
+              className="option-button seller-intelligence" 
+              style={{
+                background: 'linear-gradient(135deg, rgba(16,163,74,0.1), rgba(59,130,246,0.1))',
+                backdropFilter: 'blur(20px)',
+                border: '1px solid rgba(16,163,74,0.3)',
+                borderRadius: '20px',
+                padding: '20px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '18px',
+                textAlign: 'left',
+                position: 'relative',
+                overflow: 'hidden',
+                cursor: 'pointer'
+              }}
+              onClick={() => onNavigate('seller_intelligence_area')}
+            >
+              <div className="option-icon" style={{
+                fontSize: '24px',
+                width: '52px',
+                height: '52px',
+                borderRadius: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'rgba(255,255,255,0.9)',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.15), 0 1px 3px rgba(0,0,0,0.1)',
+                backdropFilter: 'blur(10px)'
+              }}>🎯</div>
+              <div className="option-text">
+                <div className="option-title" style={{
+                  fontSize: '17px',
+                  fontWeight: '700',
+                  color: '#1e293b',
+                  marginBottom: '4px',
+                  letterSpacing: '-0.2px'
+                }}>Sellers Hub</div>
+                <div className="option-desc" style={{
+                  fontSize: '13px',
+                  color: '#64748b',
+                  fontWeight: '500'
+                }}>Campaigns & lead generation</div>
+              </div>
+              <div style={{
+                position: 'absolute',
+                top: '8px',
+                right: '12px',
+                background: '#16a34a',
+                color: 'white',
+                fontSize: '10px',
+                fontWeight: '700',
+                padding: '3px 8px',
+                borderRadius: '12px',
+                letterSpacing: '0.5px'
+              }}>NEW</div>
+            </div>
+            
+            <div 
               className="option-button clients" 
               style={{
                 background: 'rgba(254,240,138,0.6)',
