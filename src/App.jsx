@@ -11,12 +11,14 @@ import UserMenu from './components/UserMenu'
 import { ProfileScreen, ClientsScreen, CMAsScreen, SettingsScreen } from './components/screens/MenuScreens'
 import SellersDashboardScreen from './components/screens/SellersDashboardScreen'
 import SellerIntelligenceResultsScreen from './components/screens/SellerIntelligenceResultsScreen'
+import CampaignDetailsScreen from './components/screens/CampaignDetailsScreen'
 
 function App() {
   const [currentScreen, setCurrentScreen] = useState('home')
   const [previousScreen, setPreviousScreen] = useState(null)
   const [analysisMode, setAnalysisMode] = useState('discovery') // 'discovery' or 'cma'
   const [shareId, setShareId] = useState(null)
+  const [navigationParams, setNavigationParams] = useState({})
   const [userProfile, setUserProfile] = useState({
     firstName: 'Jane',
     lastName: 'Doe',
@@ -37,11 +39,16 @@ function App() {
     }
   }, [])
 
-  const navigateTo = (screen, mode = null) => {
+  const navigateTo = (screen, params = null) => {
     setPreviousScreen(currentScreen)
     setCurrentScreen(screen)
-    if (mode) {
-      setAnalysisMode(mode)
+    if (params) {
+      if (params.mode) {
+        setAnalysisMode(params.mode)
+      }
+      setNavigationParams(params)
+    } else {
+      setNavigationParams({})
     }
   }
 
@@ -71,10 +78,13 @@ function App() {
         return <CMAsScreen onNavigate={navigateTo} />
       case 'settings':
         return <SettingsScreen onNavigate={navigateTo} />
+      case 'sellers_dashboard':
       case 'seller_intelligence_area':
         return <SellersDashboardScreen onNavigate={navigateTo} />
       case 'seller_intelligence_results':
-        return <SellerIntelligenceResultsScreen onNavigate={navigateTo} />
+        return <SellerIntelligenceResultsScreen onNavigate={navigateTo} searchParams={navigationParams} />
+      case 'campaign_details':
+        return <CampaignDetailsScreen onNavigate={navigateTo} campaignId={navigationParams?.campaignId} />
       default:
         return <HomeScreen onNavigate={navigateTo} />
     }

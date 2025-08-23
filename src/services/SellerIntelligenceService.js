@@ -13,7 +13,51 @@ class SellerIntelligenceService {
             responseRate: 25,
             startDate: '3 days ago',
             radius: 5,
-            propertyTypes: { singleFamily: true, condo: true }
+            propertyTypes: { singleFamily: true, condo: true },
+            contactChannels: {
+              phone: { attempts: 89, successful: 28, responses: 5 },
+              email: { attempts: 47, successful: 47, responses: 3 },
+              text: { attempts: 32, successful: 31, responses: 2 },
+              mail: { attempts: 15, successful: 15, responses: 0 }
+            },
+            leads: [
+              {
+                id: 'lead_001',
+                name: 'John & Mary Smith',
+                address: '4521 Beverly Dr',
+                phone: '(214) 555-0123',
+                email: 'jsmith@email.com',
+                lastContact: '2 hours ago',
+                contactAttempts: 4,
+                status: 'responded',
+                response: 'Interested in market analysis',
+                motivationScore: 94
+              },
+              {
+                id: 'lead_002',
+                name: 'Robert Johnson',
+                address: '3842 Mockingbird Ln',
+                phone: '(214) 555-0456',
+                email: 'rjohnson@email.com',
+                lastContact: '1 day ago',
+                contactAttempts: 3,
+                status: 'contacted',
+                response: null,
+                motivationScore: 87
+              },
+              {
+                id: 'lead_003',
+                name: 'Sarah Williams',
+                address: '2156 Preston Rd',
+                phone: '(469) 555-0789',
+                email: 'swilliams@email.com',
+                lastContact: '3 days ago',
+                contactAttempts: 2,
+                status: 'pending',
+                response: null,
+                motivationScore: 82
+              }
+            ]
           },
           {
             id: 'campaign_002',
@@ -25,7 +69,39 @@ class SellerIntelligenceService {
             responseRate: 27,
             startDate: '1 week ago',
             radius: 3,
-            propertyTypes: { condo: true, commercial: true }
+            propertyTypes: { condo: true, commercial: true },
+            contactChannels: {
+              phone: { attempts: 120, successful: 38, responses: 8 },
+              email: { attempts: 62, successful: 62, responses: 4 },
+              text: { attempts: 45, successful: 43, responses: 3 },
+              mail: { attempts: 20, successful: 20, responses: 1 }
+            },
+            leads: [
+              {
+                id: 'lead_004',
+                name: 'Michael & Jennifer Brown',
+                address: '5673 Lakewood Blvd',
+                phone: '(972) 555-0321',
+                email: 'mbrown@email.com',
+                lastContact: '5 hours ago',
+                contactAttempts: 5,
+                status: 'responded',
+                response: 'Wants to schedule showing',
+                motivationScore: 79
+              },
+              {
+                id: 'lead_005',
+                name: 'Estate of Patricia Davis',
+                address: '1890 Oak Lawn Ave',
+                phone: '(214) 555-0654',
+                email: 'estate.davis@law.com',
+                lastContact: '2 days ago',
+                contactAttempts: 6,
+                status: 'responded',
+                response: 'Meeting scheduled for next week',
+                motivationScore: 96
+              }
+            ]
           },
           {
             id: 'campaign_003',
@@ -37,7 +113,27 @@ class SellerIntelligenceService {
             responseRate: 15,
             startDate: '2 weeks ago',
             radius: 7,
-            propertyTypes: { singleFamily: true, rawLand: true }
+            propertyTypes: { singleFamily: true, rawLand: true },
+            contactChannels: {
+              phone: { attempts: 55, successful: 15, responses: 2 },
+              email: { attempts: 35, successful: 35, responses: 1 },
+              text: { attempts: 20, successful: 18, responses: 0 },
+              mail: { attempts: 10, successful: 10, responses: 0 }
+            },
+            leads: [
+              {
+                id: 'lead_006',
+                name: 'David Martinez',
+                address: '7234 Greenville Ave',
+                phone: '(469) 555-0987',
+                email: 'dmartinez@email.com',
+                lastContact: '1 week ago',
+                contactAttempts: 3,
+                status: 'no-response',
+                response: null,
+                motivationScore: 73
+              }
+            ]
           }
         ];
         resolve(campaigns);
@@ -440,6 +536,11 @@ class SellerIntelligenceService {
       return `${years} year${years > 1 ? 's' : ''} ${months > 0 ? `${months} mo` : ''}`;
     }
     return `${months} month${months > 1 ? 's' : ''}`;
+  }
+
+  static async getCampaignDetails(campaignId) {
+    const campaigns = await this.getCampaigns();
+    return campaigns.find(c => c.id === campaignId) || null;
   }
 
   static async exportLeads(leads, format = 'csv') {

@@ -114,12 +114,7 @@ const SellersDashboardScreen = ({ onNavigate }) => {
                   <div 
                     key={campaign.id}
                     style={styles.campaignCard}
-                    onClick={() => onNavigate('seller_intelligence_results', {
-                      campaignId: campaign.id,
-                      area: campaign.area,
-                      radius: campaign.radius,
-                      propertyTypes: campaign.propertyTypes
-                    })}
+                    onClick={() => onNavigate('campaign_details', { campaignId: campaign.id })}
                   >
                     <div style={styles.campaignHeader}>
                       <div style={styles.campaignArea}>{campaign.area}</div>
