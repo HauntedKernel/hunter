@@ -123,6 +123,24 @@ Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 
   successful "no CAD match" is cached too, so partial tax-roll addresses aren't
   re-scraped futilely.
 
+- `[#011]` **Stripped & repackaged as "Hunter" — a single-purpose off-market
+  seller finder for realtors.** Product decision: do one thing well. Removed the
+  entire CMA / lifestyle-discovery thread (Thread A) and rebranded.
+  - `src/App.jsx` rewritten: routing now covers only the seller flow
+    (dashboard/home → search results → campaign details); Hunter branding +
+    "Dallas County" scope chip in the header; dropped analysisMode/share/UserMenu.
+  - `SellersDashboardScreen` is the front door ("Find Off-Market Sellers");
+    removed its redundant back button.
+  - Rebranded `index.html` title/meta and the PWA manifest (vite.config.js) to
+    Hunter, green theme.
+  - Deleted ~22 orphaned Thread A files (CMA/Discovery/AR/Documents/Customer/
+    Share screens, UserMenu, ui/ + gestures/ components, CustomerService,
+    ShareSessionService, mockProperties). All preserved in the
+    `seller-intelligence-focus` checkpoint commit if ever needed.
+  - `src/` is now just: App, main, 3 seller screens, SellerIntelligenceService,
+    globals.css.
+  Verified end-to-end on the public URL: search (100 leads) + cached enrichment.
+
 ### Flagged for prior-art / patent review (Handoff Rule 6)
 - New `calculateUrgencyScore()` (0–100): weights balance size, years behind,
   absentee ownership (no homestead exemption), and foreclosure risk. Used as

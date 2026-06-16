@@ -71,14 +71,10 @@ const SellersDashboardScreen = ({ onNavigate }) => {
   return (
     <div style={styles.screen}>
       <div style={styles.header}>
-        <button onClick={() => onNavigate('home')} style={styles.backButton}>
-          ← Back
-        </button>
         <div style={styles.headerContent}>
-          <h1 style={styles.title}>Sellers Dashboard</h1>
-          <p style={styles.subtitle}>Manage campaigns & find new leads</p>
+          <h1 style={styles.title}>Find Off-Market Sellers</h1>
+          <p style={styles.subtitle}>Motivated sellers from Dallas County public records</p>
         </div>
-        <div style={styles.headerSpacer}></div>
       </div>
 
       <div style={styles.content}>

@@ -1,78 +1,60 @@
-# FlashStack
+# 🎯 Hunter — Off-Market Property Finder
 
-Mobile-first real estate analysis platform with AI-powered seller intelligence.
+**Hunter helps realtors find off-market properties before they list**, by scoring
+**seller motivation** from public records. It surfaces financially distressed
+owners (tax-delinquent properties) in **Dallas County**, ranks them by how likely
+they are to sell, and enriches each lead with full property detail for outreach.
 
-## Project Status - December 2024
+> One job, done well: find motivated off-market sellers. (Formerly "FlashStack" —
+> the CMA/discovery features were removed to focus on this single product.)
 
-### ✅ Completed Features
+## How it works
 
-**Core CMA Platform**
-- Property address input and AR camera scanning
-- Document disclosure analysis
-- Multi-tab CMA results (Subject Property, Comparables, Intelligence)
-- Client management system
-- Session sharing capabilities
+1. **Search an area** — type a Dallas County neighborhood, city, or ZIP
+   (e.g. *Highland Park*, *Lakewood*, *75205*).
+2. **Get ranked leads** — instantly pulled from the full Dallas County tax roll
+   (874k properties, ~73k delinquent), scored by a multi-factor **motivation**
+   model and an **urgency** score (balance owed, years behind, absentee owner,
+   foreclosure risk).
+3. **Enrich on demand** — open a lead (or select several) to pull live Dallas CAD
+   detail: verified owner, full street address, market value, beds/baths/sqft,
+   year built. Results are cached, so repeat lookups are instant.
+4. **Export** — download selected leads as a CSV (owner, address, value,
+   beds/baths/sqft/year built, amount owed, scores) for your outreach workflow.
 
-**🆕 Seller Intelligence Hub** (Latest Addition)
-- **Sellers Dashboard** with campaign management
-- **Lead Discovery** with geographic and property type filtering
-- **Campaign Setup** with lead selection and outreach configuration
-- Mock data integration for 11 property types including commercial, industrial, and raw land
-- Export functionality for selected leads
+## Architecture
 
-### 🏗️ Current Architecture
+- **Frontend** — React + Vite (mobile-first). Single-purpose UI:
+  dashboard/search → ranked results → lead detail → CSV export.
+- **Backend** — Express API (`backend/`, port 3001):
+  - `POST /api/property/delinquent` — area search over the tax roll (DB-first, ~800ms)
+  - `POST /api/property/analyze` — single-property CAD enrichment
+  - `POST /api/property/bulk-enrich` — batch enrichment with a persistent SQLite cache
+- **Data** — the Dallas County bulk tax roll processed into SQLite
+  (`tax_roll.db`), plus live scraping of dallascad.org for per-property detail.
 
-**Navigation Structure**
-- HomeScreen → 4 main pathways (Address, Scan, Documents, Sellers Hub)
-- Tab-based interfaces for complex workflows
-- Mobile-first responsive design (375x812px)
+## Running locally
 
-**Seller Intelligence Workflow**
-1. **Dashboard** → View active campaigns or start new search
-2. **Search** → Define target area, radius, and property types  
-3. **Campaign Setup** → Select leads and configure outreach settings
-4. **Results** → Track campaign performance and lead responses
-
-### 📱 Technical Details
-
-**Stack**
-- React 19.1.0 + Vite 7.0.5
-- PWA capabilities with service worker
-- HTTPS with SSL certificates for local network access
-- Mock data services ready for API integration
-
-**Running Locally**
 ```bash
-npm install
-npm run dev
-# Accessible at https://localhost:5173 or network IP
+# Backend (port 3001) — serves the tax-roll DB + CAD scraper
+cd backend && npm install && npm start
+
+# Frontend (port 5173) — proxies /api to the backend
+npm install && npm run dev
+
+# Public test URL (optional)
+cloudflared tunnel --url https://localhost:5173 --no-tls-verify
 ```
 
-### 🎯 Next Phase Roadmap
+**Data note:** the tax roll (~3 GB raw) and the SQLite DBs are gitignored.
+Rebuild the DB locally with `backend/process_full_tax_roll.js`.
 
-**Phase 2**: Real Data Integration
-- Connect to public records APIs
-- Implement motivation scoring algorithms
-- Add lead contact information lookup
+## Scope & roadmap
 
-**Phase 3**: AI Outreach Automation  
-- OpenAI integration for personalized messaging
-- Automated contact sequences
-- Compliance checking and legal safeguards
+- **Now:** Dallas County, tax-delinquency motivation signal.
+- **Possible next signals:** absentee/out-of-county owners, very long ownership,
+  probate, code violations, high tax-burden ratio.
+- **Possible expansion:** additional Texas counties (each has its own CAD + tax
+  roll format).
 
-**Phase 4**: Enterprise Campaign Management
-- Bulk outreach capabilities
-- Advanced analytics and reporting
-- Team collaboration features
-
-## GitHub Setup
-To connect this repository to GitHub:
-```bash
-# If you haven't created a GitHub repo yet:
-# 1. Create a new repository on GitHub
-# 2. Update the remote URL:
-git remote set-url origin https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git
-
-# Push your changes:
-git push -u origin master
-``` 
+See `CHANGELOG.md` for detailed change history.

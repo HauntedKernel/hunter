@@ -13,10 +13,10 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg}']
       },
       manifest: {
-        name: 'FlashStack - Revolutionary CMA Technology',
-        short_name: 'FlashStack',
-        description: 'Patent-pending gesture-based property intelligence platform',
-        theme_color: '#2563eb',
+        name: 'Hunter — Off-Market Property Finder',
+        short_name: 'Hunter',
+        description: 'Find off-market motivated sellers in Dallas County from public records',
+        theme_color: '#16a34a',
         background_color: '#ffffff',
         display: 'standalone',
         orientation: 'portrait',
