@@ -629,6 +629,16 @@ class TaxRollProcessor {
    * Format property result for API response
    */
   formatPropertyResult(record) {
+    // Absentee-owner signal: the owner's mailing address doesn't reference the
+    // property's street, so they likely don't live there (tired landlord /
+    // out-of-state heir). Heuristic — matches on the property's main street
+    // token since tax-roll property addresses often lack a house number.
+    const propAddrUpper = String(record.property_address || '').toUpperCase();
+    const ownerAddrUpper = String(record.owner_address || '').toUpperCase();
+    const streetToken = (propAddrUpper.match(/[A-Z]{4,}/g) || [])
+      .sort((a, b) => b.length - a.length)[0] || '';
+    const isAbsentee = !!ownerAddrUpper && !!streetToken && !ownerAddrUpper.includes(streetToken);
+
     // Calculate motivation score based on multiple factors
     let motivationScore = 0;
     if (record.delinquent_amount > 15000) motivationScore += 30;
@@ -651,6 +661,7 @@ class TaxRollProcessor {
       propertyId: record.property_id,
       ownerName: record.owner_name,
       ownerAddress: record.owner_address,
+      isAbsentee: isAbsentee,
       city: record.city,
       state: record.state,
       zipCode: record.zip_code,

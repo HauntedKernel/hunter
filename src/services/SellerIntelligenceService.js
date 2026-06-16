@@ -260,7 +260,7 @@ class SellerIntelligenceService {
           
           // Motivation analysis
           motivationScore: seller.motivation.totalScore,
-          motivationFactors: seller.motivation.factors?.map(factor => ({
+          motivationFactors: seller.motivation.factors?.filter(factor => factor.points > 0).map(factor => ({
             type: factor.type,
             description: factor.description,
             severity: factor.points > 20 ? 'high' : factor.points > 10 ? 'medium' : 'low',

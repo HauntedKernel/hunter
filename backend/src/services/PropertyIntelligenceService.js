@@ -284,7 +284,16 @@ class PropertyIntelligenceService {
         amountOwed: dp.amountOwed,
         yearsDelinquent: dp.yearsDelinquent
       },
-      ownerName: dp.ownerName
+      ownerName: dp.ownerName,
+      // Life-stage / legal signals (see STRATEGY.md). Absentee + elderly come
+      // straight from the tax roll; arrest stays null until a feed is wired.
+      signals: {
+        absenteeOwner: !!dp.isAbsentee,
+        elderlyOwner: !!(dp.over65Exemption || dp.disabledExemption),
+        over65: !!dp.over65Exemption,
+        disabled: !!dp.disabledExemption,
+        arrest: null
+      }
     });
 
     return {

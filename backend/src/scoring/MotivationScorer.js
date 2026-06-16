@@ -22,7 +22,12 @@ class MotivationScorer {
       logLevel: options.logLevel || 'info',
       enableConsole: options.enableConsole !== false
     });
-    
+
+    // Arrest/legal signal is OFF unless explicitly enabled (see STRATEGY.md §6).
+    // Flip via `new MotivationScorer({ enableArrestSignal: true })` only after a
+    // real arrest data feed exists and legal review has signed off.
+    this.enableArrestSignal = options.enableArrestSignal === true;
+
     // Core scoring weights (Patent Claim: Multi-factor weighted algorithm)
     this.scoringWeights = {
       // Financial Distress Factors (60% of total score)
@@ -39,7 +44,16 @@ class MotivationScorer {
       
       // Market Position Factors (5% of total score)
       marketOutlier: 3,          // Property significantly over/under market
-      liquidityPressure: 2       // Market conditions favoring quick sales
+      liquidityPressure: 2,      // Market conditions favoring quick sales
+
+      // Life-stage / ownership signals (added — see STRATEGY.md §2)
+      absenteeOwner: 12,         // Mailing address != property: tired landlord / out-of-state heir
+      elderlyOwner: 10,          // Over-65 or disability exemption: downsizer / estate
+
+      // Legal-event signal (GATED OFF by default — see STRATEGY.md §6).
+      // Public record, but high legal/reputational risk: requires an arrest
+      // data feed AND legal review before enabling. Contributes 0 until then.
+      arrestRecord: 15
     };
     
     // Scoring thresholds for classification
@@ -185,6 +199,12 @@ class MotivationScorer {
       // Owner data - enhanced with new structure
       processedOwners: propertyData.processedOwners || {},
       ownerType: propertyData.ownership?.ownershipType || propertyData.processedOwners?.ownerType || 'individual',
+
+      // Life-stage / legal signals (see STRATEGY.md). `signals.arrest` is null
+      // until an arrest data feed is wired.
+      isAbsentee: !!propertyData.signals?.absenteeOwner,
+      isElderly: !!propertyData.signals?.elderlyOwner,
+      arrest: propertyData.signals?.arrest || null,
       
       // Market context
       neighborhoodData: propertyData.geographicContext || {},
@@ -217,8 +237,73 @@ class MotivationScorer {
     // Market position factors
     factors.marketOutlier = this.calculateMarketOutlierScore(context);
     factors.liquidityPressure = this.calculateLiquidityPressureScore(context);
-    
+
+    // Life-stage / ownership signals
+    factors.absenteeOwner = this.calculateAbsenteeScore(context);
+    factors.elderlyOwner = this.calculateElderlyScore(context);
+
+    // Legal-event signal (gated)
+    factors.arrestRecord = this.calculateArrestScore(context);
+
     return factors;
+  }
+
+  /**
+   * Absentee owner — mailing address differs from the property. Strong
+   * motivation signal (tired landlord, out-of-state heir).
+   */
+  calculateAbsenteeScore(context) {
+    if (!context.isAbsentee) {
+      return { score: 0, factor: 'Owner-occupied (not absentee)', category: 'ownership' };
+    }
+    return {
+      score: this.scoringWeights.absenteeOwner,
+      factor: 'Absentee owner — mailing address differs from property',
+      category: 'ownership',
+      severity: 'medium'
+    };
+  }
+
+  /**
+   * Elderly / disabled owner — over-65 or disability homestead exemption.
+   * Correlates with downsizing, estate sales, aging-in-place transitions.
+   */
+  calculateElderlyScore(context) {
+    if (!context.isElderly) {
+      return { score: 0, factor: 'No over-65/disability exemption', category: 'life-stage' };
+    }
+    return {
+      score: this.scoringWeights.elderlyOwner,
+      factor: 'Elderly/disabled owner (over-65 or disability exemption)',
+      category: 'life-stage',
+      severity: 'medium'
+    };
+  }
+
+  /**
+   * Arrest / legal-event signal. GATED: contributes nothing unless
+   * `enableArrestSignal` is set AND an arrest record is attached. See
+   * STRATEGY.md §6 — public record, but high legal/reputational risk.
+   * Event-based: more recent arrests weigh more.
+   */
+  calculateArrestScore(context) {
+    if (!this.enableArrestSignal) {
+      return { score: 0, factor: 'Arrest signal disabled', category: 'legal', disabled: true };
+    }
+    const arrest = context.arrest;
+    if (!arrest) {
+      return { score: 0, factor: 'No arrest record on file', category: 'legal' };
+    }
+    // Recency-weighted: full weight within 90 days, decaying to ~half by a year.
+    const daysAgo = typeof arrest.daysAgo === 'number' ? arrest.daysAgo : 0;
+    const recency = daysAgo <= 90 ? 1 : Math.max(0.4, 1 - (daysAgo - 90) / 365);
+    const score = Math.round(this.scoringWeights.arrestRecord * recency);
+    return {
+      score,
+      factor: `Arrest record${daysAgo ? ` (${daysAgo}d ago)` : ''}`,
+      category: 'legal',
+      severity: 'high'
+    };
   }
 
   /**
@@ -528,7 +613,9 @@ class MotivationScorer {
    * Calculate final weighted score
    */
   calculateFinalScore(factorScores) {
-    return Object.values(factorScores).reduce((total, factor) => total + factor.score, 0);
+    const total = Object.values(factorScores).reduce((sum, factor) => sum + factor.score, 0);
+    // Cap at 100: total available weight now exceeds 100 with the added signals.
+    return Math.min(100, total);
   }
 
   /**

@@ -204,14 +204,14 @@ This generalizes the current `MotivationScorer` from one input (tax) to many.
 
 ## 10. Prioritized roadmap
 
-| # | Add | Type | Why now |
+| # | Add | Type | Status |
 |---|---|---|---|
-| 1 | Absentee-owner + over-65 flags | state | Free — data already ingested |
-| 2 | Pre-foreclosure / lis pendens | event | Strongest signal that exists |
+| 1 | Absentee-owner + over-65 scoring | state | ✅ **Done** [#014] — scored factors (absentee +12, elderly +10) |
+| 2 | Pre-foreclosure / lis pendens | event | Next — strongest signal that exists |
 | 3 | Probate / inherited property | event | Huge off-market category |
 | 4 | Voter-file join (owner age, empty-nester) | state, statewide | Unlocks demographics; scales |
 | 5 | Skip-trace append (on selected leads) + DNC scrub | contact | Turns leads into *contactable* leads — the thing realtors pay for |
-| — | Arrests / legal | event | Roadmap only — gated, opt-in, legal review first (§6) |
+| — | Arrests / legal | event | ⚙️ **Wired but GATED OFF** [#014] — scoring factor exists (+15, recency-weighted); needs an arrest data feed + legal review to enable (`enableArrestSignal`). See §6. |
 
 This sequence moves the product from "a list of distressed properties" to "a
 contactable, ranked, multi-signal seller pipeline" — a categorically more

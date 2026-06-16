@@ -163,6 +163,25 @@ Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 
   ethics as product requirements. Flags arrests/legal as a high-risk, gated,
   legal-review-required signal.
 
+- `[#014]` **Added absentee, elderly, and (gated) arrest signals to the motivation
+  model.** Generalizes scoring beyond tax delinquency (STRATEGY.md §2/§6).
+  - `TaxRollProcessor.formatPropertyResult` now derives `isAbsentee` (owner
+    mailing address doesn't reference the property's street — tired landlord /
+    out-of-state heir).
+  - `MotivationScorer`: new weighted factors `absenteeOwner` (+12),
+    `elderlyOwner` (+10, from over-65/disability exemption), and `arrestRecord`
+    (+15, recency-weighted) — the last **gated OFF** behind `enableArrestSignal`
+    (default false) pending an arrest data feed + legal review. Final score now
+    capped at 100 (added weights raise the max).
+  - `PropertyIntelligenceService.buildLeadFromTaxRecord` passes the real signals
+    (absentee/over-65/disabled from the tax roll; arrest = null).
+  - Frontend now shows only factors that actually fired (`points > 0`).
+  - Verified on real data: Garland leads now spread 25 / 35 (elderly) / 37
+    (absentee), and a 75205 lead hit 47 (delinquent + absentee + elderly).
+  - Note: refines RANKING of the delinquent leads we surface. Surfacing
+    NON-delinquent absentee/elderly owners as candidates needs the discovery
+    query to broaden (a separate step).
+
 ### Flagged for prior-art / patent review (Handoff Rule 6)
 - New `calculateUrgencyScore()` (0–100): weights balance size, years behind,
   absentee ownership (no homestead exemption), and foreclosure risk. Used as
