@@ -267,8 +267,16 @@ const SellersDashboardScreen = ({ onNavigate }) => {
               </button>
               
               <p style={styles.disclaimer}>
-                Results generated from public records and AI analysis
+                Results powered by Dallas CAD Integration & AI analysis
               </p>
+              
+              <div style={styles.cadIndicator}>
+                <div style={styles.cadBadge}>
+                  <span style={styles.cadIcon}>🏛️</span>
+                  <span style={styles.cadText}>Dallas CAD Live Data</span>
+                  <span style={styles.cadStatus}>●</span>
+                </div>
+              </div>
             </div>
           </>
         )}
@@ -624,6 +632,33 @@ const styles = {
     textAlign: 'center',
     marginTop: '12px',
     marginBottom: 0
+  },
+  cadIndicator: {
+    display: 'flex',
+    justifyContent: 'center',
+    marginTop: '12px'
+  },
+  cadBadge: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    background: 'rgba(59, 130, 246, 0.1)',
+    border: '1px solid rgba(59, 130, 246, 0.2)',
+    borderRadius: '20px',
+    padding: '6px 12px',
+    fontSize: '11px',
+    fontWeight: '600'
+  },
+  cadIcon: {
+    fontSize: '12px'
+  },
+  cadText: {
+    color: '#3b82f6'
+  },
+  cadStatus: {
+    color: '#10b981',
+    fontSize: '8px',
+    animation: 'pulse 2s infinite'
   }
 };
 

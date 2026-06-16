@@ -12,6 +12,7 @@ import { ProfileScreen, ClientsScreen, CMAsScreen, SettingsScreen } from './comp
 import SellersDashboardScreen from './components/screens/SellersDashboardScreen'
 import SellerIntelligenceResultsScreen from './components/screens/SellerIntelligenceResultsScreen'
 import CampaignDetailsScreen from './components/screens/CampaignDetailsScreen'
+import PropertyIntelligenceScreen from './components/screens/PropertyIntelligenceScreen'
 
 function App() {
   const [currentScreen, setCurrentScreen] = useState('home')
@@ -85,6 +86,8 @@ function App() {
         return <SellerIntelligenceResultsScreen onNavigate={navigateTo} searchParams={navigationParams} />
       case 'campaign_details':
         return <CampaignDetailsScreen onNavigate={navigateTo} campaignId={navigationParams?.campaignId} />
+      case 'property_intelligence':
+        return <PropertyIntelligenceScreen onNavigate={navigateTo} />
       default:
         return <HomeScreen onNavigate={navigateTo} />
     }

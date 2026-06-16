@@ -42,6 +42,23 @@ export default defineConfig({
     strictPort: false,
     hmr: {
       overlay: true
-    }
+    },
+    // The backend writes debug HTML + the tax-roll DB inside the repo; without
+    // this, those writes trigger full page reloads that reset the UI mid-use.
+    watch: {
+      ignored: ['**/backend/**']
+    },
+    // Proxy API calls to the backend so the frontend can use same-origin
+    // relative paths (/api/...). This keeps everything behind one origin,
+    // which is what lets a single Cloudflare tunnel serve the whole app.
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        secure: false
+      }
+    },
+    // Allow Cloudflare quick-tunnel hostnames to reach the dev server.
+    allowedHosts: ['.trycloudflare.com', '.cfargotunnel.com']
   }
 })

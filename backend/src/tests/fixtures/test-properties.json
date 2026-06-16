@@ -1,0 +1,102 @@
+[
+  {
+    "id": "test_property_001",
+    "address": "4300 Beverly Dr, Highland Park, TX 75205",
+    "expectedData": {
+      "city": "Highland Park",
+      "state": "TX",
+      "zipCode": "75205",
+      "propertyType": "Residential"
+    },
+    "testType": "high-value-residential",
+    "description": "High-value Highland Park property for testing extraction accuracy",
+    "priority": "high"
+  },
+  {
+    "id": "test_property_002", 
+    "address": "3500 Armstrong Pkwy, Highland Park, TX 75205",
+    "expectedData": {
+      "city": "Highland Park",
+      "state": "TX",
+      "zipCode": "75205",
+      "propertyType": "Residential"
+    },
+    "testType": "standard-residential",
+    "description": "Standard Highland Park residential property",
+    "priority": "medium"
+  },
+  {
+    "id": "test_property_003",
+    "address": "6800 Hillcrest Ave, University Park, TX 75225", 
+    "expectedData": {
+      "city": "University Park",
+      "state": "TX",
+      "zipCode": "75225",
+      "propertyType": "Residential"
+    },
+    "testType": "university-park",
+    "description": "University Park property for city-specific testing",
+    "priority": "high"
+  },
+  {
+    "id": "test_property_004",
+    "address": "2100 Ross Ave, Dallas, TX 75201",
+    "expectedData": {
+      "city": "Dallas",
+      "state": "TX", 
+      "zipCode": "75201",
+      "propertyType": "Commercial"
+    },
+    "testType": "commercial-downtown",
+    "description": "Downtown Dallas commercial property",
+    "priority": "medium"
+  },
+  {
+    "id": "test_property_005",
+    "address": "5500 Preston Rd, Dallas, TX 75230",
+    "expectedData": {
+      "city": "Dallas", 
+      "state": "TX",
+      "zipCode": "75230",
+      "propertyType": "Residential"
+    },
+    "testType": "preston-hollow",
+    "description": "Preston Hollow area residential property",
+    "priority": "medium"
+  },
+  {
+    "id": "test_property_006",
+    "address": "1890 Oak Lawn Ave, Dallas, TX 75219",
+    "expectedData": {
+      "city": "Dallas",
+      "state": "TX",
+      "zipCode": "75219", 
+      "propertyType": "Condo"
+    },
+    "testType": "oak-lawn-condo",
+    "description": "Oak Lawn area condo for property type testing",
+    "priority": "low"
+  },
+  {
+    "id": "test_property_007",
+    "address": "4000 Swiss Ave, Dallas, TX 75204",
+    "expectedData": {
+      "city": "Dallas",
+      "state": "TX",
+      "zipCode": "75204",
+      "propertyType": "Residential"
+    },
+    "testType": "historic-district",
+    "description": "Historic district property for special handling testing",
+    "priority": "medium"
+  },
+  {
+    "id": "test_property_008",
+    "address": "Invalid Address for Error Testing",
+    "expectedData": null,
+    "testType": "error-handling",
+    "description": "Invalid address to test error handling",
+    "priority": "high",
+    "expectError": true
+  }
+]

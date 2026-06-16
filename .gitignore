@@ -53,3 +53,21 @@ coverage/
 
 # Archives
 /archive/
+
+# Backend dependencies
+backend/node_modules/
+
+# Large data files — NEVER commit (the tax roll is ~3GB; DBs are 100s of MB).
+# Rebuild locally with backend/process_full_tax_roll.js.
+backend/src/data/
+backend/debug_html/
+*.db
+*.db-journal
+*.zip
+flat404*
+
+# Scratch / junk
+nul
+temp_response.json
+practice.py
+*.output

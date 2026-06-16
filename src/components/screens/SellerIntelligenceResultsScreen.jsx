@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import SellerIntelligenceService from '../../services/SellerIntelligenceService';
 
 const SellerIntelligenceResultsScreen = ({ onNavigate, searchParams }) => {
@@ -16,6 +16,14 @@ const SellerIntelligenceResultsScreen = ({ onNavigate, searchParams }) => {
     followUpDays: 3
   });
 
+  // --- Background CAD enrichment of selected leads ---
+  // A live mirror of leads (so the async queue always reads current state),
+  // the set of leads currently in flight, and a flag so only one queue runs.
+  const leadsRef = useRef(leads);
+  const inFlightRef = useRef(new Set());
+  const queueRunningRef = useRef(false);
+  useEffect(() => { leadsRef.current = leads; }, [leads]);
+
   useEffect(() => {
     loadLeads();
     generateCampaignName();
@@ -31,7 +39,14 @@ const SellerIntelligenceResultsScreen = ({ onNavigate, searchParams }) => {
       };
       
       const result = await SellerIntelligenceService.searchLeads(params);
-      setLeads(result.leads);
+      console.log('🔍 Search result:', {
+        source: result.source,
+        totalFound: result.totalFound,
+        leadsCount: result.leads?.length || 0,
+        error: result.error,
+        message: result.message
+      });
+      setLeads(result.leads || []);
     } catch (error) {
       console.error('Error loading leads:', error);
     } finally {
@@ -45,6 +60,96 @@ const SellerIntelligenceResultsScreen = ({ onNavigate, searchParams }) => {
     const date = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     setCampaignName(`${areaName} - ${date}`);
   };
+
+  // Expand/collapse a lead. On expand, lazily fetch CAD details once (full
+  // street address, beds/baths/sqft, year built) for that single property.
+  const handleSelectLead = async (lead) => {
+    const isOpening = selectedLead?.id !== lead.id;
+    setSelectedLead(isOpening ? lead : null);
+
+    // Enrich on first expand, unless already done / in progress (e.g. the
+    // background queue already picked it up).
+    if (!isOpening || lead.enriched || lead.enriching || inFlightRef.current.has(lead.id)) return;
+    await enrichOne(lead);
+  };
+
+  // Merge a bulk-enrich result onto a lead (or record its error).
+  const applyEnrichment = (leadId, result) => {
+    setLeads(prev => prev.map(l => {
+      if (l.id !== leadId) return l;
+      if (!result || result.error) {
+        return { ...l, enriching: false, enriched: true, cadError: result?.error || 'no result' };
+      }
+      return {
+        ...l,
+        enriching: false,
+        enriched: true,
+        cad: result,
+        fullAddress: result.fullAddress || l.fullAddress,
+        bedrooms: result.bedrooms ?? l.bedrooms,
+        bathrooms: result.bathrooms ?? l.bathrooms,
+        sqft: result.sqft ?? l.sqft,
+        yearBuilt: result.yearBuilt ?? l.yearBuilt
+      };
+    }));
+  };
+
+  // Enrich a single lead (used by click-to-expand). Goes through the cached
+  // bulk endpoint with one address.
+  const enrichOne = async (lead) => {
+    inFlightRef.current.add(lead.id);
+    setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, enriching: true } : l));
+    try {
+      const results = await SellerIntelligenceService.bulkEnrichLeads([lead.fullAddress || lead.address]);
+      applyEnrichment(lead.id, results[0]);
+    } catch (err) {
+      console.error('CAD enrichment failed:', err);
+      applyEnrichment(lead.id, { error: err.message });
+    } finally {
+      inFlightRef.current.delete(lead.id);
+    }
+  };
+
+  // Drain selected-but-unenriched leads through the cached bulk endpoint in
+  // small chunks — cached addresses come back instantly, misses are scraped
+  // (rate-limited) server-side. Chunking keeps the progress banner moving and
+  // re-scans each round so leads selected mid-run are picked up.
+  const ENRICH_CHUNK = 5;
+  const runEnrichmentQueue = async () => {
+    if (queueRunningRef.current) return;
+    queueRunningRef.current = true;
+    try {
+      while (true) {
+        const batch = leadsRef.current
+          .filter(l => l.selected && !l.enriched && !l.enriching && !inFlightRef.current.has(l.id))
+          .slice(0, ENRICH_CHUNK);
+        if (batch.length === 0) break;
+
+        const ids = new Set(batch.map(l => l.id));
+        batch.forEach(l => inFlightRef.current.add(l.id));
+        setLeads(prev => prev.map(l => ids.has(l.id) ? { ...l, enriching: true } : l));
+
+        const addresses = batch.map(l => l.fullAddress || l.address);
+        try {
+          const results = await SellerIntelligenceService.bulkEnrichLeads(addresses);
+          batch.forEach((l, i) => applyEnrichment(l.id, results[i]));
+        } catch (err) {
+          console.error('Bulk enrichment failed:', err);
+          batch.forEach(l => applyEnrichment(l.id, { error: err.message }));
+        } finally {
+          batch.forEach(l => inFlightRef.current.delete(l.id));
+        }
+      }
+    } finally {
+      queueRunningRef.current = false;
+    }
+  };
+
+  const pendingEnrichCount = leads.filter(l => l.selected && !l.enriched && !l.enriching).length;
+  useEffect(() => {
+    if (pendingEnrichCount > 0) runEnrichmentQueue();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingEnrichCount]);
 
   const handleSort = (type) => {
     setSortBy(type);
@@ -121,7 +226,16 @@ const SellerIntelligenceResultsScreen = ({ onNavigate, searchParams }) => {
       alert('Please select leads to export');
       return;
     }
-    
+
+    const notEnriched = selectedLeads.filter(l => !l.enriched).length;
+    if (notEnriched > 0) {
+      const proceed = window.confirm(
+        `${notEnriched} of ${selectedLeads.length} selected leads are still being enriched with CAD ` +
+        `details (beds/baths/sqft). Export now with partial data, or cancel and wait for it to finish?`
+      );
+      if (!proceed) return;
+    }
+
     const exportData = await SellerIntelligenceService.exportLeads(selectedLeads, 'csv');
     if (exportData) {
       const blob = new Blob([exportData.content], { type: exportData.mimeType });
@@ -191,6 +305,20 @@ const SellerIntelligenceResultsScreen = ({ onNavigate, searchParams }) => {
         {/* Leads Tab */}
         {activeTab === 'leads' && (
           <>
+            {(() => {
+              const sel = leads.filter(l => l.selected);
+              if (sel.length === 0) return null;
+              const enr = sel.filter(l => l.enriched).length;
+              const active = enr < sel.length;
+              return (
+                <div style={{ ...styles.enrichBanner, ...(active ? {} : styles.enrichBannerDone) }}>
+                  {active
+                    ? `⏳ Enriching selected leads with CAD details… ${enr}/${sel.length} (export will include beds/baths/sqft)`
+                    : `✓ All ${sel.length} selected leads enriched — export includes beds/baths/sqft/year built`}
+                </div>
+              );
+            })()}
+
             <div style={styles.controls}>
               <div style={styles.selectionControls}>
                 <button onClick={selectAllLeads} style={styles.selectAllButton}>
@@ -257,7 +385,8 @@ const SellerIntelligenceResultsScreen = ({ onNavigate, searchParams }) => {
                   key={lead.id} 
                   style={{
                     ...styles.leadCard,
-                    ...(lead.selected ? styles.leadCardSelected : {})
+                    ...(lead.selected ? styles.leadCardSelected : {}),
+                    ...(lead.isDelinquent ? styles.leadCardDelinquent : {})
                   }}
                 >
                   <div style={styles.leadCheckbox}>
@@ -269,13 +398,20 @@ const SellerIntelligenceResultsScreen = ({ onNavigate, searchParams }) => {
                     />
                   </div>
                   
-                  <div 
+                  <div
                     style={styles.leadContent}
-                    onClick={() => setSelectedLead(selectedLead?.id === lead.id ? null : lead)}
+                    onClick={() => handleSelectLead(lead)}
                   >
                     <div style={styles.leadHeader}>
                       <div style={styles.leadAddress}>
-                        <div style={styles.addressLine}>{lead.address}</div>
+                        <div style={styles.addressLine}>
+                          {lead.address}
+                          {lead.isDelinquent && (
+                            <span style={styles.delinquentBadge}>
+                              ⚠️ TAX DELINQUENT
+                            </span>
+                          )}
+                        </div>
                         <div style={styles.cityLine}>{lead.city}, {lead.state} {lead.zip}</div>
                       </div>
                       <div style={styles.leadScore}>
@@ -309,6 +445,24 @@ const SellerIntelligenceResultsScreen = ({ onNavigate, searchParams }) => {
                         <span style={styles.infoLabel}>Confidence:</span>
                         <span style={styles.infoValue}>{lead.confidence}%</span>
                       </div>
+                      {lead.isDelinquent && (
+                        <div style={styles.taxDelinquentInfo}>
+                          <div style={styles.delinquentHeader}>
+                            <span style={styles.delinquentIcon}>⚠️</span>
+                            <span style={styles.delinquentTitle}>Tax Delinquent Property</span>
+                          </div>
+                          <div style={styles.delinquentDetails}>
+                            <div style={styles.delinquentItem}>
+                              <span style={styles.delinquentLabel}>Amount Owed:</span>
+                              <span style={styles.delinquentAmount}>${lead.amountOwed?.toLocaleString()}</span>
+                            </div>
+                            <div style={styles.delinquentItem}>
+                              <span style={styles.delinquentLabel}>Years Delinquent:</span>
+                              <span style={styles.delinquentYears}>{lead.yearsDelinquent} year{lead.yearsDelinquent > 1 ? 's' : ''}</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {selectedLead?.id === lead.id && (
@@ -319,12 +473,70 @@ const SellerIntelligenceResultsScreen = ({ onNavigate, searchParams }) => {
                             <div key={index} style={styles.factorItem}>
                               <span style={{
                                 ...styles.factorDot,
-                                background: factor.severity === 'high' ? '#dc2626' : 
+                                background: factor.severity === 'high' ? '#dc2626' :
                                            factor.severity === 'medium' ? '#f59e0b' : '#6b7280'
                               }}></span>
                               <span style={styles.factorText}>{factor.description}</span>
                             </div>
                           ))}
+                        </div>
+
+                        {/* Lazy CAD enrichment — fetched on first expand */}
+                        <div style={styles.cadDetails}>
+                          <h4 style={styles.factorsTitle}>Property Details (Dallas CAD):</h4>
+
+                          {lead.enriching && (
+                            <div style={styles.cadLoading}>
+                              <span style={styles.cadSpinner}>⏳</span>
+                              <span>Looking up CAD records…</span>
+                            </div>
+                          )}
+
+                          {!lead.enriching && lead.cad && (
+                            <div style={styles.cadGrid}>
+                              {lead.cad.fullAddress && lead.cad.fullAddress !== lead.address && (
+                                <div style={styles.cadRowFull}>
+                                  <span style={styles.infoLabel}>Full Address:</span>
+                                  <span style={styles.infoValue}>{lead.cad.fullAddress}</span>
+                                </div>
+                              )}
+                              <div style={styles.infoRow}>
+                                <span style={styles.infoLabel}>Beds:</span>
+                                <span style={styles.infoValue}>{lead.cad.bedrooms ?? '—'}</span>
+                              </div>
+                              <div style={styles.infoRow}>
+                                <span style={styles.infoLabel}>Baths:</span>
+                                <span style={styles.infoValue}>{lead.cad.bathrooms ?? '—'}</span>
+                              </div>
+                              <div style={styles.infoRow}>
+                                <span style={styles.infoLabel}>Sq Ft:</span>
+                                <span style={styles.infoValue}>{lead.cad.sqft ? lead.cad.sqft.toLocaleString() : '—'}</span>
+                              </div>
+                              <div style={styles.infoRow}>
+                                <span style={styles.infoLabel}>Year Built:</span>
+                                <span style={styles.infoValue}>{lead.cad.yearBuilt ?? '—'}</span>
+                              </div>
+                              {lead.cad.cadValue ? (
+                                <div style={styles.infoRow}>
+                                  <span style={styles.infoLabel}>CAD Value:</span>
+                                  <span style={styles.infoValue}>
+                                    {SellerIntelligenceService.formatPropertyValue(lead.cad.cadValue)}
+                                  </span>
+                                </div>
+                              ) : null}
+                            </div>
+                          )}
+
+                          {!lead.enriching && lead.cadError && (
+                            <div style={styles.cadError}>
+                              CAD lookup unavailable for this address. Tax-roll data above is
+                              confirmed; CAD often needs a full street number.
+                            </div>
+                          )}
+
+                          {!lead.enriching && lead.enriched && !lead.cad && !lead.cadError && (
+                            <div style={styles.cadError}>No additional CAD records found.</div>
+                          )}
                         </div>
                       </div>
                     )}
@@ -665,6 +877,11 @@ const styles = {
     borderColor: '#16a34a',
     background: 'rgba(16,163,74,0.02)'
   },
+  leadCardDelinquent: {
+    borderLeft: '5px solid #dc2626',
+    backgroundColor: '#fff5f5',
+    boxShadow: '0 2px 8px rgba(220, 38, 38, 0.15)'
+  },
   leadCheckbox: {
     display: 'flex',
     alignItems: 'flex-start',
@@ -771,6 +988,56 @@ const styles = {
     fontSize: '13px',
     color: '#475569'
   },
+  cadDetails: {
+    marginTop: '12px',
+    background: '#f0f9ff',
+    border: '1px solid #bae6fd',
+    borderRadius: '8px',
+    padding: '12px'
+  },
+  cadLoading: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    fontSize: '13px',
+    color: '#0369a1',
+    fontWeight: '500'
+  },
+  cadSpinner: {
+    fontSize: '15px'
+  },
+  cadGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, 1fr)',
+    gap: '8px'
+  },
+  cadRowFull: {
+    gridColumn: '1 / -1',
+    display: 'flex',
+    gap: '6px',
+    fontSize: '13px',
+    marginBottom: '4px'
+  },
+  cadError: {
+    fontSize: '12px',
+    color: '#64748b',
+    fontStyle: 'italic',
+    lineHeight: 1.4
+  },
+  enrichBanner: {
+    padding: '10px 14px',
+    background: '#eff6ff',
+    border: '1px solid #bfdbfe',
+    borderRadius: '10px',
+    fontSize: '13px',
+    fontWeight: '600',
+    color: '#1d4ed8'
+  },
+  enrichBannerDone: {
+    background: '#f0fdf4',
+    border: '1px solid #bbf7d0',
+    color: '#15803d'
+  },
   section: {
     background: 'rgba(255,255,255,0.95)',
     backdropFilter: 'blur(20px)',
@@ -866,6 +1133,64 @@ const styles = {
     gap: '8px',
     boxShadow: '0 4px 12px rgba(16,163,74,0.3)',
     transition: 'all 0.2s'
+  },
+  delinquentBadge: {
+    display: 'inline-block',
+    marginLeft: '12px',
+    padding: '2px 8px',
+    background: '#dc2626',
+    color: 'white',
+    fontSize: '10px',
+    fontWeight: '700',
+    borderRadius: '12px',
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px'
+  },
+  taxDelinquentInfo: {
+    gridColumn: '1 / -1',
+    marginTop: '12px',
+    padding: '12px',
+    background: '#fef2f2',
+    border: '1px solid #fca5a5',
+    borderRadius: '8px'
+  },
+  delinquentHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    marginBottom: '8px'
+  },
+  delinquentIcon: {
+    fontSize: '16px'
+  },
+  delinquentTitle: {
+    fontSize: '13px',
+    fontWeight: '700',
+    color: '#991b1b',
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px'
+  },
+  delinquentDetails: {
+    display: 'flex',
+    gap: '20px'
+  },
+  delinquentItem: {
+    display: 'flex',
+    gap: '6px',
+    fontSize: '12px'
+  },
+  delinquentLabel: {
+    color: '#7f1d1d',
+    fontWeight: '500'
+  },
+  delinquentAmount: {
+    color: '#dc2626',
+    fontWeight: '700',
+    fontSize: '13px'
+  },
+  delinquentYears: {
+    color: '#dc2626',
+    fontWeight: '600'
   }
 };
 
