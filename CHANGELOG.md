@@ -155,6 +155,14 @@ Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 
   scores/amount-owed/value/beds-baths-sqft, plus CSV export and delete. No fake
   outreach activity. Verified: save → list → detail → export → delete.
 
+- `[#013]` **Added `STRATEGY.md`** — signal & growth strategy (no code). Reframes
+  the product as a multi-signal "candidate" library (events vs. states), catalogs
+  public data sources by scrape-ability/scale, covers demographics via the voter
+  file, contact-info via skip-tracing, the county-by-county scaling/edge question
+  (build vs. buy; moat = signal fusion), a prioritized roadmap, and compliance/
+  ethics as product requirements. Flags arrests/legal as a high-risk, gated,
+  legal-review-required signal.
+
 ### Flagged for prior-art / patent review (Handoff Rule 6)
 - New `calculateUrgencyScore()` (0–100): weights balance size, years behind,
   absentee ownership (no homestead exemption), and foreclosure risk. Used as
