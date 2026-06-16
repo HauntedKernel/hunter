@@ -141,6 +141,20 @@ Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 
     globals.css.
   Verified end-to-end on the public URL: search (100 leads) + cached enrichment.
 
+- `[#012]` **Campaigns tab wired to real saved searches (removed last mock data).**
+  `SellerIntelligenceService` — replaced the three hardcoded demo campaigns with
+  localStorage-backed campaign storage (`getCampaigns`/`saveCampaign`/
+  `getCampaignById`/`deleteCampaign`, key `hunter_campaigns`). A campaign now
+  stores the leads the realtor actually selected + the search params + counts.
+  `SellerIntelligenceResultsScreen.handleEnableCampaign` now persists a real
+  campaign (lead essentials) instead of just alerting.
+  `SellersDashboardScreen` campaign cards show real stats (leads, avg motivation,
+  total owed, created date) — dropped the fake contacted/responses/response-rate.
+  `CampaignDetailsScreen` rewritten: was entirely mock outreach (contact channels,
+  phone/email/responses); now shows the real saved leads with owner/address/
+  scores/amount-owed/value/beds-baths-sqft, plus CSV export and delete. No fake
+  outreach activity. Verified: save → list → detail → export → delete.
+
 ### Flagged for prior-art / patent review (Handoff Rule 6)
 - New `calculateUrgencyScore()` (0–100): weights balance size, years behind,
   absentee ownership (no homestead exemption), and foreclosure risk. Used as

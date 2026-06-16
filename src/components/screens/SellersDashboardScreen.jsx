@@ -106,17 +106,31 @@ const SellersDashboardScreen = ({ onNavigate }) => {
           <div style={styles.section}>
             {campaigns.length > 0 ? (
               <div style={styles.campaignGrid}>
-                {campaigns.map((campaign) => (
-                  <div 
+                {campaigns.map((campaign) => {
+                  const cLeads = campaign.leads || [];
+                  const avgScore = cLeads.length
+                    ? Math.round(cLeads.reduce((s, l) => s + (l.motivationScore || 0), 0) / cLeads.length)
+                    : 0;
+                  const totalOwed = cLeads.reduce((s, l) => s + (l.amountOwed || 0), 0);
+                  const created = campaign.createdAt
+                    ? new Date(campaign.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                    : '';
+                  return (
+                  <div
                     key={campaign.id}
                     style={styles.campaignCard}
                     onClick={() => onNavigate('campaign_details', { campaignId: campaign.id })}
                   >
                     <div style={styles.campaignHeader}>
-                      <div style={styles.campaignArea}>{campaign.area}</div>
+                      <div>
+                        <div style={styles.campaignArea}>{campaign.name || campaign.area}</div>
+                        {campaign.name && campaign.area && (
+                          <div style={styles.campaignSubArea}>{campaign.area}</div>
+                        )}
+                      </div>
                       <div style={{
                         ...styles.statusBadge,
-                        background: campaign.status === 'active' ? '#16a34a' : 
+                        background: campaign.status === 'active' ? '#16a34a' :
                                    campaign.status === 'paused' ? '#f59e0b' : '#6b7280'
                       }}>
                         {campaign.status}
@@ -124,28 +138,25 @@ const SellersDashboardScreen = ({ onNavigate }) => {
                     </div>
                     <div style={styles.campaignStats}>
                       <div style={styles.statItem}>
-                        <span style={styles.statNumber}>{campaign.totalLeads}</span>
-                        <span style={styles.statLabel}>Total Leads</span>
+                        <span style={styles.statNumber}>{campaign.totalLeads ?? cLeads.length}</span>
+                        <span style={styles.statLabel}>Leads</span>
                       </div>
                       <div style={styles.statItem}>
-                        <span style={styles.statNumber}>{campaign.contacted}</span>
-                        <span style={styles.statLabel}>Contacted</span>
+                        <span style={styles.statNumber}>{avgScore}</span>
+                        <span style={styles.statLabel}>Avg Score</span>
                       </div>
                       <div style={styles.statItem}>
-                        <span style={styles.statNumber}>{campaign.responses}</span>
-                        <span style={styles.statLabel}>Responses</span>
-                      </div>
-                      <div style={styles.statItem}>
-                        <span style={styles.statNumber}>{campaign.responseRate}%</span>
-                        <span style={styles.statLabel}>Response Rate</span>
+                        <span style={styles.statNumber}>${Math.round(totalOwed).toLocaleString()}</span>
+                        <span style={styles.statLabel}>Total Owed</span>
                       </div>
                     </div>
                     <div style={styles.campaignFooter}>
-                      <span style={styles.campaignDate}>Started {campaign.startDate}</span>
-                      <span style={styles.viewDetails}>View Details →</span>
+                      <span style={styles.campaignDate}>Created {created}</span>
+                      <span style={styles.viewDetails}>View →</span>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div style={styles.emptyCampaigns}>
@@ -431,6 +442,11 @@ const styles = {
     fontWeight: '600',
     color: '#1e293b'
   },
+  campaignSubArea: {
+    fontSize: '12px',
+    color: '#94a3b8',
+    marginTop: '2px'
+  },
   statusBadge: {
     padding: '4px 10px',
     borderRadius: '12px',
@@ -441,7 +457,7 @@ const styles = {
   },
   campaignStats: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(4, 1fr)',
+    gridTemplateColumns: 'repeat(3, 1fr)',
     gap: '12px',
     marginBottom: '12px',
     paddingBottom: '12px',

@@ -358,57 +358,54 @@ class SellerIntelligenceService {
     return emptyResult;
   }
 
+  // --- Campaigns: real, persisted in the browser via localStorage ---
+  // A campaign is a saved search: the leads the realtor picked, plus the search
+  // params and counts. No mock outreach data — only what the user actually did.
+  static CAMPAIGNS_KEY = 'hunter_campaigns';
+
+  static _readCampaigns() {
+    if (typeof localStorage === 'undefined') return [];
+    try {
+      return JSON.parse(localStorage.getItem(SellerIntelligenceService.CAMPAIGNS_KEY)) || [];
+    } catch {
+      return [];
+    }
+  }
+
+  static _writeCampaigns(campaigns) {
+    if (typeof localStorage === 'undefined') return;
+    localStorage.setItem(SellerIntelligenceService.CAMPAIGNS_KEY, JSON.stringify(campaigns));
+  }
+
   static async getCampaigns() {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        const campaigns = [
-          {
-            id: 'campaign_001',
-            area: 'Highland Park, Dallas, TX',
-            status: 'active',
-            totalLeads: 47,
-            contacted: 32,
-            responses: 8,
-            responseRate: 25,
-            createdAt: '2024-08-20',
-            lastActivity: '2 hours ago'
-          },
-          {
-            id: 'campaign_002', 
-            area: 'University Park, Dallas, TX',
-            status: 'active',
-            totalLeads: 23,
-            contacted: 18,
-            responses: 4,
-            responseRate: 22,
-            createdAt: '2024-08-19',
-            lastActivity: '5 hours ago'
-          },
-          {
-            id: 'campaign_003',
-            area: 'Preston Hollow, Dallas, TX',
-            status: 'paused',
-            totalLeads: 35,
-            contacted: 12,
-            responses: 3,
-            responseRate: 25,
-            createdAt: '2024-08-18',
-            lastActivity: '1 day ago'
-          }
-        ];
-        resolve(campaigns);
-      }, 300);
-    });
+    // Newest first
+    return SellerIntelligenceService._readCampaigns()
+      .slice()
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  }
+
+  /** Create or update a saved campaign. */
+  static async saveCampaign(campaign) {
+    const campaigns = SellerIntelligenceService._readCampaigns();
+    const idx = campaigns.findIndex(c => c.id === campaign.id);
+    if (idx >= 0) campaigns[idx] = { ...campaigns[idx], ...campaign };
+    else campaigns.push(campaign);
+    SellerIntelligenceService._writeCampaigns(campaigns);
+    return campaign;
+  }
+
+  static async deleteCampaign(campaignId) {
+    const campaigns = SellerIntelligenceService._readCampaigns().filter(c => c.id !== campaignId);
+    SellerIntelligenceService._writeCampaigns(campaigns);
+    return true;
   }
 
   static async getCampaignById(campaignId) {
-    const campaigns = await this.getCampaigns();
-    return campaigns.find(c => c.id === campaignId) || null;
+    return SellerIntelligenceService._readCampaigns().find(c => c.id === campaignId) || null;
   }
 
   static async getCampaignDetails(campaignId) {
-    const campaigns = await this.getCampaigns();
-    return campaigns.find(c => c.id === campaignId) || null;
+    return SellerIntelligenceService.getCampaignById(campaignId);
   }
 
   static async exportLeads(leads, format = 'csv') {

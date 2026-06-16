@@ -203,21 +203,52 @@ const SellerIntelligenceResultsScreen = ({ onNavigate, searchParams }) => {
     return leads.filter(lead => lead.selected).length;
   };
 
-  const handleEnableCampaign = () => {
+  const handleEnableCampaign = async () => {
     const selectedLeads = leads.filter(lead => lead.selected);
     if (selectedLeads.length === 0) {
       alert('Please select at least one lead to create a campaign');
       return;
     }
-    
+
     if (!campaignName.trim()) {
       alert('Please enter a campaign name');
       return;
     }
 
-    // Here you would save the campaign
-    alert(`Campaign "${campaignName}" created with ${selectedLeads.length} leads!`);
-    onNavigate('seller_intelligence_area');
+    // Persist a real campaign: the leads the user picked + the search that
+    // found them. We store lead essentials (not the full CAD blob) to keep it small.
+    const campaign = {
+      id: `camp_${Date.now()}`,
+      name: campaignName.trim(),
+      area: searchParams?.area || campaignName.trim(),
+      searchParams: searchParams || null,
+      status: 'active',
+      totalLeads: selectedLeads.length,
+      createdAt: new Date().toISOString(),
+      leads: selectedLeads.map(l => ({
+        id: l.id,
+        address: l.address,
+        fullAddress: l.fullAddress,
+        ownerName: l.ownerName,
+        city: l.city,
+        state: l.state,
+        zip: l.zip,
+        motivationScore: l.motivationScore,
+        urgencyScore: l.urgencyScore,
+        amountOwed: l.amountOwed,
+        yearsDelinquent: l.yearsDelinquent,
+        propertyValue: l.propertyValue,
+        propertyType: l.propertyType,
+        bedrooms: l.bedrooms,
+        bathrooms: l.bathrooms,
+        sqft: l.sqft,
+        yearBuilt: l.yearBuilt
+      }))
+    };
+
+    await SellerIntelligenceService.saveCampaign(campaign);
+    alert(`Campaign "${campaign.name}" saved with ${selectedLeads.length} lead${selectedLeads.length > 1 ? 's' : ''}.`);
+    onNavigate('sellers_dashboard');
   };
 
   const handleExport = async () => {
