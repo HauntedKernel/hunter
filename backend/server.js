@@ -14,14 +14,20 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
+// Allowed browser origins. Local dev defaults, plus any production origins from
+// CORS_ORIGINS (comma-separated), e.g. CORS_ORIGINS="https://hunter.pages.dev,https://app.hunter.com"
+const defaultOrigins = [
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'https://localhost:5173',
+  'http://127.0.0.1:5173'
+];
+const envOrigins = (process.env.CORS_ORIGINS || '')
+  .split(',')
+  .map(o => o.trim())
+  .filter(Boolean);
 app.use(cors({
-  origin: [
-    'http://localhost:3000', 
-    'http://localhost:5173', 
-    'http://127.0.0.1:5173',
-    'https://192.168.1.73:5173',
-    'http://192.168.1.73:5173'
-  ],
+  origin: [...defaultOrigins, ...envOrigins],
   credentials: true
 }));
 

@@ -302,6 +302,20 @@ Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 
   `contacts` cache + `/api/property/contact` are already the single billable
   chokepoint where a balance check would go.
 
+- `[#022]` **Deploy-ready: configurable API base + CORS + `DEPLOYMENT.md`.**
+  - `SellerIntelligenceService`: all four API calls now use `API_BASE` from
+    `import.meta.env.VITE_API_BASE` (unset in dev → relative `/api` via the Vite
+    proxy; set at build time for a static deploy → backend's public URL).
+  - `server.js`: CORS origins now extendable via `CORS_ORIGINS` env
+    (comma-separated) on top of the localhost defaults.
+  - `.env.example`: documents VITE_API_BASE, PORT, CORS_ORIGINS, and the optional
+    skip-trace/DNC provider keys.
+  - `DEPLOYMENT.md`: static frontend on Cloudflare Pages (instant updates, like
+    the game) + Node backend/DB on your machine-via-named-tunnel → cheap VPS;
+    why it's a web app not a download; data rebuild steps; cost ladder.
+  - Verified: `npm run build` produces a 73 KB-gzipped static bundle with the API
+    base baked in; dev proxy path still returns results.
+
 ### Flagged for prior-art / patent review (Handoff Rule 6)
 - New `calculateUrgencyScore()` (0–100): weights balance size, years behind,
   absentee ownership (no homestead exemption), and foreclosure risk. Used as

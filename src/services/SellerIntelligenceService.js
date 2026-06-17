@@ -1,5 +1,12 @@
+// Base URL for the backend API.
+//   - Dev (`npm run dev`): VITE_API_BASE is unset -> '' -> relative '/api/...'
+//     which the Vite dev-server proxy forwards to localhost:3001.
+//   - Production (static build on Cloudflare Pages): set VITE_API_BASE to the
+//     backend's public URL (named tunnel or VPS), e.g. https://api.hunter.app
+const API_BASE = (import.meta.env && import.meta.env.VITE_API_BASE) || '';
+
 class SellerIntelligenceService {
-  
+
   /**
    * Search for delinquent properties in area using Dallas County tax records
    * Integrates with our backend Property Intelligence API
@@ -11,7 +18,7 @@ class SellerIntelligenceService {
       console.log('🔍 Searching for delinquent properties in:', area);
       
       // Search for delinquent properties directly using Dallas County tax records
-      const response = await fetch('/api/property/delinquent', {
+      const response = await fetch(`${API_BASE}/api/property/delinquent`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -84,7 +91,7 @@ class SellerIntelligenceService {
    * @returns {Promise<Object>} Normalized CAD fields (may be partial)
    */
   static async enrichLeadWithCAD(address) {
-    const response = await fetch('/api/property/analyze', {
+    const response = await fetch(`${API_BASE}/api/property/analyze`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ address })
@@ -122,7 +129,7 @@ class SellerIntelligenceService {
   static async getContacts(accountIds) {
     const ids = (accountIds || []).filter(Boolean);
     if (!ids.length) return { configured: { skiptrace: false, dnc: false }, contacts: {} };
-    const response = await fetch('/api/property/contact', {
+    const response = await fetch(`${API_BASE}/api/property/contact`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ accountIds: ids })
@@ -142,7 +149,7 @@ class SellerIntelligenceService {
    * @returns {Promise<Array>} per-address result (each has cached/error fields)
    */
   static async bulkEnrichLeads(addresses) {
-    const response = await fetch('/api/property/bulk-enrich', {
+    const response = await fetch(`${API_BASE}/api/property/bulk-enrich`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ addresses })
