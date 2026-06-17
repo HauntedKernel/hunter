@@ -5,10 +5,31 @@
 
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
+const sqlite3 = require('sqlite3');
+const { open } = require('sqlite');
 const { PropertyIntelligenceService } = require('../services/PropertyIntelligenceService');
 const CADResultCache = require('../cache/CADResultCache');
+const SkipTraceService = require('../services/SkipTraceService');
 
 const router = express.Router();
+
+// Lazy SkipTraceService bound to the tax-roll DB (where the contacts table lives).
+let _skipTraceSvc = null;
+async function getSkipTrace() {
+  if (!_skipTraceSvc) {
+    const db = await open({
+      filename: path.join(__dirname, '..', 'data', 'tax_roll.db'),
+      driver: sqlite3.Database
+    });
+    await db.exec(`CREATE TABLE IF NOT EXISTS contacts (
+      account_id TEXT PRIMARY KEY, owner_name TEXT, phones TEXT, emails TEXT,
+      source TEXT, dnc_checked_at TEXT, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
+    _skipTraceSvc = new SkipTraceService(db);
+  }
+  return _skipTraceSvc;
+}
 
 // Initialize the intelligence service
 const intelligenceService = new PropertyIntelligenceService({
@@ -139,6 +160,32 @@ router.post('/delinquent', async (req, res) => {
       code: 'DELINQUENT_SEARCH_FAILED',
       timestamp: new Date().toISOString()
     });
+  }
+});
+
+/**
+ * POST /api/property/contact - Fetch skip-traced contact info (phone/email) for
+ * leads, with the DNC compliance gate applied. Body: { accountIds: [...] }.
+ * Returns provider-configured flags + per-account contacts. Phones are only
+ * `callable` when DNC-scrubbed and clear (fail-closed).
+ */
+router.post('/contact', async (req, res) => {
+  try {
+    const { accountIds } = req.body;
+    if (!Array.isArray(accountIds) || accountIds.length === 0) {
+      return res.status(400).json({ success: false, error: 'accountIds[] is required', code: 'MISSING_ACCOUNTS' });
+    }
+    const svc = await getSkipTrace();
+    const contacts = await svc.getContacts(accountIds.slice(0, 200));
+    res.json({
+      success: true,
+      configured: svc.providerStatus(),
+      contacts,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Contact lookup failed:', error);
+    res.status(500).json({ success: false, error: error.message, code: 'CONTACT_LOOKUP_FAILED' });
   }
 });
 

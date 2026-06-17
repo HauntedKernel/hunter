@@ -67,6 +67,18 @@ const SellerIntelligenceResultsScreen = ({ onNavigate, searchParams }) => {
     const isOpening = selectedLead?.id !== lead.id;
     setSelectedLead(isOpening ? lead : null);
 
+    // Load skip-traced contact info on first expand (DNC-gated by backend).
+    if (isOpening && !lead.contactLoaded && lead.accountId) {
+      SellerIntelligenceService.getContacts([lead.accountId])
+        .then(({ configured, contacts }) => {
+          const c = contacts[lead.accountId] || { phones: [], emails: [] };
+          setLeads(prev => prev.map(l => l.id === lead.id
+            ? { ...l, contact: c, contactConfigured: configured, contactLoaded: true } : l));
+        })
+        .catch(err => setLeads(prev => prev.map(l => l.id === lead.id
+          ? { ...l, contactLoaded: true, contactError: err.message } : l)));
+    }
+
     // Enrich on first expand, unless already done / in progress (e.g. the
     // background queue already picked it up).
     if (!isOpening || lead.enriched || lead.enriching || inFlightRef.current.has(lead.id)) return;
@@ -267,7 +279,20 @@ const SellerIntelligenceResultsScreen = ({ onNavigate, searchParams }) => {
       if (!proceed) return;
     }
 
-    const exportData = await SellerIntelligenceService.exportLeads(selectedLeads, 'csv');
+    // Pull skip-traced contact info for the export (DNC-gated by the backend).
+    let contactMap = {};
+    const accts = selectedLeads.map(l => l.accountId).filter(Boolean);
+    if (accts.length) {
+      try {
+        const { contacts } = await SellerIntelligenceService.getContacts(accts);
+        contactMap = contacts || {};
+      } catch (err) {
+        console.error('Contact fetch for export failed:', err);
+      }
+    }
+    const leadsForExport = selectedLeads.map(l => ({ ...l, _contact: contactMap[l.accountId] }));
+
+    const exportData = await SellerIntelligenceService.exportLeads(leadsForExport, 'csv');
     if (exportData) {
       const blob = new Blob([exportData.content], { type: exportData.mimeType });
       const url = window.URL.createObjectURL(blob);
@@ -567,6 +592,37 @@ const SellerIntelligenceResultsScreen = ({ onNavigate, searchParams }) => {
 
                           {!lead.enriching && lead.enriched && !lead.cad && !lead.cadError && (
                             <div style={styles.cadError}>No additional CAD records found.</div>
+                          )}
+                        </div>
+
+                        {/* Skip-traced contact info — DNC-gated */}
+                        <div style={styles.contactBox}>
+                          <h4 style={styles.factorsTitle}>Contact (skip-trace):</h4>
+                          {lead.contact && (lead.contact.phones?.length || lead.contact.emails?.length) ? (
+                            <div>
+                              {lead.contact.phones?.map((p, i) => (
+                                <div key={i} style={styles.contactRow}>
+                                  <span style={styles.infoValue}>{p.number}</span>
+                                  <span style={{
+                                    ...styles.dncBadge,
+                                    ...(p.callable ? styles.dncClear : p.dnc === 'do_not_call' ? styles.dncBlock : styles.dncUnknown)
+                                  }}>
+                                    {p.callable ? '✓ callable' : p.dnc === 'do_not_call' ? '⛔ do not call' : 'DNC not verified'}
+                                  </span>
+                                </div>
+                              ))}
+                              {lead.contact.emails?.map((e, i) => (
+                                <div key={i} style={styles.contactRow}><span style={styles.infoValue}>✉ {e}</span></div>
+                              ))}
+                              {lead.contactConfigured && !lead.contactConfigured.dnc && (
+                                <div style={styles.cadError}>Numbers can't be marked callable — no DNC provider configured. Don't call until scrubbed.</div>
+                              )}
+                            </div>
+                          ) : (
+                            <div style={styles.cadError}>
+                              {lead.contactError ? `Lookup failed: ${lead.contactError}`
+                                : 'No contact on file. Load skip-trace results (ingest_contacts.js) or configure a provider.'}
+                            </div>
                           )}
                         </div>
                       </div>
@@ -1055,6 +1111,30 @@ const styles = {
     fontStyle: 'italic',
     lineHeight: 1.4
   },
+  contactBox: {
+    marginTop: '12px',
+    background: '#fefce8',
+    border: '1px solid #fde68a',
+    borderRadius: '8px',
+    padding: '12px'
+  },
+  contactRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    marginBottom: '6px'
+  },
+  dncBadge: {
+    fontSize: '10px',
+    fontWeight: '700',
+    padding: '2px 8px',
+    borderRadius: '10px',
+    textTransform: 'uppercase',
+    letterSpacing: '0.3px'
+  },
+  dncClear: { background: '#dcfce7', color: '#15803d' },
+  dncBlock: { background: '#fee2e2', color: '#b91c1c' },
+  dncUnknown: { background: '#f1f5f9', color: '#64748b' },
   enrichBanner: {
     padding: '10px 14px',
     background: '#eff6ff',

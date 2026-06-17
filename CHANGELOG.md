@@ -250,6 +250,25 @@ Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 
     loads. NO live feed wired yet — needs Dallas County Clerk foreclosure
     postings / OPR (or a vendor) loaded via the ingester.
 
+- `[#019]` **Skip-trace contact info + DNC compliance (roadmap #5).** Turns leads
+  into *contactable* leads (STRATEGY.md §5/§7). No public source for phone/email,
+  so built as infrastructure + a CSV path; NO contact data is invented.
+  - `contacts` table in tax_roll.db (created at init).
+  - `ingest_contacts.js`: CSV importer for skip-trace results (account_id, phones,
+    emails); phones stored dnc='unknown'.
+  - `SkipTraceService`: reads contacts, applies the DNC gate **fail-closed** — a
+    phone is `callable` only when DNC-scrubbed and clear; unscrubbed/unknown =
+    not callable. Live skip-trace + DNC providers behind env keys
+    (SKIPTRACE_/DNC_*), reporting "not configured" when absent (never optimistic).
+  - `POST /api/property/contact`: returns DNC-gated contacts + provider status.
+  - Frontend: contact section in lead detail (phones with Callable / Do-Not-Call /
+    Not-Verified badges, emails) + leads carry `accountId`. CSV export gains
+    "Phone (DNC-cleared)" (callable only), "Phones (all, DNC status)", and "Email"
+    columns — a do-not-call/unverified number is never presented as callable.
+  - Verified with fictional 555-01xx sample: contacts returned, every phone
+    non-callable (fail-closed), CSV cleared-column held only the clear number.
+    Sample then cleared; production contacts table empty. NO live provider wired.
+
 ### Flagged for prior-art / patent review (Handoff Rule 6)
 - New `calculateUrgencyScore()` (0–100): weights balance size, years behind,
   absentee ownership (no homestead exemption), and foreclosure risk. Used as

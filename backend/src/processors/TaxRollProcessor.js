@@ -125,6 +125,21 @@ class TaxRollProcessor {
         );
         CREATE INDEX IF NOT EXISTS idx_legal_events_account ON legal_events(account_id);
       `);
+
+      // Skip-trace contact info (phone/email) — populated by ingest_contacts.js
+      // or a live provider. Phones carry a per-number DNC status; not callable
+      // until scrubbed (see SkipTraceService).
+      await this.db.exec(`
+        CREATE TABLE IF NOT EXISTS contacts (
+          account_id TEXT PRIMARY KEY,
+          owner_name TEXT,
+          phones TEXT,
+          emails TEXT,
+          source TEXT,
+          dnc_checked_at TEXT,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
       
       this.logger.info('Database initialized successfully');
       

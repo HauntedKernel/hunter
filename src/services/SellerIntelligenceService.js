@@ -115,6 +115,25 @@ class SellerIntelligenceService {
   }
 
   /**
+   * Fetch skip-traced contact info (phone/email) for leads by account id, with
+   * the DNC compliance gate applied by the backend. Returns
+   * { configured: {skiptrace, dnc}, contacts: { [accountId]: {phones, emails} } }.
+   */
+  static async getContacts(accountIds) {
+    const ids = (accountIds || []).filter(Boolean);
+    if (!ids.length) return { configured: { skiptrace: false, dnc: false }, contacts: {} };
+    const response = await fetch('/api/property/contact', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accountIds: ids })
+    });
+    if (!response.ok) throw new Error(`Contact API error: ${response.status}`);
+    const data = await response.json();
+    if (!data.success) throw new Error(data.error || 'Contact lookup failed');
+    return { configured: data.configured, contacts: data.contacts || {} };
+  }
+
+  /**
    * Bulk-enrich many leads in one request. The backend serves cached results
    * instantly and scrapes only the misses, so repeat selections are fast.
    * Results are returned in the same order as the input addresses.
@@ -252,6 +271,7 @@ class SellerIntelligenceService {
       allResults.forEach((seller, index) => {
         const lead = {
           id: `cad_lead_${Date.now()}_${index}`,
+          accountId: seller.property?.accountId || null,
           address: seller.property.address?.split(',')[0] || 'Unknown Address',
           fullAddress: seller.property.address,
           city: seller.geographic?.neighborhood || 'Dallas',
@@ -426,6 +446,9 @@ class SellerIntelligenceService {
             'Baths',
             'SqFt',
             'Year Built',
+            'Phone (DNC-cleared)',
+            'Phones (all, DNC status)',
+            'Email',
             'City',
             'State',
             'ZIP'
@@ -436,6 +459,18 @@ class SellerIntelligenceService {
           const csvCell = (v) => {
             const s = String(v ?? '');
             return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+          };
+
+          // Contact info (compliance-gated): only DNC-cleared numbers go in the
+          // callable column; the "all" column lists every number with its DNC
+          // status so a do-not-call number is never presented as safe to call.
+          const contactCols = (lead) => {
+            const c = lead._contact;
+            if (!c) return ['', '', ''];
+            const cleared = (c.phones || []).filter(p => p.callable).map(p => p.number).join('; ');
+            const all = (c.phones || []).map(p => `${p.number} [${p.dnc}]`).join('; ');
+            const emails = (c.emails || []).join('; ');
+            return [cleared, all, emails];
           };
 
           const rows = leads.map(lead => [
@@ -451,6 +486,7 @@ class SellerIntelligenceService {
             lead.bathrooms ?? lead.cad?.bathrooms ?? '',
             lead.sqft ?? lead.cad?.sqft ?? '',
             lead.yearBuilt ?? lead.cad?.yearBuilt ?? '',
+            ...contactCols(lead),
             lead.city || '',
             lead.state || 'TX',
             lead.zip || ''
