@@ -7,11 +7,12 @@ because the data, scraping, and skip-trace metering all live server-side
 (see MONETIZATION.md §why-not-download).
 
 ```
-[ Cloudflare Pages ]                 [ your server / VPS ]
-  static React build      HTTPS  -->  Node/Express API (:3001)
-  (Vite build output)                 + tax_roll.db (~332MB)
-  instant updates, free               + CAD scraping + skip-trace metering
-        user browser  ───────────────────────┘
+            hunter.living                      api.hunter.living
+        [ Cloudflare Pages ]                 [ your machine / VPS ]
+  static React build + /api proxy   -->       Node/Express API (:3001)
+  (Vite build, instant updates)               + tax_roll.db (~332MB)
+        user browser ──── only talks ─────────  + CAD scraping + skip-trace
+                          to hunter.living
 ```
 
 Only the **frontend** is "lightweight like the game" (~73 KB gzipped). The
@@ -20,23 +21,34 @@ Cloudflare Workers/Pages Functions **cannot** run it.
 
 ---
 
-## Frontend — Cloudflare Pages
+## Frontend — Cloudflare Pages (domain: hunter.living)
 
 Static build; push a new version and every user gets it instantly.
 
-- **Build command:** `npm run build`
-- **Output directory:** `dist`
-- **Env var (build-time):** `VITE_API_BASE` = the backend's public URL
-  (e.g. `https://api.hunter.example.com`). Unset = relative `/api` (dev only).
+**How the frontend reaches the backend — recommended: the `/api` proxy.**
+This repo includes a Pages Function (`functions/api/[[path]].js`) that proxies
+`/api/*` to the backend, so the browser only ever talks to `hunter.living`:
+no CORS, and the backend URL is a Pages env var (`API_ORIGIN`), not baked into
+the JS bundle. With this approach **leave `VITE_API_BASE` unset** — the frontend
+calls relative `/api`, which the Function forwards.
 
-Set `VITE_API_BASE` in the Cloudflare Pages project settings (Environment
-variables → Production). Connect the GitHub repo (`HauntedKernel/hunter`) and
-Pages auto-builds + deploys on every push to `main`.
+### One-time setup (Cloudflare dashboard — needs your account)
+1. **Pages → Create project → Connect to Git →** repo `HauntedKernel/hunter`.
+2. Build settings: **Build command** `npm run build`, **Output directory** `dist`
+   (framework preset: Vite). Deploy.
+3. **Settings → Environment variables (Production):**
+   `API_ORIGIN = https://api.hunter.living`  (the backend tunnel — see below).
+4. **Custom domains → Set up a domain → `hunter.living`** (and optionally
+   `www`). DNS is already in your Cloudflare zone, so this is one click.
+5. Every push to `main` now auto-builds and deploys.
+
+**Alternative (no proxy):** set `VITE_API_BASE` to the backend URL at build time
+and allow the Pages origin in backend `CORS_ORIGINS`. Simpler infra, but exposes
+the backend URL and requires CORS. The proxy approach above is preferred.
 
 Local production preview:
 ```bash
-VITE_API_BASE="https://api.hunter.example.com" npm run build
-npm run preview
+npm run build && npm run preview
 ```
 
 ---
@@ -59,16 +71,19 @@ npm start            # listens on :3001
   (absent ⇒ contact features report "not configured", no data invented)
 
 ### Phase 1 — your machine + named Cloudflare Tunnel (≈ $0)
-Expose the local backend at a **stable** hostname (unlike throwaway quick
-tunnels). Requires a domain on Cloudflare (~$10/yr).
+Expose the local backend at the **stable** hostname `api.hunter.living` (unlike
+the throwaway quick tunnels used in earlier testing). Run on the machine hosting
+the backend:
 ```bash
-cloudflared tunnel login
+cloudflared tunnel login                                  # browser auth (one time)
 cloudflared tunnel create hunter-api
-cloudflared tunnel route dns hunter-api api.hunter.example.com
+cloudflared tunnel route dns hunter-api api.hunter.living
 cloudflared tunnel --url http://localhost:3001 run hunter-api
 ```
-Then `VITE_API_BASE=https://api.hunter.example.com` and
-`CORS_ORIGINS=https://<your-pages-domain>`.
+Then set the Pages env var `API_ORIGIN = https://api.hunter.living`.
+(With the `/api` proxy, no `CORS_ORIGINS` change is needed — the browser is
+same-origin. If you use the direct `VITE_API_BASE` approach instead, set
+`CORS_ORIGINS=https://hunter.living`.)
 
 ### Phase 2 — move backend to a VPS (~$5–15/mo)
 When it shouldn't depend on your laptop being on: deploy `backend/` to a small

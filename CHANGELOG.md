@@ -316,6 +316,20 @@ Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 
   - Verified: `npm run build` produces a 73 KB-gzipped static bundle with the API
     base baked in; dev proxy path still returns results.
 
+- `[#023]` **Cloudflare Pages deploy setup (hunter.living).**
+  - `functions/api/[[path]].js` — Pages Function that proxies `/api/*` to the
+    backend (`API_ORIGIN` env var). Browser talks only to hunter.living → no
+    CORS, backend URL not baked into the bundle, frontend uses relative `/api`
+    (VITE_API_BASE stays unset).
+  - `public/_redirects` — SPA fallback (`/* /index.html 200`); the `/api`
+    Function takes precedence so it isn't shadowed.
+  - `DEPLOYMENT.md` updated with the concrete hunter.living click-through (connect
+    repo, build `npm run build` → `dist`, set `API_ORIGIN`, add custom domain) and
+    the `api.hunter.living` named-tunnel commands.
+  - Verified `npm run build` emits `dist/_redirects` and the bundle. The Pages
+    project creation, env var, custom domain, and `cloudflared tunnel login` are
+    interactive Cloudflare-account steps (can't be done headlessly).
+
 ### Flagged for prior-art / patent review (Handoff Rule 6)
 - New `calculateUrgencyScore()` (0–100): weights balance size, years behind,
   absentee ownership (no homestead exemption), and foreclosure risk. Used as
