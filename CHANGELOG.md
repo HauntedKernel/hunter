@@ -182,6 +182,26 @@ Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 
     NON-delinquent absentee/elderly owners as candidates needs the discovery
     query to broaden (a separate step).
 
+- `[#015]` **Broadened discovery to surface non-delinquent absentee & elderly
+  owners** (not just tax-delinquent). STRATEGY.md §2.
+  - `migrate_signal_columns.js` (one-time): precomputes an `is_absentee` column
+    (street-token vs owner mailing address — owner_address has no city/ZIP in
+    this data) so absentee can be filtered/ranked in SQL, and adds `zip_code` /
+    `city` indexes for fast area queries. Flagged 265,079 absentee properties.
+    **Run after any fresh `process_full_tax_roll.js` rebuild.**
+  - `TaxRollProcessor.searchCandidatesByArea`: any-signal discovery (delinquent
+    OR over-65/disabled OR absentee). Two-bucket blend (default 60% delinquent /
+    40% current-but-elderly/absentee, with backfill) so non-delinquent owners
+    actually appear instead of being crowded out by delinquents.
+  - `formatPropertyResult` now reads stored `is_absentee` and reports honest
+    delinquency status (was hardcoded `isDelinquent: true`).
+  - `DallasCountyTaxScraper.searchCandidatePropertiesByArea` + service now call
+    the broadened search; `buildLeadFromTaxRecord` no longer assumes delinquency.
+  - Verified: Lakewood & Highland Park each return 60 delinquent + 40 current
+    elderly/absentee candidates (~1s); current owners score 22 (absentee+elderly).
+  - NOTE: still ranks delinquents first (higher motivation); the non-delinquent
+    candidates appear below them. Signal-type toggles in the UI are a future step.
+
 ### Flagged for prior-art / patent review (Handoff Rule 6)
 - New `calculateUrgencyScore()` (0–100): weights balance size, years behind,
   absentee ownership (no homestead exemption), and foreclosure risk. Used as

@@ -70,14 +70,33 @@ class DallasCountyTaxScraper {
       });
       
       this.logger.info(`Found ${delinquentProperties.length} delinquent properties in ${area} from tax roll`);
-      
+
       return delinquentProperties;
-      
+
     } catch (error) {
       this.logger.error('Tax roll delinquent property search failed', {
         area,
         error: error.message
       });
+      return [];
+    }
+  }
+
+  /**
+   * Broadened discovery: all candidates in an area matching any motivation
+   * signal (delinquent OR elderly OR absentee), not just delinquents.
+   */
+  async searchCandidatePropertiesByArea(area, options = {}) {
+    try {
+      this.logger.info('Searching Dallas County Tax Roll for candidate properties', { area });
+      await this.ensureTaxRollData();
+      const candidates = await this.taxRollProcessor.searchCandidatesByArea(area, {
+        limit: options.limit || 100
+      });
+      this.logger.info(`Found ${candidates.length} candidate properties in ${area} from tax roll`);
+      return candidates;
+    } catch (error) {
+      this.logger.error('Tax roll candidate search failed', { area, error: error.message });
       return [];
     }
   }

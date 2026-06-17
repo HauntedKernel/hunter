@@ -163,8 +163,9 @@ class PropertyIntelligenceService {
     try {
       this.logger.info('Finding delinquent properties in area', { area, correlationId });
       
-      // Step 1: Get all delinquent properties in the area from Dallas County
-      const delinquentProperties = await this.taxDelinquencyDetector.taxScraper.searchDelinquentPropertiesByArea(area);
+      // Step 1: Get all candidate properties in the area — any motivation signal
+      // (delinquent OR elderly OR absentee), not just tax-delinquent ones.
+      const delinquentProperties = await this.taxDelinquencyDetector.taxScraper.searchCandidatePropertiesByArea(area, options);
       
       if (delinquentProperties.length === 0) {
         this.logger.info('No delinquent properties found in area', { area });
@@ -314,12 +315,12 @@ class PropertyIntelligenceService {
         exemptions: dp.exemptions
       },
       taxDelinquency: {
-        status: 'DELINQUENT',
-        isDelinquent: true,
-        amountOwed: dp.amountOwed,
-        yearsDelinquent: dp.yearsDelinquent,
+        status: dp.status || (dp.isDelinquent ? 'DELINQUENT' : 'CURRENT'),
+        isDelinquent: !!dp.isDelinquent,
+        amountOwed: dp.amountOwed || 0,
+        yearsDelinquent: dp.yearsDelinquent || 0,
         foreclosureRisk: dp.foreclosureRisk,
-        urgencyScore: this.calculateUrgencyScore(dp),
+        urgencyScore: dp.isDelinquent ? this.calculateUrgencyScore(dp) : 0,
         paymentStatus: dp.paymentStatus,
         detectedAt: new Date().toISOString()
       },

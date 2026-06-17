@@ -626,18 +626,71 @@ class TaxRollProcessor {
   }
 
   /**
+   * Broadened discovery: surface candidates matching ANY motivation signal in
+   * an area — tax-delinquent OR over-65/disabled exemption OR absentee owner —
+   * not just delinquents. Candidate pools can be thousands per ZIP, so we rank
+   * with a SQL score proxy and return the strongest top-N. The in-process
+   * MotivationScorer then computes the precise score. See STRATEGY.md §2.
+   */
+  async searchCandidatesByArea(area, options = {}) {
+    try {
+      const limit = options.limit || 100;
+      const areaFilter = this.buildAreaFilter(area);
+      const baseWhere = `${areaFilter.clause}
+          AND suit_pending = 0
+          AND bankruptcy_filed = 0
+          AND payment_status NOT IN ('SUIT_PENDING', 'BANKRUPTCY')`;
+
+      // Blend two buckets so non-delinquent owners actually surface: in a
+      // high-delinquency area, delinquents (+40 in the score) would otherwise
+      // crowd out every current elderly/absentee owner. Reserve slots for them.
+      const delqTarget = Math.ceil(limit * 0.6);
+
+      // Bucket A — tax-delinquent, ranked by urgency (amount) + supporting signals.
+      const delqSql = `
+        SELECT * FROM tax_roll
+        WHERE ${baseWhere} AND is_delinquent = 1
+        ORDER BY MIN(COALESCE(delinquent_amount, 0) / 1000.0, 40)
+          + (((over65_exemption = 1) OR (disabled_exemption = 1)) * 5)
+          + ((is_absentee = 1) * 5) DESC,
+          delinquent_amount DESC
+        LIMIT ?`;
+      const delq = await this.db.all(delqSql, [...areaFilter.params, delqTarget]);
+
+      // Bucket B — NOT delinquent but elderly/disabled or absentee (the newly
+      // surfaced candidates). Backfill any unused delinquent slots into here.
+      const nonDelqTarget = limit - delq.length;
+      let nonDelq = [];
+      if (nonDelqTarget > 0) {
+        const nonDelqSql = `
+          SELECT * FROM tax_roll
+          WHERE ${baseWhere} AND is_delinquent = 0
+            AND (over65_exemption = 1 OR disabled_exemption = 1 OR is_absentee = 1)
+          ORDER BY (((over65_exemption = 1) OR (disabled_exemption = 1)) * 10)
+            + ((is_absentee = 1) * 12) DESC,
+            total_value DESC
+          LIMIT ?`;
+        nonDelq = await this.db.all(nonDelqSql, [...areaFilter.params, nonDelqTarget]);
+      }
+
+      const results = [...delq, ...nonDelq];
+      this.logger.info(`Found ${results.length} candidates in "${area}" (${areaFilter.label}): ${delq.length} delinquent + ${nonDelq.length} elderly/absentee`);
+      return results.map(this.formatPropertyResult);
+
+    } catch (error) {
+      this.logger.error('Failed to search candidates', { error: error.message });
+      throw error;
+    }
+  }
+
+  /**
    * Format property result for API response
    */
   formatPropertyResult(record) {
-    // Absentee-owner signal: the owner's mailing address doesn't reference the
-    // property's street, so they likely don't live there (tired landlord /
-    // out-of-state heir). Heuristic — matches on the property's main street
-    // token since tax-roll property addresses often lack a house number.
-    const propAddrUpper = String(record.property_address || '').toUpperCase();
-    const ownerAddrUpper = String(record.owner_address || '').toUpperCase();
-    const streetToken = (propAddrUpper.match(/[A-Z]{4,}/g) || [])
-      .sort((a, b) => b.length - a.length)[0] || '';
-    const isAbsentee = !!ownerAddrUpper && !!streetToken && !ownerAddrUpper.includes(streetToken);
+    // Absentee-owner signal is precomputed into the DB (migrate_signal_columns.js)
+    // so it can be filtered/ranked in SQL. Same street-token definition.
+    const isAbsentee = !!record.is_absentee;
+    const isDelinquent = !!record.is_delinquent;
 
     // Calculate motivation score based on multiple factors
     let motivationScore = 0;
@@ -674,9 +727,9 @@ class TaxRollProcessor {
       totalAmountDue90: record.total_amount_due_90,
       totalValue: record.total_value,
       yearsDelinquent: record.delinquent_years,
-      isDelinquent: true,
-      status: 'DELINQUENT',
-      paymentStatus: record.payment_status || 'DELINQUENT',
+      isDelinquent: isDelinquent,
+      status: isDelinquent ? 'DELINQUENT' : 'CURRENT',
+      paymentStatus: record.payment_status || (isDelinquent ? 'DELINQUENT' : 'CURRENT'),
       datePaid: record.date_paid,
       dueDate: record.due_date,
       exemptions: record.exemptions,
@@ -687,7 +740,8 @@ class TaxRollProcessor {
       agExemption: record.ag_exemption,
       paymentAgreement: record.payment_agreement,
       deferred: record.deferred,
-      foreclosureRisk: record.delinquent_amount > 15000 ? 'HIGH' : 
+      foreclosureRisk: !isDelinquent ? 'NONE' :
+                       record.delinquent_amount > 15000 ? 'HIGH' :
                        record.delinquent_amount > 5000 ? 'MEDIUM' : 'LOW',
       motivationScore: motivationScore,
       source: 'dallas_county_tax_roll',
