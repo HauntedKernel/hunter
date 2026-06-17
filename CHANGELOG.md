@@ -217,6 +217,19 @@ Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 
     100/100 absentee with 0 delinquent (pure tired-landlords); delinquent-only →
     100 delinquent.
 
+- `[#017]` **Wired property-type checkboxes to `category_code`** (were decorative).
+  `TaxRollProcessor.buildPropertyTypeFilter` maps the UI types to Texas SPTD
+  state category codes: A = single-family (incl. condo/townhome — not separately
+  coded), B = multifamily, C/D/1D = vacant & ag land, F1 = commercial,
+  F2 = industrial. Non-real-estate categories (L business personal property,
+  J utilities, G minerals, M mobile/tangible) are excluded. Filter applied in
+  `searchCandidatesByArea` (all query branches); `propertyTypes` threaded through
+  the scraper. Verified (Garland): single-family → individuals; commercial →
+  businesses/churches; raw land → vacant municipal lots; multi-family → B.
+  NOTE: condo/townhome can't be isolated from single-family (SPTD codes them all
+  as A). Default search is single-family only, so results are now residential
+  unless other types are checked.
+
 ### Flagged for prior-art / patent review (Handoff Rule 6)
 - New `calculateUrgencyScore()` (0–100): weights balance size, years behind,
   absentee ownership (no homestead exemption), and foreclosure risk. Used as

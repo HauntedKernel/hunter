@@ -626,6 +626,47 @@ class TaxRollProcessor {
   }
 
   /**
+   * Build a SQL filter from selected property types, mapped to Texas SPTD
+   * state category codes (the `category_code` column):
+   *   A = single-family residential (incl. condo/townhome — SPTD doesn't code
+   *       them separately), B = multifamily, C/D/1D = vacant and ag land,
+   *   F1 = commercial, F2 = industrial.
+   * Categories like L (business personal property), J (utilities), G (minerals),
+   * M (mobile/tangible) are intentionally excluded — they aren't listable real
+   * estate. Returns null when nothing is selected (no category filter applied).
+   *
+   * @param {Object} propertyTypes - { singleFamily, condo, ... : boolean }
+   * @returns {{clause: string, params: string[]}|null}
+   */
+  buildPropertyTypeFilter(propertyTypes) {
+    if (!propertyTypes || typeof propertyTypes !== 'object') return null;
+
+    const CATEGORY_PREFIXES = {
+      singleFamily: ['A'],
+      condo: ['A'],
+      townhome: ['A'],
+      multiFamily: ['B'],
+      commercial: ['F1'],
+      industrial: ['F2'],
+      rawLand: ['C', 'D', '1D']
+    };
+
+    const prefixes = new Set();
+    for (const [type, enabled] of Object.entries(propertyTypes)) {
+      if (enabled && CATEGORY_PREFIXES[type]) {
+        CATEGORY_PREFIXES[type].forEach(p => prefixes.add(p));
+      }
+    }
+    if (prefixes.size === 0) return null;
+
+    const arr = [...prefixes];
+    return {
+      clause: '(' + arr.map(() => 'category_code LIKE ?').join(' OR ') + ')',
+      params: arr.map(p => `${p}%`)
+    };
+  }
+
+  /**
    * Broadened discovery: surface candidates matching ANY motivation signal in
    * an area — tax-delinquent OR over-65/disabled exemption OR absentee owner —
    * not just delinquents. Candidate pools can be thousands per ZIP, so we rank
@@ -636,10 +677,14 @@ class TaxRollProcessor {
     try {
       const limit = options.limit || 100;
       const areaFilter = this.buildAreaFilter(area);
+      const ptFilter = this.buildPropertyTypeFilter(options.propertyTypes);
       const baseWhere = `${areaFilter.clause}
           AND suit_pending = 0
           AND bankruptcy_filed = 0
-          AND payment_status NOT IN ('SUIT_PENDING', 'BANKRUPTCY')`;
+          AND payment_status NOT IN ('SUIT_PENDING', 'BANKRUPTCY')
+          ${ptFilter ? `AND ${ptFilter.clause}` : ''}`;
+      // Params that prefix every query below (area filter, then property-type).
+      const baseParams = [...areaFilter.params, ...(ptFilter ? ptFilter.params : [])];
 
       // Which motivation signals to hunt for (UI toggles). Default: all.
       // An all-off selection falls back to all-on so a search never returns empty.
@@ -664,7 +709,7 @@ class TaxRollProcessor {
             + (${ELDERLY} * 5) + (${ABSENTEE} * 5) DESC,
             delinquent_amount DESC
           LIMIT ?`;
-        const delq = await this.db.all(delqSql, [...areaFilter.params, delqTarget]);
+        const delq = await this.db.all(delqSql, [...baseParams, delqTarget]);
 
         // Non-delinquent owners matching the enabled non-delinquent signals.
         const nonDelqConds = [];
@@ -678,7 +723,7 @@ class TaxRollProcessor {
             WHERE ${baseWhere} AND is_delinquent = 0 AND (${nonDelqConds.join(' OR ')})
             ORDER BY (${ELDERLY} * 10) + (${ABSENTEE} * 12) DESC, total_value DESC
             LIMIT ?`;
-          nonDelq = await this.db.all(nonDelqSql, [...areaFilter.params, nonDelqTarget]);
+          nonDelq = await this.db.all(nonDelqSql, [...baseParams, nonDelqTarget]);
         }
         const results = [...delq, ...nonDelq];
         this.logger.info(`Found ${results.length} candidates in "${area}" (${areaFilter.label}): ${delq.length} delinquent + ${nonDelq.length} current elderly/absentee`);
@@ -711,7 +756,7 @@ class TaxRollProcessor {
         WHERE ${baseWhere} AND (${conds.join(' OR ')})
         ORDER BY ${orderExpr} DESC, total_value DESC
         LIMIT ?`;
-      const results = await this.db.all(sql, [...areaFilter.params, limit]);
+      const results = await this.db.all(sql, [...baseParams, limit]);
       this.logger.info(`Found ${results.length} candidates in "${area}" (${areaFilter.label}); signals=[${conds.length ? Object.keys(signals).filter(k => signals[k]).join(',') : 'all'}]`);
       return results.map(this.formatPropertyResult);
 
