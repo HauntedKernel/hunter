@@ -202,6 +202,21 @@ Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 
   - NOTE: still ranks delinquents first (higher motivation); the non-delinquent
     candidates appear below them. Signal-type toggles in the UI are a future step.
 
+- `[#016]` **Signal-type toggles in the discovery search.** Realtors choose which
+  motivation signals make a property a candidate — Tax Delinquent / Elderly-
+  Disabled / Absentee (default all on).
+  - `SellersDashboardScreen`: "Motivation Signals" toggle section; passed through
+    search params. Validates at least one selected.
+  - `SellerIntelligenceService.searchDallasCADLeads`: forwards `signals` in the
+    API body.
+  - `DallasCountyTaxScraper` + `TaxRollProcessor.searchCandidatesByArea`: honor
+    selected signals in BOTH filter and ranking. Only selected signals influence
+    ordering, so "elderly only" surfaces current downsizers rather than being
+    dominated by a delinquency weight the user didn't pick.
+  - Verified (Lakewood): elderly-only → 96/100 current elderly; absentee-only →
+    100/100 absentee with 0 delinquent (pure tired-landlords); delinquent-only →
+    100 delinquent.
+
 ### Flagged for prior-art / patent review (Handoff Rule 6)
 - New `calculateUrgencyScore()` (0–100): weights balance size, years behind,
   absentee ownership (no homestead exemption), and foreclosure risk. Used as
