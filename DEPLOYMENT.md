@@ -53,7 +53,7 @@ npm run build && npm run preview
 
 ---
 
-## Backend — your machine now, cheap VPS later
+## Backend — your machine now, free always-on box later
 
 The API + DB run as a normal Node process.
 
@@ -85,10 +85,71 @@ Then set the Pages env var `API_ORIGIN = https://api.hunter.living`.
 same-origin. If you use the direct `VITE_API_BASE` approach instead, set
 `CORS_ORIGINS=https://hunter.living`.)
 
-### Phase 2 — move backend to a VPS (~$5–15/mo)
-When it shouldn't depend on your laptop being on: deploy `backend/` to a small
-box (Hetzner / Render / Railway / Fly), keep it behind the same hostname, run
-under a process manager (pm2/systemd). Frontend doesn't change.
+### Phase 2 — Oracle Cloud Always Free ($0, always-on) — recommended home
+Gets the backend off your laptop for **free, forever** (not a 12-month trial).
+Oracle's Always Free **Ampere A1 (ARM)** shape gives up to 4 cores + 24 GB RAM +
+200 GB storage — easily runs Node + the 332 MB SQLite DB + scraping.
+
+> Heads-up: free A1 (ARM) capacity is often "out of capacity" in popular regions.
+> Pick a less-busy home region, try different availability domains, and retry
+> (or script retries). The tiny AMD micro (1 GB RAM) also works but is cramped.
+
+**1. Provision the VM**
+- Oracle Cloud → Compute → Instances → Create.
+- Shape: **Ampere (VM.Standard.A1.Flex)**, ~2–4 OCPU / 12–24 GB (all Always Free).
+- Image: **Ubuntu 22.04 (aarch64)**. Add your SSH public key. Create.
+- You do **not** need to open any inbound port for the API — the cloudflared
+  tunnel dials *out* to Cloudflare. Leave only SSH (22) open.
+
+**2. Install runtime (SSH in)**
+```bash
+sudo apt update && sudo apt install -y nodejs npm git build-essential python3
+sudo npm install -g pm2          # keeps the backend running across crashes/reboots
+# (if distro Node is old, install Node 20+ via nodesource)
+```
+`build-essential`/`python3` cover the native `sqlite3` build on ARM.
+
+**3. Get the code + data**
+```bash
+git clone https://github.com/HauntedKernel/hunter.git
+cd hunter/backend && npm install
+```
+The DB is gitignored, so copy your already-built one up from your machine
+(it already has the absentee column + indexes — no rebuild needed):
+```bash
+# from your local machine:
+scp backend/src/data/tax_roll.db  ubuntu@<vm-ip>:~/hunter/backend/src/data/
+```
+*(Alternative: rebuild on the box — `node process_full_tax_roll.js` then
+`node migrate_signal_columns.js` — but that needs the 2.8 GB county file uploaded.)*
+
+**4. Run the backend under pm2**
+```bash
+cd ~/hunter/backend
+pm2 start server.js --name hunter-api
+pm2 save && pm2 startup        # run the printed command so it survives reboots
+```
+
+**5. Run the named tunnel from the box**
+```bash
+# install cloudflared (arm64)
+curl -L -o cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64.deb
+sudo dpkg -i cloudflared.deb
+cloudflared tunnel login
+cloudflared tunnel create hunter-api
+cloudflared tunnel route dns hunter-api api.hunter.living
+# install it as a service so it stays up:
+sudo cloudflared service install
+# then configure the tunnel to point at http://localhost:3001 (config.yml) and start it
+sudo systemctl enable --now cloudflared
+```
+Set the Pages env var `API_ORIGIN = https://api.hunter.living`. Done — the box is
+always-on and nothing but SSH is exposed publicly.
+
+**Updates:** `git pull && cd backend && npm install && pm2 restart hunter-api`.
+Data refresh: re-run the relevant `ingest_*` / processor script on the box.
+
+(Other paid options if you ever outgrow free: Hetzner ~$5/mo, Render, Railway, Fly.)
 
 ---
 
@@ -120,11 +181,12 @@ node ingest_contacts.js <skiptrace.csv>          # phone/email (then DNC-scrub)
 
 | Stage | Frontend | Backend | Monthly |
 |---|---|---|---|
-| Demo / first users | Pages (free) | your machine + named tunnel | ~$0 (+ ~$10/yr domain) |
-| Real traction | Pages (free) | $5–15/mo VPS | ~$5–15 (+ domain) |
+| Demo / first users | Pages (free) | your machine + named tunnel | ~$0 (domain already owned) |
+| Always-on | Pages (free) | **Oracle Cloud Always Free** + tunnel | **$0** |
+| If you outgrow free | Pages (free) | Hetzner/Render/Railway/Fly | ~$5–15 |
 
 No per-user infra cost. The only usage-based cost is skip-trace/DNC, which is
-prepaid by the user (MONETIZATION.md).
+prepaid by the user (MONETIZATION.md). hunter.living is the one fixed cost (already paid).
 
 ---
 

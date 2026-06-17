@@ -330,6 +330,15 @@ Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 
     project creation, env var, custom domain, and `cloudflared tunnel login` are
     interactive Cloudflare-account steps (can't be done headlessly).
 
+- `[#024]` **DEPLOYMENT.md: Oracle Cloud Always Free backend path ($0 always-on).**
+  Replaced the "cheap VPS later" stub with a full walkthrough — provision an
+  Always Free Ampere A1 (ARM, up to 4 cores/24GB, free forever, runs Node +
+  332MB SQLite + scraping), install Node/pm2, clone the repo, `scp` the prebuilt
+  `tax_roll.db` up (no rebuild needed), run the backend under pm2, and run the
+  `api.hunter.living` named tunnel from the box as a service (so nothing but SSH
+  is exposed). Cost ladder updated: always-on backend = $0. (Namecheap has no
+  free VPS — only a 1-month shared-hosting trial, which can't run the Node backend.)
+
 ### Flagged for prior-art / patent review (Handoff Rule 6)
 - New `calculateUrgencyScore()` (0–100): weights balance size, years behind,
   absentee ownership (no homestead exemption), and foreclosure risk. Used as
