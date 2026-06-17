@@ -106,6 +106,25 @@ class TaxRollProcessor {
         CREATE INDEX IF NOT EXISTS idx_property_address ON tax_roll(property_address);
         CREATE INDEX IF NOT EXISTS idx_delinquent_amount ON tax_roll(delinquent_amount);
       `);
+
+      // Legal events (pre-foreclosure / lis pendens) — populated by
+      // ingest_legal_events.js. Created here so discovery's LEFT JOIN always
+      // resolves even before any feed is loaded.
+      await this.db.exec(`
+        CREATE TABLE IF NOT EXISTS legal_events (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          account_id TEXT,
+          event_type TEXT,
+          address TEXT,
+          owner_name TEXT,
+          filed_date TEXT,
+          sale_date TEXT,
+          source TEXT,
+          match_method TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_legal_events_account ON legal_events(account_id);
+      `);
       
       this.logger.info('Database initialized successfully');
       
@@ -688,13 +707,24 @@ class TaxRollProcessor {
 
       // Which motivation signals to hunt for (UI toggles). Default: all.
       // An all-off selection falls back to all-on so a search never returns empty.
-      let signals = options.signals || { delinquent: true, elderly: true, absentee: true };
-      if (!signals.delinquent && !signals.elderly && !signals.absentee) {
-        signals = { delinquent: true, elderly: true, absentee: true };
+      let signals = options.signals || { delinquent: true, elderly: true, absentee: true, preForeclosure: true };
+      if (!signals.delinquent && !signals.elderly && !signals.absentee && !signals.preForeclosure) {
+        signals = { delinquent: true, elderly: true, absentee: true, preForeclosure: true };
       }
+
+      // Join legal events (pre-foreclosure / lis pendens) from the County Clerk.
+      // Deduped to one row per account so the join can't multiply results. Empty
+      // until a feed is ingested (ingest_legal_events.js), so this is a no-op then.
+      const FROM = `tax_roll t LEFT JOIN (
+            SELECT account_id, event_type, sale_date FROM legal_events
+            WHERE account_id IS NOT NULL GROUP BY account_id
+          ) le ON le.account_id = t.account_id`;
+      const SELECT = `t.*, le.event_type AS legal_event_type, le.sale_date AS legal_sale_date,
+            (le.account_id IS NOT NULL) AS has_preforeclosure`;
 
       const ELDERLY = '(over65_exemption = 1 OR disabled_exemption = 1)';
       const ABSENTEE = '(is_absentee = 1)';
+      const PREFORE = '(le.account_id IS NOT NULL)';
 
       // Blend (reserve slots for current owners) only when delinquent is hunted
       // alongside a non-delinquent signal — otherwise one ranked query is enough.
@@ -703,30 +733,32 @@ class TaxRollProcessor {
       if (blend) {
         const delqTarget = Math.ceil(limit * 0.6);
         const delqSql = `
-          SELECT * FROM tax_roll
+          SELECT ${SELECT} FROM ${FROM}
           WHERE ${baseWhere} AND is_delinquent = 1
-          ORDER BY MIN(COALESCE(delinquent_amount, 0) / 1000.0, 40)
+          ORDER BY (${PREFORE} * 35) + MIN(COALESCE(delinquent_amount, 0) / 1000.0, 40)
             + (${ELDERLY} * 5) + (${ABSENTEE} * 5) DESC,
             delinquent_amount DESC
           LIMIT ?`;
         const delq = await this.db.all(delqSql, [...baseParams, delqTarget]);
 
-        // Non-delinquent owners matching the enabled non-delinquent signals.
+        // Non-delinquent owners matching the enabled non-delinquent signals
+        // (elderly / absentee / pre-foreclosure).
         const nonDelqConds = [];
         if (signals.elderly) nonDelqConds.push(ELDERLY);
         if (signals.absentee) nonDelqConds.push(ABSENTEE);
+        if (signals.preForeclosure) nonDelqConds.push(PREFORE);
         const nonDelqTarget = limit - delq.length;
         let nonDelq = [];
         if (nonDelqTarget > 0 && nonDelqConds.length) {
           const nonDelqSql = `
-            SELECT * FROM tax_roll
+            SELECT ${SELECT} FROM ${FROM}
             WHERE ${baseWhere} AND is_delinquent = 0 AND (${nonDelqConds.join(' OR ')})
-            ORDER BY (${ELDERLY} * 10) + (${ABSENTEE} * 12) DESC, total_value DESC
+            ORDER BY (${PREFORE} * 35) + (${ELDERLY} * 10) + (${ABSENTEE} * 12) DESC, total_value DESC
             LIMIT ?`;
           nonDelq = await this.db.all(nonDelqSql, [...baseParams, nonDelqTarget]);
         }
         const results = [...delq, ...nonDelq];
-        this.logger.info(`Found ${results.length} candidates in "${area}" (${areaFilter.label}): ${delq.length} delinquent + ${nonDelq.length} current elderly/absentee`);
+        this.logger.info(`Found ${results.length} candidates in "${area}" (${areaFilter.label}): ${delq.length} delinquent + ${nonDelq.length} current elderly/absentee/pre-foreclosure`);
         return results.map(this.formatPropertyResult);
       }
 
@@ -736,6 +768,10 @@ class TaxRollProcessor {
       // didn't ask for.
       const conds = [];
       const orderTerms = [];
+      if (signals.preForeclosure) {
+        conds.push(PREFORE);
+        orderTerms.push(`(${PREFORE} * 35)`);
+      }
       if (signals.delinquent) {
         conds.push('is_delinquent = 1');
         orderTerms.push('(is_delinquent = 1) * 40');
@@ -752,12 +788,12 @@ class TaxRollProcessor {
       const orderExpr = orderTerms.length ? orderTerms.join(' + ') : 'total_value';
 
       const sql = `
-        SELECT * FROM tax_roll
+        SELECT ${SELECT} FROM ${FROM}
         WHERE ${baseWhere} AND (${conds.join(' OR ')})
         ORDER BY ${orderExpr} DESC, total_value DESC
         LIMIT ?`;
       const results = await this.db.all(sql, [...baseParams, limit]);
-      this.logger.info(`Found ${results.length} candidates in "${area}" (${areaFilter.label}); signals=[${conds.length ? Object.keys(signals).filter(k => signals[k]).join(',') : 'all'}]`);
+      this.logger.info(`Found ${results.length} candidates in "${area}" (${areaFilter.label}); signals=[${Object.keys(signals).filter(k => signals[k]).join(',')}]`);
       return results.map(this.formatPropertyResult);
 
     } catch (error) {
@@ -774,6 +810,8 @@ class TaxRollProcessor {
     // so it can be filtered/ranked in SQL. Same street-token definition.
     const isAbsentee = !!record.is_absentee;
     const isDelinquent = !!record.is_delinquent;
+    // Pre-foreclosure / lis-pendens — joined from legal_events (may be absent).
+    const isPreForeclosure = !!record.has_preforeclosure;
 
     // Calculate motivation score based on multiple factors
     let motivationScore = 0;
@@ -798,6 +836,9 @@ class TaxRollProcessor {
       ownerName: record.owner_name,
       ownerAddress: record.owner_address,
       isAbsentee: isAbsentee,
+      isPreForeclosure: isPreForeclosure,
+      legalEventType: record.legal_event_type || null,
+      legalSaleDate: record.legal_sale_date || null,
       city: record.city,
       state: record.state,
       zipCode: record.zip_code,

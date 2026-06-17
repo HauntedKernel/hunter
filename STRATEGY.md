@@ -207,7 +207,7 @@ This generalizes the current `MotivationScorer` from one input (tax) to many.
 | # | Add | Type | Status |
 |---|---|---|---|
 | 1 | Absentee-owner + over-65 scoring | state | ✅ **Done** [#014] — scored factors (absentee +12, elderly +10) |
-| 2 | Pre-foreclosure / lis pendens | event | Next — strongest signal that exists |
+| 2 | Pre-foreclosure / lis pendens | event | ⚙️ **Built, feed-pending** [#018] — `legal_events` table + scoring (+35, lis pendens 0.75×) + UI toggle, all working. Needs a County Clerk foreclosure/lis-pendens feed loaded via `ingest_legal_events.js` (CSV). Table empty until then. |
 | 3 | Probate / inherited property | event | Huge off-market category |
 | 4 | Voter-file join (owner age, empty-nester) | state, statewide | Unlocks demographics; scales |
 | 5 | Skip-trace append (on selected leads) + DNC scrub | contact | Turns leads into *contactable* leads — the thing realtors pay for |

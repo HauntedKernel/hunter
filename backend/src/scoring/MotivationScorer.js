@@ -46,6 +46,9 @@ class MotivationScorer {
       marketOutlier: 3,          // Property significantly over/under market
       liquidityPressure: 2,      // Market conditions favoring quick sales
 
+      // Legal-event signals (added — see STRATEGY.md §3)
+      preForeclosure: 35,        // Notice of Trustee Sale / lis pendens — strongest "about to sell or lose it" signal
+
       // Life-stage / ownership signals (added — see STRATEGY.md §2)
       absenteeOwner: 12,         // Mailing address != property: tired landlord / out-of-state heir
       elderlyOwner: 10,          // Over-65 or disability exemption: downsizer / estate
@@ -204,6 +207,7 @@ class MotivationScorer {
       // until an arrest data feed is wired.
       isAbsentee: !!propertyData.signals?.absenteeOwner,
       isElderly: !!propertyData.signals?.elderlyOwner,
+      preForeclosure: propertyData.signals?.preForeclosure || null,
       arrest: propertyData.signals?.arrest || null,
       
       // Market context
@@ -238,6 +242,9 @@ class MotivationScorer {
     factors.marketOutlier = this.calculateMarketOutlierScore(context);
     factors.liquidityPressure = this.calculateLiquidityPressureScore(context);
 
+    // Legal-event signals
+    factors.preForeclosure = this.calculatePreForeclosureScore(context);
+
     // Life-stage / ownership signals
     factors.absenteeOwner = this.calculateAbsenteeScore(context);
     factors.elderlyOwner = this.calculateElderlyScore(context);
@@ -246,6 +253,30 @@ class MotivationScorer {
     factors.arrestRecord = this.calculateArrestScore(context);
 
     return factors;
+  }
+
+  /**
+   * Pre-foreclosure / lis-pendens — the strongest "about to sell or lose it"
+   * signal. A pending trustee sale especially means a fast, motivated exit.
+   * context.preForeclosure = { eventType, saleDate } | null
+   */
+  calculatePreForeclosureScore(context) {
+    const pf = context.preForeclosure;
+    if (!pf) {
+      return { score: 0, factor: 'No pre-foreclosure / lis-pendens filing', category: 'legal' };
+    }
+    const isForeclosure = pf.eventType !== 'lis_pendens';
+    // Lis pendens (pending suit, not necessarily a sale) weighs a bit less than
+    // an active trustee-sale notice.
+    const base = isForeclosure ? this.scoringWeights.preForeclosure : Math.round(this.scoringWeights.preForeclosure * 0.75);
+    const label = isForeclosure ? 'Pre-foreclosure (Notice of Trustee Sale)' : 'Lis pendens (pending suit affecting title)';
+    const saleSuffix = pf.saleDate ? ` — sale ${pf.saleDate}` : '';
+    return {
+      score: base,
+      factor: `${label}${saleSuffix}`,
+      category: 'legal',
+      severity: 'high'
+    };
   }
 
   /**

@@ -49,6 +49,8 @@ cloudflared tunnel --url https://localhost:5173 --no-tls-verify
 **Data note:** the tax roll (~3 GB raw) and the SQLite DBs are gitignored.
 Rebuild the DB locally with `backend/process_full_tax_roll.js`, then run
 `backend/migrate_signal_columns.js` to add the absentee column + area indexes.
+Pre-foreclosure / lis-pendens are a separate County Clerk feed — load a CSV with
+`backend/ingest_legal_events.js <file.csv>` (the signal stays inactive until then).
 
 ## Scope & roadmap
 

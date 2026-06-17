@@ -287,12 +287,16 @@ class PropertyIntelligenceService {
       },
       ownerName: dp.ownerName,
       // Life-stage / legal signals (see STRATEGY.md). Absentee + elderly come
-      // straight from the tax roll; arrest stays null until a feed is wired.
+      // straight from the tax roll; pre-foreclosure is joined from legal_events;
+      // arrest stays null until a feed is wired.
       signals: {
         absenteeOwner: !!dp.isAbsentee,
         elderlyOwner: !!(dp.over65Exemption || dp.disabledExemption),
         over65: !!dp.over65Exemption,
         disabled: !!dp.disabledExemption,
+        preForeclosure: dp.isPreForeclosure
+          ? { eventType: dp.legalEventType, saleDate: dp.legalSaleDate }
+          : null,
         arrest: null
       }
     });

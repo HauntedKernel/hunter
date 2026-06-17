@@ -230,6 +230,26 @@ Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 
   as A). Default search is single-family only, so results are now residential
   unless other types are checked.
 
+- `[#018]` **Pre-foreclosure / lis-pendens signal (roadmap #2 — strongest signal).**
+  These are County Clerk EVENTS, not tax-roll data, so built as a separate
+  source (STRATEGY.md §3).
+  - New `legal_events` table in tax_roll.db (created at DB init; empty until fed).
+  - `ingest_legal_events.js`: CSV-driven ingester (event_type, account_id,
+    address, owner_name, filed/sale dates, source). Matches to tax-roll by
+    account_id (preferred) or address; `--clear` to wipe.
+  - `MotivationScorer.calculatePreForeclosureScore`: new factor, +35 (the top
+    weight); lis pendens scored 0.75× a trustee-sale notice.
+  - `searchCandidatesByArea`: LEFT JOINs `legal_events` (deduped per account);
+    pre-foreclosure is a selectable signal in filter + ranking across both query
+    branches; `formatPropertyResult` surfaces it.
+  - UI: "Pre-Foreclosure" toggle (listed first — strongest).
+  - Verified with a labeled sample fixture: 3 flagged properties surfaced and
+    ranked at the top (47 / 35 / 26 — lis pendens correctly lower), and the
+    "pre-foreclosure only" toggle returned exactly those 3. Sample then cleared;
+    production table is empty and the JOIN is a clean no-op until a real feed
+    loads. NO live feed wired yet — needs Dallas County Clerk foreclosure
+    postings / OPR (or a vendor) loaded via the ingester.
+
 ### Flagged for prior-art / patent review (Handoff Rule 6)
 - New `calculateUrgencyScore()` (0–100): weights balance size, years behind,
   absentee ownership (no homestead exemption), and foreclosure risk. Used as

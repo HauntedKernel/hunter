@@ -19,6 +19,7 @@ const SellersDashboardScreen = ({ onNavigate }) => {
 
   // Motivation signals to hunt for (drives the backend discovery query).
   const [signals, setSignals] = useState({
+    preForeclosure: true,
     delinquent: true,
     elderly: true,
     absentee: true
@@ -283,6 +284,7 @@ const SellersDashboardScreen = ({ onNavigate }) => {
               <p style={styles.helperText}>Which public-record signals should make a property a candidate</p>
               <div style={styles.signalList}>
                 {[
+                  { key: 'preForeclosure', icon: '⚖️', label: 'Pre-Foreclosure', desc: 'Notice of trustee sale / lis pendens' },
                   { key: 'delinquent', icon: '🔴', label: 'Tax Delinquent', desc: 'Owes back property taxes' },
                   { key: 'elderly', icon: '👵', label: 'Elderly / Disabled', desc: 'Over-65 or disability exemption' },
                   { key: 'absentee', icon: '🏚️', label: 'Absentee Owner', desc: "Mailing address differs from the property" }
