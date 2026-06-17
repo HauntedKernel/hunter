@@ -291,6 +291,17 @@ Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 
     also elderly-by-age); a 40-yr-old with a 22-yr-old in the home correctly did
     NOT qualify. Sample then cleared; production table empty. NO live feed wired.
 
+- `[#021]` **Added `MONETIZATION.md`** — cost & pricing strategy (no code).
+  Distinguishes fixed-cost feeds (tax roll/voter/foreclosure — pay once, serve
+  free) from per-lookup costs (skip-trace/DNC — the only paywall surface). Golden
+  rule: never bill before payment, trace-once-cache-forever. Model: free
+  unlimited discovery + metered contact reveals sold as "unlimited leads" with an
+  included allotment (protects margin vs. true-unlimited; beats per-lead framing).
+  Cash-flow rules for a bootstrapped founder (prepaid, pay-as-you-go vendor, ship
+  free first / don't build billing until demand shows). Notes the existing
+  `contacts` cache + `/api/property/contact` are already the single billable
+  chokepoint where a balance check would go.
+
 ### Flagged for prior-art / patent review (Handoff Rule 6)
 - New `calculateUrgencyScore()` (0–100): weights balance size, years behind,
   absentee ownership (no homestead exemption), and foreclosure risk. Used as
