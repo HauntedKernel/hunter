@@ -17,6 +17,13 @@ const SellersDashboardScreen = ({ onNavigate }) => {
     rawLand: false
   });
 
+  // Motivation signals to hunt for (drives the backend discovery query).
+  const [signals, setSignals] = useState({
+    delinquent: true,
+    elderly: true,
+    absentee: true
+  });
+
   const mockAreas = [
     'Highland Park, Dallas, TX',
     'University Park, Dallas, TX',
@@ -57,10 +64,16 @@ const SellersDashboardScreen = ({ onNavigate }) => {
       return;
     }
 
+    if (!Object.values(signals).some(v => v)) {
+      alert('Please select at least one motivation signal');
+      return;
+    }
+
     onNavigate('seller_intelligence_results', {
       area: selectedArea,
       radius: searchRadius,
-      propertyTypes: propertyTypes
+      propertyTypes: propertyTypes,
+      signals: signals
     });
   };
 
@@ -259,6 +272,38 @@ const SellersDashboardScreen = ({ onNavigate }) => {
                     </label>
                   ))}
                 </div>
+              </div>
+            </div>
+
+            <div style={styles.section}>
+              <h2 style={styles.sectionTitle}>
+                <span style={styles.sectionIcon}>🎯</span>
+                Motivation Signals
+              </h2>
+              <p style={styles.helperText}>Which public-record signals should make a property a candidate</p>
+              <div style={styles.signalList}>
+                {[
+                  { key: 'delinquent', icon: '🔴', label: 'Tax Delinquent', desc: 'Owes back property taxes' },
+                  { key: 'elderly', icon: '👵', label: 'Elderly / Disabled', desc: 'Over-65 or disability exemption' },
+                  { key: 'absentee', icon: '🏚️', label: 'Absentee Owner', desc: "Mailing address differs from the property" }
+                ].map(sig => (
+                  <label
+                    key={sig.key}
+                    style={{ ...styles.signalRow, ...(signals[sig.key] ? styles.signalRowActive : {}) }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={signals[sig.key]}
+                      onChange={(e) => setSignals(prev => ({ ...prev, [sig.key]: e.target.checked }))}
+                      style={styles.checkbox}
+                    />
+                    <span style={styles.signalIcon}>{sig.icon}</span>
+                    <span style={styles.signalText}>
+                      <span style={styles.signalLabel}>{sig.label}</span>
+                      <span style={styles.signalDesc}>{sig.desc}</span>
+                    </span>
+                  </label>
+                ))}
               </div>
             </div>
 
@@ -591,6 +636,44 @@ const styles = {
     width: '18px',
     height: '18px',
     cursor: 'pointer'
+  },
+  signalList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px',
+    marginTop: '12px'
+  },
+  signalRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    padding: '12px 14px',
+    border: '1px solid #e2e8f0',
+    borderRadius: '12px',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+    background: 'white'
+  },
+  signalRowActive: {
+    borderColor: '#16a34a',
+    background: 'rgba(16,163,74,0.05)'
+  },
+  signalIcon: {
+    fontSize: '22px'
+  },
+  signalText: {
+    display: 'flex',
+    flexDirection: 'column'
+  },
+  signalLabel: {
+    fontSize: '14px',
+    fontWeight: '600',
+    color: '#1e293b'
+  },
+  signalDesc: {
+    fontSize: '12px',
+    color: '#64748b',
+    marginTop: '2px'
   },
   footer: {
     padding: '20px',

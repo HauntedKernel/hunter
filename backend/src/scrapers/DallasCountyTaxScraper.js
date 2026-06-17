@@ -91,7 +91,8 @@ class DallasCountyTaxScraper {
       this.logger.info('Searching Dallas County Tax Roll for candidate properties', { area });
       await this.ensureTaxRollData();
       const candidates = await this.taxRollProcessor.searchCandidatesByArea(area, {
-        limit: options.limit || 100
+        limit: options.limit || 100,
+        signals: options.signals
       });
       this.logger.info(`Found ${candidates.length} candidate properties in ${area} from tax roll`);
       return candidates;

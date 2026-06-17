@@ -641,40 +641,78 @@ class TaxRollProcessor {
           AND bankruptcy_filed = 0
           AND payment_status NOT IN ('SUIT_PENDING', 'BANKRUPTCY')`;
 
-      // Blend two buckets so non-delinquent owners actually surface: in a
-      // high-delinquency area, delinquents (+40 in the score) would otherwise
-      // crowd out every current elderly/absentee owner. Reserve slots for them.
-      const delqTarget = Math.ceil(limit * 0.6);
-
-      // Bucket A — tax-delinquent, ranked by urgency (amount) + supporting signals.
-      const delqSql = `
-        SELECT * FROM tax_roll
-        WHERE ${baseWhere} AND is_delinquent = 1
-        ORDER BY MIN(COALESCE(delinquent_amount, 0) / 1000.0, 40)
-          + (((over65_exemption = 1) OR (disabled_exemption = 1)) * 5)
-          + ((is_absentee = 1) * 5) DESC,
-          delinquent_amount DESC
-        LIMIT ?`;
-      const delq = await this.db.all(delqSql, [...areaFilter.params, delqTarget]);
-
-      // Bucket B — NOT delinquent but elderly/disabled or absentee (the newly
-      // surfaced candidates). Backfill any unused delinquent slots into here.
-      const nonDelqTarget = limit - delq.length;
-      let nonDelq = [];
-      if (nonDelqTarget > 0) {
-        const nonDelqSql = `
-          SELECT * FROM tax_roll
-          WHERE ${baseWhere} AND is_delinquent = 0
-            AND (over65_exemption = 1 OR disabled_exemption = 1 OR is_absentee = 1)
-          ORDER BY (((over65_exemption = 1) OR (disabled_exemption = 1)) * 10)
-            + ((is_absentee = 1) * 12) DESC,
-            total_value DESC
-          LIMIT ?`;
-        nonDelq = await this.db.all(nonDelqSql, [...areaFilter.params, nonDelqTarget]);
+      // Which motivation signals to hunt for (UI toggles). Default: all.
+      // An all-off selection falls back to all-on so a search never returns empty.
+      let signals = options.signals || { delinquent: true, elderly: true, absentee: true };
+      if (!signals.delinquent && !signals.elderly && !signals.absentee) {
+        signals = { delinquent: true, elderly: true, absentee: true };
       }
 
-      const results = [...delq, ...nonDelq];
-      this.logger.info(`Found ${results.length} candidates in "${area}" (${areaFilter.label}): ${delq.length} delinquent + ${nonDelq.length} elderly/absentee`);
+      const ELDERLY = '(over65_exemption = 1 OR disabled_exemption = 1)';
+      const ABSENTEE = '(is_absentee = 1)';
+
+      // Blend (reserve slots for current owners) only when delinquent is hunted
+      // alongside a non-delinquent signal — otherwise one ranked query is enough.
+      const blend = signals.delinquent && (signals.elderly || signals.absentee);
+
+      if (blend) {
+        const delqTarget = Math.ceil(limit * 0.6);
+        const delqSql = `
+          SELECT * FROM tax_roll
+          WHERE ${baseWhere} AND is_delinquent = 1
+          ORDER BY MIN(COALESCE(delinquent_amount, 0) / 1000.0, 40)
+            + (${ELDERLY} * 5) + (${ABSENTEE} * 5) DESC,
+            delinquent_amount DESC
+          LIMIT ?`;
+        const delq = await this.db.all(delqSql, [...areaFilter.params, delqTarget]);
+
+        // Non-delinquent owners matching the enabled non-delinquent signals.
+        const nonDelqConds = [];
+        if (signals.elderly) nonDelqConds.push(ELDERLY);
+        if (signals.absentee) nonDelqConds.push(ABSENTEE);
+        const nonDelqTarget = limit - delq.length;
+        let nonDelq = [];
+        if (nonDelqTarget > 0 && nonDelqConds.length) {
+          const nonDelqSql = `
+            SELECT * FROM tax_roll
+            WHERE ${baseWhere} AND is_delinquent = 0 AND (${nonDelqConds.join(' OR ')})
+            ORDER BY (${ELDERLY} * 10) + (${ABSENTEE} * 12) DESC, total_value DESC
+            LIMIT ?`;
+          nonDelq = await this.db.all(nonDelqSql, [...areaFilter.params, nonDelqTarget]);
+        }
+        const results = [...delq, ...nonDelq];
+        this.logger.info(`Found ${results.length} candidates in "${area}" (${areaFilter.label}): ${delq.length} delinquent + ${nonDelq.length} current elderly/absentee`);
+        return results.map(this.formatPropertyResult);
+      }
+
+      // Single ranked query for any other signal combination. Only the SELECTED
+      // signals influence ranking — so "elderly only" ranks by elderly + value
+      // (surfacing current downsizers), not by a delinquency weight the user
+      // didn't ask for.
+      const conds = [];
+      const orderTerms = [];
+      if (signals.delinquent) {
+        conds.push('is_delinquent = 1');
+        orderTerms.push('(is_delinquent = 1) * 40');
+        orderTerms.push('MIN(COALESCE(delinquent_amount, 0) / 1000.0, 20)');
+      }
+      if (signals.elderly) {
+        conds.push(ELDERLY);
+        orderTerms.push(`(${ELDERLY} * 10)`);
+      }
+      if (signals.absentee) {
+        conds.push(ABSENTEE);
+        orderTerms.push(`(${ABSENTEE} * 12)`);
+      }
+      const orderExpr = orderTerms.length ? orderTerms.join(' + ') : 'total_value';
+
+      const sql = `
+        SELECT * FROM tax_roll
+        WHERE ${baseWhere} AND (${conds.join(' OR ')})
+        ORDER BY ${orderExpr} DESC, total_value DESC
+        LIMIT ?`;
+      const results = await this.db.all(sql, [...areaFilter.params, limit]);
+      this.logger.info(`Found ${results.length} candidates in "${area}" (${areaFilter.label}); signals=[${conds.length ? Object.keys(signals).filter(k => signals[k]).join(',') : 'all'}]`);
       return results.map(this.formatPropertyResult);
 
     } catch (error) {

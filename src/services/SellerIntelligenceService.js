@@ -5,7 +5,7 @@ class SellerIntelligenceService {
    * Integrates with our backend Property Intelligence API
    */
   static async searchDallasCADLeads(params) {
-    const { area, radius, propertyTypes } = params;
+    const { area, radius, propertyTypes, signals } = params;
     
     try {
       console.log('🔍 Searching for delinquent properties in:', area);
@@ -20,7 +20,8 @@ class SellerIntelligenceService {
           area: area,
           options: {
             radius: radius,
-            propertyTypes: propertyTypes
+            propertyTypes: propertyTypes,
+            signals: signals
           }
         })
       });
