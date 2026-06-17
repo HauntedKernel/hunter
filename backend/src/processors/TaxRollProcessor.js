@@ -140,6 +140,21 @@ class TaxRollProcessor {
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
       `);
+
+      // Voter-file demographics (owner age, empty-nester) — populated by
+      // ingest_voters.js. Empty until a voter file is loaded.
+      await this.db.exec(`
+        CREATE TABLE IF NOT EXISTS voter_demographics (
+          account_id TEXT PRIMARY KEY,
+          owner_age INTEGER,
+          household_size INTEGER,
+          youngest_age INTEGER,
+          oldest_age INTEGER,
+          empty_nester INTEGER DEFAULT 0,
+          source TEXT,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
       
       this.logger.info('Database initialized successfully');
       
@@ -722,28 +737,32 @@ class TaxRollProcessor {
 
       // Which motivation signals to hunt for (UI toggles). Default: all.
       // An all-off selection falls back to all-on so a search never returns empty.
-      let signals = options.signals || { delinquent: true, elderly: true, absentee: true, preForeclosure: true };
-      if (!signals.delinquent && !signals.elderly && !signals.absentee && !signals.preForeclosure) {
-        signals = { delinquent: true, elderly: true, absentee: true, preForeclosure: true };
-      }
+      const ALL = { delinquent: true, elderly: true, absentee: true, preForeclosure: true, emptyNester: true };
+      let signals = options.signals || ALL;
+      if (!Object.values(signals).some(Boolean)) signals = ALL;
 
-      // Join legal events (pre-foreclosure / lis pendens) from the County Clerk.
-      // Deduped to one row per account so the join can't multiply results. Empty
-      // until a feed is ingested (ingest_legal_events.js), so this is a no-op then.
-      const FROM = `tax_roll t LEFT JOIN (
+      // Join legal events (pre-foreclosure / lis pendens) and voter demographics
+      // (owner age / empty-nester). Both deduped to one row per account so joins
+      // can't multiply results; both empty until their feeds are ingested.
+      const FROM = `tax_roll t
+          LEFT JOIN (
             SELECT account_id, event_type, sale_date FROM legal_events
             WHERE account_id IS NOT NULL GROUP BY account_id
-          ) le ON le.account_id = t.account_id`;
+          ) le ON le.account_id = t.account_id
+          LEFT JOIN voter_demographics vd ON vd.account_id = t.account_id`;
       const SELECT = `t.*, le.event_type AS legal_event_type, le.sale_date AS legal_sale_date,
-            (le.account_id IS NOT NULL) AS has_preforeclosure`;
+            (le.account_id IS NOT NULL) AS has_preforeclosure,
+            vd.owner_age AS owner_age, vd.empty_nester AS empty_nester`;
 
-      const ELDERLY = '(over65_exemption = 1 OR disabled_exemption = 1)';
+      // elderly fires on the tax exemption OR a voter-file age >= 65.
+      const ELDERLY = '(over65_exemption = 1 OR disabled_exemption = 1 OR vd.owner_age >= 65)';
       const ABSENTEE = '(is_absentee = 1)';
       const PREFORE = '(le.account_id IS NOT NULL)';
+      const EMPTYNEST = '(vd.empty_nester = 1)';
 
       // Blend (reserve slots for current owners) only when delinquent is hunted
       // alongside a non-delinquent signal — otherwise one ranked query is enough.
-      const blend = signals.delinquent && (signals.elderly || signals.absentee);
+      const blend = signals.delinquent && (signals.elderly || signals.absentee || signals.emptyNester);
 
       if (blend) {
         const delqTarget = Math.ceil(limit * 0.6);
@@ -751,24 +770,25 @@ class TaxRollProcessor {
           SELECT ${SELECT} FROM ${FROM}
           WHERE ${baseWhere} AND is_delinquent = 1
           ORDER BY (${PREFORE} * 35) + MIN(COALESCE(delinquent_amount, 0) / 1000.0, 40)
-            + (${ELDERLY} * 5) + (${ABSENTEE} * 5) DESC,
+            + (${ELDERLY} * 5) + (${ABSENTEE} * 5) + (${EMPTYNEST} * 5) DESC,
             delinquent_amount DESC
           LIMIT ?`;
         const delq = await this.db.all(delqSql, [...baseParams, delqTarget]);
 
         // Non-delinquent owners matching the enabled non-delinquent signals
-        // (elderly / absentee / pre-foreclosure).
+        // (elderly / absentee / pre-foreclosure / empty-nester).
         const nonDelqConds = [];
         if (signals.elderly) nonDelqConds.push(ELDERLY);
         if (signals.absentee) nonDelqConds.push(ABSENTEE);
         if (signals.preForeclosure) nonDelqConds.push(PREFORE);
+        if (signals.emptyNester) nonDelqConds.push(EMPTYNEST);
         const nonDelqTarget = limit - delq.length;
         let nonDelq = [];
         if (nonDelqTarget > 0 && nonDelqConds.length) {
           const nonDelqSql = `
             SELECT ${SELECT} FROM ${FROM}
             WHERE ${baseWhere} AND is_delinquent = 0 AND (${nonDelqConds.join(' OR ')})
-            ORDER BY (${PREFORE} * 35) + (${ELDERLY} * 10) + (${ABSENTEE} * 12) DESC, total_value DESC
+            ORDER BY (${PREFORE} * 35) + (${ELDERLY} * 10) + (${ABSENTEE} * 12) + (${EMPTYNEST} * 12) DESC, total_value DESC
             LIMIT ?`;
           nonDelq = await this.db.all(nonDelqSql, [...baseParams, nonDelqTarget]);
         }
@@ -800,6 +820,10 @@ class TaxRollProcessor {
         conds.push(ABSENTEE);
         orderTerms.push(`(${ABSENTEE} * 12)`);
       }
+      if (signals.emptyNester) {
+        conds.push(EMPTYNEST);
+        orderTerms.push(`(${EMPTYNEST} * 12)`);
+      }
       const orderExpr = orderTerms.length ? orderTerms.join(' + ') : 'total_value';
 
       const sql = `
@@ -827,6 +851,9 @@ class TaxRollProcessor {
     const isDelinquent = !!record.is_delinquent;
     // Pre-foreclosure / lis-pendens — joined from legal_events (may be absent).
     const isPreForeclosure = !!record.has_preforeclosure;
+    // Voter-file demographics — joined from voter_demographics (may be absent).
+    const ownerAge = record.owner_age || null;
+    const isEmptyNester = !!record.empty_nester;
 
     // Calculate motivation score based on multiple factors
     let motivationScore = 0;
@@ -854,6 +881,8 @@ class TaxRollProcessor {
       isPreForeclosure: isPreForeclosure,
       legalEventType: record.legal_event_type || null,
       legalSaleDate: record.legal_sale_date || null,
+      ownerAge: ownerAge,
+      isEmptyNester: isEmptyNester,
       city: record.city,
       state: record.state,
       zipCode: record.zip_code,

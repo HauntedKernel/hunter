@@ -269,6 +269,28 @@ Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 
     non-callable (fail-closed), CSV cleared-column held only the clear number.
     Sample then cleared; production contacts table empty. NO live provider wired.
 
+- `[#020]` **Voter-file demographics: owner age + empty-nester (roadmap #4).**
+  The TX voter roll is public and STATEWIDE (one source covers all of Texas),
+  but obtained from the SOS (fee/eligibility), so built as infrastructure + a CSV
+  path; no demographic data invented (STRATEGY.md §4).
+  - `voter_demographics` table in tax_roll.db (created at init).
+  - `ingest_voters.js`: per-voter CSV (name, address, birth_year). Matches voters
+    to a tax-roll OWNER mailing address (owner-occupants) via house-number +
+    street token (owner_address has house numbers; property_address often doesn't).
+    Groups by property; derives owner_age (name-matched voter, else oldest),
+    household size/ages, and an empty-nester flag (heuristic: owner 48–75, no
+    household member under 28, ≤2 voters — kids likely moved out).
+  - `MotivationScorer`: new `emptyNester` factor (+12); `elderly` now ALSO fires
+    on voter age ≥ 65 (not just the tax exemption).
+  - `searchCandidatesByArea`: LEFT JOINs `voter_demographics`; empty-nester is a
+    selectable signal in filter + ranking (blend + single branches);
+    `formatPropertyResult` surfaces owner_age + empty_nester.
+  - UI: "🪺 Empty Nester" toggle.
+  - Verified with a labeled sample (address-matched): empty-nester-only returned
+    exactly the 2 qualifying owners (62 w/ spouse 60, and 70 solo — the latter
+    also elderly-by-age); a 40-yr-old with a 22-yr-old in the home correctly did
+    NOT qualify. Sample then cleared; production table empty. NO live feed wired.
+
 ### Flagged for prior-art / patent review (Handoff Rule 6)
 - New `calculateUrgencyScore()` (0–100): weights balance size, years behind,
   absentee ownership (no homestead exemption), and foreclosure risk. Used as

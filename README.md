@@ -54,6 +54,8 @@ Pre-foreclosure / lis-pendens are a separate County Clerk feed — load a CSV wi
 Contact info (skip-trace) comes from a paid vendor — load results with
 `backend/ingest_contacts.js <file.csv>`. Phones stay non-callable until
 DNC-scrubbed (set `DNC_API_URL`/`DNC_API_KEY`); compliance is enforced fail-closed.
+Owner age / empty-nester come from the (statewide) TX voter file — load it with
+`backend/ingest_voters.js <file.csv>` (matches voters to owner addresses).
 
 ## Scope & roadmap
 

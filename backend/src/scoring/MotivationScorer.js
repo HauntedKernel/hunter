@@ -49,9 +49,10 @@ class MotivationScorer {
       // Legal-event signals (added — see STRATEGY.md §3)
       preForeclosure: 35,        // Notice of Trustee Sale / lis pendens — strongest "about to sell or lose it" signal
 
-      // Life-stage / ownership signals (added — see STRATEGY.md §2)
+      // Life-stage / ownership signals (added — see STRATEGY.md §2/§4)
       absenteeOwner: 12,         // Mailing address != property: tired landlord / out-of-state heir
-      elderlyOwner: 10,          // Over-65 or disability exemption: downsizer / estate
+      elderlyOwner: 10,          // Over-65 or disability exemption (or voter age >= 65): downsizer / estate
+      emptyNester: 12,           // Voter file: mid/senior owner, no young adults in household (kids moved out)
 
       // Legal-event signal (GATED OFF by default — see STRATEGY.md §6).
       // Public record, but high legal/reputational risk: requires an arrest
@@ -207,6 +208,8 @@ class MotivationScorer {
       // until an arrest data feed is wired.
       isAbsentee: !!propertyData.signals?.absenteeOwner,
       isElderly: !!propertyData.signals?.elderlyOwner,
+      isEmptyNester: !!propertyData.signals?.emptyNester,
+      ownerAge: propertyData.signals?.ownerAge || null,
       preForeclosure: propertyData.signals?.preForeclosure || null,
       arrest: propertyData.signals?.arrest || null,
       
@@ -248,6 +251,7 @@ class MotivationScorer {
     // Life-stage / ownership signals
     factors.absenteeOwner = this.calculateAbsenteeScore(context);
     factors.elderlyOwner = this.calculateElderlyScore(context);
+    factors.emptyNester = this.calculateEmptyNesterScore(context);
 
     // Legal-event signal (gated)
     factors.arrestRecord = this.calculateArrestScore(context);
@@ -300,12 +304,32 @@ class MotivationScorer {
    * Correlates with downsizing, estate sales, aging-in-place transitions.
    */
   calculateElderlyScore(context) {
-    if (!context.isElderly) {
+    // Fires on the tax over-65/disability exemption OR a voter-file age >= 65.
+    const byAge = context.ownerAge && context.ownerAge >= 65;
+    if (!context.isElderly && !byAge) {
       return { score: 0, factor: 'No over-65/disability exemption', category: 'life-stage' };
     }
+    const detail = byAge ? `owner age ${context.ownerAge}` : 'over-65 or disability exemption';
     return {
       score: this.scoringWeights.elderlyOwner,
-      factor: 'Elderly/disabled owner (over-65 or disability exemption)',
+      factor: `Elderly/disabled owner (${detail})`,
+      category: 'life-stage',
+      severity: 'medium'
+    };
+  }
+
+  /**
+   * Empty-nester — voter file shows a mid-life/senior owner with no young adults
+   * in a small current household (kids likely moved out). A downsizing lead.
+   */
+  calculateEmptyNesterScore(context) {
+    if (!context.isEmptyNester) {
+      return { score: 0, factor: 'Not an empty-nester profile', category: 'life-stage' };
+    }
+    const ageSuffix = context.ownerAge ? ` (owner age ${context.ownerAge})` : '';
+    return {
+      score: this.scoringWeights.emptyNester,
+      factor: `Empty-nester — kids likely moved out${ageSuffix}`,
       category: 'life-stage',
       severity: 'medium'
     };

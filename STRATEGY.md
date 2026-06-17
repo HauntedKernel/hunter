@@ -209,7 +209,7 @@ This generalizes the current `MotivationScorer` from one input (tax) to many.
 | 1 | Absentee-owner + over-65 scoring | state | ✅ **Done** [#014] — scored factors (absentee +12, elderly +10) |
 | 2 | Pre-foreclosure / lis pendens | event | ⚙️ **Built, feed-pending** [#018] — `legal_events` table + scoring (+35, lis pendens 0.75×) + UI toggle, all working. Needs a County Clerk foreclosure/lis-pendens feed loaded via `ingest_legal_events.js` (CSV). Table empty until then. |
 | 3 | Probate / inherited property | event | Huge off-market category |
-| 4 | Voter-file join (owner age, empty-nester) | state, statewide | Unlocks demographics; scales |
+| 4 | Voter-file join (owner age, empty-nester) | state, statewide | ⚙️ **Built, feed-pending** [#020] — `voter_demographics` table + `ingest_voters.js` (matches voters→owner address; derives owner age + empty-nester) + scoring (emptyNester +12; elderly also fires on age ≥ 65) + UI toggle. Needs the TX voter file loaded. |
 | 5 | Skip-trace append + DNC scrub | contact | ⚙️ **Built, provider-pending** [#019] — `contacts` table + `ingest_contacts.js` (CSV) + `SkipTraceService` (DNC fail-closed gate) + `/api/property/contact` + UI display + DNC-gated CSV export. Needs a paid skip-trace vendor and a DNC-scrub provider (env keys) or a vendor CSV. No contact data invented. |
 | — | Arrests / legal | event | ⚙️ **Wired but GATED OFF** [#014] — scoring factor exists (+15, recency-weighted); needs an arrest data feed + legal review to enable (`enableArrestSignal`). See §6. |
 

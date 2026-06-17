@@ -22,7 +22,8 @@ const SellersDashboardScreen = ({ onNavigate }) => {
     preForeclosure: true,
     delinquent: true,
     elderly: true,
-    absentee: true
+    absentee: true,
+    emptyNester: true
   });
 
   const mockAreas = [
@@ -287,7 +288,8 @@ const SellersDashboardScreen = ({ onNavigate }) => {
                   { key: 'preForeclosure', icon: '⚖️', label: 'Pre-Foreclosure', desc: 'Notice of trustee sale / lis pendens' },
                   { key: 'delinquent', icon: '🔴', label: 'Tax Delinquent', desc: 'Owes back property taxes' },
                   { key: 'elderly', icon: '👵', label: 'Elderly / Disabled', desc: 'Over-65 or disability exemption' },
-                  { key: 'absentee', icon: '🏚️', label: 'Absentee Owner', desc: "Mailing address differs from the property" }
+                  { key: 'absentee', icon: '🏚️', label: 'Absentee Owner', desc: "Mailing address differs from the property" },
+                  { key: 'emptyNester', icon: '🪺', label: 'Empty Nester', desc: 'Voter file: kids likely moved out' }
                 ].map(sig => (
                   <label
                     key={sig.key}
