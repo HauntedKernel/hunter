@@ -765,7 +765,7 @@ class TaxRollProcessor {
 
       // Which motivation signals to hunt for (UI toggles). Default: all.
       // An all-off selection falls back to all-on so a search never returns empty.
-      const ALL = { delinquent: true, elderly: true, absentee: true, preForeclosure: true, emptyNester: true };
+      const ALL = { delinquent: true, elderly: true, absentee: true, preForeclosure: true, emptyNester: true, estate: true };
       let signals = options.signals || ALL;
       if (!Object.values(signals).some(Boolean)) signals = ALL;
 
@@ -787,10 +787,14 @@ class TaxRollProcessor {
       const ABSENTEE = '(is_absentee = 1)';
       const PREFORE = '(le.account_id IS NOT NULL)';
       const EMPTYNEST = '(vd.empty_nester = 1)';
+      // Estate / inherited — the owner has died and the property is held by an
+      // estate or heirs (a top-tier "death" seller signal, per STRATEGY.md).
+      // Precise patterns so "REAL ESTATE LLC" business names don't match.
+      const ESTATE = "(owner_name LIKE '%ESTATE OF%' OR owner_name LIKE '%LIFE ESTATE%' OR owner_name LIKE '%HEIRS%' OR owner_name LIKE '% ET AL%')";
 
       // Blend (reserve slots for current owners) only when delinquent is hunted
       // alongside a non-delinquent signal — otherwise one ranked query is enough.
-      const blend = signals.delinquent && (signals.elderly || signals.absentee || signals.emptyNester);
+      const blend = signals.delinquent && (signals.elderly || signals.absentee || signals.emptyNester || signals.estate);
 
       if (blend) {
         const delqTarget = Math.ceil(limit * 0.6);
@@ -798,7 +802,7 @@ class TaxRollProcessor {
           SELECT ${SELECT} FROM ${FROM}
           WHERE ${baseWhere} AND is_delinquent = 1
           ORDER BY (${PREFORE} * 35) + MIN(COALESCE(delinquent_amount, 0) / 1000.0, 40)
-            + (${ELDERLY} * 5) + (${ABSENTEE} * 5) + (${EMPTYNEST} * 5) DESC,
+            + (${ELDERLY} * 5) + (${ABSENTEE} * 5) + (${EMPTYNEST} * 5) + (${ESTATE} * 8) DESC,
             delinquent_amount DESC
           LIMIT ?`;
         const delq = await this.db.all(delqSql, [...baseParams, delqTarget]);
@@ -810,13 +814,14 @@ class TaxRollProcessor {
         if (signals.absentee) nonDelqConds.push(ABSENTEE);
         if (signals.preForeclosure) nonDelqConds.push(PREFORE);
         if (signals.emptyNester) nonDelqConds.push(EMPTYNEST);
+        if (signals.estate) nonDelqConds.push(ESTATE);
         const nonDelqTarget = limit - delq.length;
         let nonDelq = [];
         if (nonDelqTarget > 0 && nonDelqConds.length) {
           const nonDelqSql = `
             SELECT ${SELECT} FROM ${FROM}
             WHERE ${baseWhere} AND is_delinquent = 0 AND (${nonDelqConds.join(' OR ')})
-            ORDER BY (${PREFORE} * 35) + (${ELDERLY} * 10) + (${ABSENTEE} * 12) + (${EMPTYNEST} * 12) DESC, total_value DESC
+            ORDER BY (${PREFORE} * 35) + (${ELDERLY} * 10) + (${ABSENTEE} * 12) + (${EMPTYNEST} * 12) + (${ESTATE} * 14) DESC, total_value DESC
             LIMIT ?`;
           nonDelq = await this.db.all(nonDelqSql, [...baseParams, nonDelqTarget]);
         }
@@ -852,6 +857,10 @@ class TaxRollProcessor {
         conds.push(EMPTYNEST);
         orderTerms.push(`(${EMPTYNEST} * 12)`);
       }
+      if (signals.estate) {
+        conds.push(ESTATE);
+        orderTerms.push(`(${ESTATE} * 14)`);
+      }
       const orderExpr = orderTerms.length ? orderTerms.join(' + ') : 'total_value';
 
       const sql = `
@@ -882,6 +891,9 @@ class TaxRollProcessor {
     // Voter-file demographics — joined from voter_demographics (may be absent).
     const ownerAge = record.owner_age || null;
     const isEmptyNester = !!record.empty_nester;
+    // Estate / inherited — owner deceased, property held by an estate or heirs.
+    // Read straight from the owner-name patterns (same as the ESTATE SQL filter).
+    const isEstate = /ESTATE OF|LIFE ESTATE|HEIRS|\bET AL\b/i.test(record.owner_name || '');
 
     // Calculate motivation score based on multiple factors
     let motivationScore = 0;
@@ -911,6 +923,7 @@ class TaxRollProcessor {
       legalSaleDate: record.legal_sale_date || null,
       ownerAge: ownerAge,
       isEmptyNester: isEmptyNester,
+      isEstate: isEstate,
       city: record.city,
       state: record.state,
       zipCode: record.zip_code,

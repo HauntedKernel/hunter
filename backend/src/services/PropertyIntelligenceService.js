@@ -295,6 +295,7 @@ class PropertyIntelligenceService {
         over65: !!dp.over65Exemption,
         disabled: !!dp.disabledExemption,
         emptyNester: !!dp.isEmptyNester,
+        estate: !!dp.isEstate,
         ownerAge: dp.ownerAge || null,
         preForeclosure: dp.isPreForeclosure
           ? { eventType: dp.legalEventType, saleDate: dp.legalSaleDate }

@@ -53,6 +53,7 @@ class MotivationScorer {
       absenteeOwner: 12,         // Mailing address != property: tired landlord / out-of-state heir
       elderlyOwner: 10,          // Over-65 or disability exemption (or voter age >= 65): downsizer / estate
       emptyNester: 12,           // Voter file: mid/senior owner, no young adults in household (kids moved out)
+      estate: 18,                // Owner deceased — held by an estate/heirs: a top-tier "death" sale signal
 
       // Legal-event signal (GATED OFF by default — see STRATEGY.md §6).
       // Public record, but high legal/reputational risk: requires an arrest
@@ -209,6 +210,7 @@ class MotivationScorer {
       isAbsentee: !!propertyData.signals?.absenteeOwner,
       isElderly: !!propertyData.signals?.elderlyOwner,
       isEmptyNester: !!propertyData.signals?.emptyNester,
+      isEstate: !!propertyData.signals?.estate,
       ownerAge: propertyData.signals?.ownerAge || null,
       preForeclosure: propertyData.signals?.preForeclosure || null,
       arrest: propertyData.signals?.arrest || null,
@@ -252,6 +254,7 @@ class MotivationScorer {
     factors.absenteeOwner = this.calculateAbsenteeScore(context);
     factors.elderlyOwner = this.calculateElderlyScore(context);
     factors.emptyNester = this.calculateEmptyNesterScore(context);
+    factors.estate = this.calculateEstateScore(context);
 
     // Legal-event signal (gated)
     factors.arrestRecord = this.calculateArrestScore(context);
@@ -332,6 +335,24 @@ class MotivationScorer {
       factor: `Empty-nester — kids likely moved out${ageSuffix}`,
       category: 'life-stage',
       severity: 'medium'
+    };
+  }
+
+  /**
+   * Estate / inherited — the owner has died and the property is held by an
+   * estate or heirs (owner name like "… ESTATE OF", "LIFE ESTATE", "HEIRS",
+   * "ET AL"). One of the strongest seller signals: heirs commonly sell inherited
+   * property they don't want, and a surviving spouse often downsizes.
+   */
+  calculateEstateScore(context) {
+    if (!context.isEstate) {
+      return { score: 0, factor: 'No estate/inheritance indicator', category: 'life-stage' };
+    }
+    return {
+      score: this.scoringWeights.estate,
+      factor: 'Estate / inherited — owner deceased, held by estate or heirs',
+      category: 'life-stage',
+      severity: 'high'
     };
   }
 
