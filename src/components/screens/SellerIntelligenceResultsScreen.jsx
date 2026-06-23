@@ -9,6 +9,7 @@ const SellerIntelligenceResultsScreen = ({ onNavigate, searchParams }) => {
   const [selectedLead, setSelectedLead] = useState(null);
   const [sortBy, setSortBy] = useState('score');
   const [filterBy, setFilterBy] = useState('all');
+  const [signalFilter, setSignalFilter] = useState('all');
   const [campaignName, setCampaignName] = useState('');
 
   // --- Background CAD enrichment of selected leads ---
@@ -166,13 +167,15 @@ const SellerIntelligenceResultsScreen = ({ onNavigate, searchParams }) => {
 
   const handleFilter = (type) => setFilterBy(type);
 
-  const filteredLeads = leads.filter(lead => {
+  const passesScore = (lead) => {
     if (filterBy === 'all') return true;
     if (filterBy === 'high') return lead.motivationScore >= 85;
     if (filterBy === 'medium') return lead.motivationScore >= 70 && lead.motivationScore < 85;
     if (filterBy === 'low') return lead.motivationScore < 70;
     return true;
-  });
+  };
+  const hasSignal = (lead, type) => (lead.motivationFactors || []).some(f => f.type === type && f.points > 0);
+  const filteredLeads = leads.filter(lead => passesScore(lead) && (signalFilter === 'all' || hasSignal(lead, signalFilter)));
 
   const toggleLeadSelection = (leadId) => {
     setLeads(prevLeads =>
@@ -296,6 +299,18 @@ const SellerIntelligenceResultsScreen = ({ onNavigate, searchParams }) => {
     { key: 'medium', label: 'Medium (70–84)' },
     { key: 'low', label: 'Low (<70)' }
   ];
+  const SIGNAL_FILTERS = [
+    { key: 'all', label: 'All signals' },
+    { key: 'estate', label: '⚰️ Estate / Inherited' },
+    { key: 'preForeclosure', label: '⚖️ Pre-foreclosure' },
+    { key: 'taxDelinquency', label: '🔴 Tax delinquent' },
+    { key: 'elderlyOwner', label: '👵 Elderly / Disabled' },
+    { key: 'absenteeOwner', label: '🏚️ Absentee' },
+    { key: 'emptyNester', label: '🪺 Empty-nester' }
+  ];
+  const signalCount = (key) => key === 'all'
+    ? leads.length
+    : leads.filter(l => hasSignal(l, key)).length;
   const allVisibleSelected = filteredLeads.length > 0 && filteredLeads.every(l => l.selected);
 
   const sortArrow = (key) => (sortBy === key ? ' ↓' : '');
@@ -320,6 +335,24 @@ const SellerIntelligenceResultsScreen = ({ onNavigate, searchParams }) => {
               <div className="summary-stat"><span className="k">Leads</span><span className="v">{filteredLeads.length}</span></div>
               <div className="summary-stat"><span className="k">Avg score</span><span className="v">{avgScore}</span></div>
               <div className="summary-stat"><span className="k">Total owed</span><span className="v">${Math.round(totalOwed).toLocaleString()}</span></div>
+            </div>
+            <div>
+              <div className="sidebar-block-title">Filter by signal</div>
+              <div className="filter-list">
+                {SIGNAL_FILTERS.map(s => {
+                  const count = signalCount(s.key);
+                  if (s.key !== 'all' && count === 0) return null;
+                  return (
+                    <button
+                      key={s.key}
+                      className={`chip ${signalFilter === s.key ? 'chip-active' : ''}`}
+                      onClick={() => setSignalFilter(s.key)}
+                    >
+                      {s.label} ({count})
+                    </button>
+                  );
+                })}
+              </div>
             </div>
             <div>
               <div className="sidebar-block-title">Filter by score</div>

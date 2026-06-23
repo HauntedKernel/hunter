@@ -803,7 +803,7 @@ class TaxRollProcessor {
           WHERE ${baseWhere} AND is_delinquent = 1
           ORDER BY (${PREFORE} * 35) + MIN(COALESCE(delinquent_amount, 0) / 1000.0, 40)
             + (${ELDERLY} * 5) + (${ABSENTEE} * 5) + (${EMPTYNEST} * 5) + (${ESTATE} * 8) DESC,
-            delinquent_amount DESC
+            delinquent_amount DESC, account_id
           LIMIT ?`;
         const delq = await this.db.all(delqSql, [...baseParams, delqTarget]);
 
@@ -821,12 +821,27 @@ class TaxRollProcessor {
           const nonDelqSql = `
             SELECT ${SELECT} FROM ${FROM}
             WHERE ${baseWhere} AND is_delinquent = 0 AND (${nonDelqConds.join(' OR ')})
-            ORDER BY (${PREFORE} * 35) + (${ELDERLY} * 10) + (${ABSENTEE} * 12) + (${EMPTYNEST} * 12) + (${ESTATE} * 14) DESC, total_value DESC
+            ORDER BY (${PREFORE} * 35) + (${ELDERLY} * 10) + (${ABSENTEE} * 12) + (${EMPTYNEST} * 12) + (${ESTATE} * 14) DESC, total_value DESC, account_id
             LIMIT ?`;
           nonDelq = await this.db.all(nonDelqSql, [...baseParams, nonDelqTarget]);
         }
-        const results = [...delq, ...nonDelq];
-        this.logger.info(`Found ${results.length} candidates in "${area}" (${areaFilter.label}): ${delq.length} delinquent + ${nonDelq.length} current elderly/absentee/pre-foreclosure`);
+        let results = [...delq, ...nonDelq];
+
+        // Estate / inherited is sparse and cross-cutting (an estate owner may or
+        // may not be delinquent), so the 60/40 delinquent split can bury it. When
+        // it's selected, guarantee representation with a reserved estate slice.
+        if (signals.estate) {
+          const have = new Set(results.map(r => r.account_id));
+          const estateRows = await this.db.all(`
+            SELECT ${SELECT} FROM ${FROM}
+            WHERE ${baseWhere} AND ${ESTATE}
+            ORDER BY is_delinquent DESC, delinquent_amount DESC, total_value DESC, account_id
+            LIMIT ?`, [...baseParams, Math.ceil(limit * 0.3)]);
+          for (const r of estateRows) {
+            if (!have.has(r.account_id)) { results.push(r); have.add(r.account_id); }
+          }
+        }
+        this.logger.info(`Found ${results.length} candidates in "${area}" (${areaFilter.label}): ${delq.length} delinquent + ${nonDelq.length} non-delinquent${signals.estate ? ' + estate slice' : ''}`);
         return results.map(this.formatPropertyResult);
       }
 
@@ -866,7 +881,7 @@ class TaxRollProcessor {
       const sql = `
         SELECT ${SELECT} FROM ${FROM}
         WHERE ${baseWhere} AND (${conds.join(' OR ')})
-        ORDER BY ${orderExpr} DESC, total_value DESC
+        ORDER BY ${orderExpr} DESC, total_value DESC, account_id
         LIMIT ?`;
       const results = await this.db.all(sql, [...baseParams, limit]);
       this.logger.info(`Found ${results.length} candidates in "${area}" (${areaFilter.label}); signals=[${Object.keys(signals).filter(k => signals[k]).join(',')}]`);
