@@ -7,10 +7,11 @@ const SellersDashboardScreen = ({ onNavigate }) => {
   const [searchRadius, setSearchRadius] = useState(5);
   const [campaigns, setCampaigns] = useState([]);
   const [activeTab, setActiveTab] = useState('campaigns');
+  // Texas property records don't distinguish house/condo/townhome (all are
+  // state category "A"), so we offer one Residential toggle rather than three
+  // that would return identical results.
   const [propertyTypes, setPropertyTypes] = useState({
-    singleFamily: true,
-    condo: false,
-    townhome: false,
+    residential: true,
     multiFamily: false,
     commercial: false,
     industrial: false,
@@ -26,7 +27,8 @@ const SellersDashboardScreen = ({ onNavigate }) => {
     emptyNester: true
   });
 
-  const mockAreas = [
+  // Quick-fill suggestions for the area input — real Dallas neighborhoods/ZIPs.
+  const areaSuggestions = [
     'Highland Park, Dallas, TX',
     'University Park, Dallas, TX',
     'Preston Hollow, Dallas, TX',
@@ -42,14 +44,8 @@ const SellersDashboardScreen = ({ onNavigate }) => {
   }, []);
 
   const loadCampaigns = async () => {
-    const mockCampaigns = await SellerIntelligenceService.getCampaigns();
-    setCampaigns(mockCampaigns);
-  };
-
-  const getEstimatedLeads = () => {
-    const baseLeads = 45;
-    const selectedTypesCount = Object.values(propertyTypes).filter(v => v).length;
-    return Math.floor(baseLeads * (selectedTypesCount / 3));
+    const saved = await SellerIntelligenceService.getCampaigns();
+    setCampaigns(saved);
   };
 
   const handleSearch = () => {
@@ -79,7 +75,7 @@ const SellersDashboardScreen = ({ onNavigate }) => {
     });
   };
 
-  const filteredSuggestions = mockAreas.filter(area => 
+  const filteredSuggestions = areaSuggestions.filter(area =>
     area.toLowerCase().includes(selectedArea.toLowerCase())
   );
 
@@ -252,9 +248,7 @@ const SellersDashboardScreen = ({ onNavigate }) => {
                 <label style={styles.parameterLabel}>Property Types</label>
                 <div style={styles.checkboxGroup}>
                   {Object.entries({
-                    singleFamily: 'Single Family',
-                    condo: 'Condo',
-                    townhome: 'Townhome',
+                    residential: 'Residential (house / condo / townhome)',
                     multiFamily: 'Multi-Family',
                     commercial: 'Commercial',
                     industrial: 'Industrial',
@@ -312,24 +306,19 @@ const SellersDashboardScreen = ({ onNavigate }) => {
             </div>
 
             <div style={styles.footer}>
-              <div style={styles.estimateBox}>
-                <div style={styles.estimateNumber}>{getEstimatedLeads()}</div>
-                <div style={styles.estimateText}>Estimated Leads</div>
-              </div>
-              
               <button onClick={handleSearch} style={styles.searchButton}>
                 <span style={styles.searchIcon}>🔍</span>
                 Find Motivated Sellers
               </button>
-              
+
               <p style={styles.disclaimer}>
-                Results powered by Dallas CAD Integration & AI analysis
+                Live results from Dallas County public records
               </p>
-              
+
               <div style={styles.cadIndicator}>
                 <div style={styles.cadBadge}>
                   <span style={styles.cadIcon}>🏛️</span>
-                  <span style={styles.cadText}>Dallas CAD Live Data</span>
+                  <span style={styles.cadText}>Dallas County Tax Roll</span>
                   <span style={styles.cadStatus}>●</span>
                 </div>
               </div>

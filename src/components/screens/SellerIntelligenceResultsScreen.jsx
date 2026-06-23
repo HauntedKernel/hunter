@@ -35,7 +35,7 @@ const SellerIntelligenceResultsScreen = ({ onNavigate, searchParams }) => {
       const params = searchParams || {
         area: 'Highland Park, Dallas, TX',
         radius: 5,
-        propertyTypes: { singleFamily: true, condo: true, townhome: true, commercial: true }
+        propertyTypes: { residential: true }
       };
       
       const result = await SellerIntelligenceService.searchLeads(params);

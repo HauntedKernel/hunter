@@ -691,6 +691,10 @@ class TaxRollProcessor {
     if (!propertyTypes || typeof propertyTypes !== 'object') return null;
 
     const CATEGORY_PREFIXES = {
+      // Texas SPTD codes don't separate house/condo/townhome — all are category
+      // A — so the UI offers one "Residential" toggle. The granular keys are kept
+      // for backward compatibility (they all map to A).
+      residential: ['A'],
       singleFamily: ['A'],
       condo: ['A'],
       townhome: ['A'],
@@ -727,13 +731,37 @@ class TaxRollProcessor {
       const limit = options.limit || 100;
       const areaFilter = this.buildAreaFilter(area);
       const ptFilter = this.buildPropertyTypeFilter(options.propertyTypes);
+
+      // Quality floor. The raw tax roll is full of rows that look like junk to a
+      // realtor: trivial delinquencies (a few dollars owed) and government /
+      // institutional owners (the city, county, school districts) who will never
+      // sell. Drop both so results are actionable. The dollar floor only applies
+      // to delinquent rows, so current-owner signals (elderly/absentee/empty-
+      // nester) still surface regardless of any balance owed.
+      const minAmount = options.minAmount != null ? Number(options.minAmount) : 1000;
+      const GOV_OWNER_PATTERNS = [
+        '%CITY OF%', '%COUNTY OF%', 'DALLAS COUNTY%', '%ISD%',
+        '%STATE OF TEXAS%', '%UNITED STATES%', '%HOUSING AUTHORITY%',
+        '%DEPARTMENT OF%', '%FEDERAL HOME LOAN%'
+      ];
+      const govClause = GOV_OWNER_PATTERNS.map(() => 'owner_name NOT LIKE ?').join('\n          AND ');
+
       const baseWhere = `${areaFilter.clause}
           AND suit_pending = 0
           AND bankruptcy_filed = 0
           AND payment_status NOT IN ('SUIT_PENDING', 'BANKRUPTCY')
+          AND (is_delinquent = 0 OR delinquent_amount >= ?)
+          AND owner_name IS NOT NULL
+          AND ${govClause}
           ${ptFilter ? `AND ${ptFilter.clause}` : ''}`;
-      // Params that prefix every query below (area filter, then property-type).
-      const baseParams = [...areaFilter.params, ...(ptFilter ? ptFilter.params : [])];
+      // Params that prefix every query below, in clause order: area filter, the
+      // delinquent-amount floor, the government-owner exclusions, then property-type.
+      const baseParams = [
+        ...areaFilter.params,
+        minAmount,
+        ...GOV_OWNER_PATTERNS,
+        ...(ptFilter ? ptFilter.params : [])
+      ];
 
       // Which motivation signals to hunt for (UI toggles). Default: all.
       // An all-off selection falls back to all-on so a search never returns empty.
