@@ -339,6 +339,58 @@ Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 
   is exposed). Cost ladder updated: always-on backend = $0. (Namecheap has no
   free VPS — only a 1-month shared-hosting trial, which can't run the Node backend.)
 
+## 2026-06-22 — Data quality, web-first redesign, estate signal
+
+- `[#025]` **Data-quality pass: floor junk leads, fix property-type filter, drop
+  mock data.** `TaxRollProcessor.searchCandidatesByArea` — floor delinquent
+  results at $1,000 owed and exclude government/institutional owners
+  (city/county/ISD/state/housing authority); Highland Park 413 → 44 actionable
+  leads, trivial $0.08 / "CITY OF" rows gone. Floor applies only to delinquent
+  rows so elderly/absentee signals still surface. Property-type filter: the
+  single-family/condo/townhome toggles all mapped to the same TX category code
+  (did nothing) — collapsed to one honest "Residential" option (category A);
+  Residential/Commercial/Multi-Family now differ. Removed fabricated data: dead
+  `generateAreaAddresses()` (fake MOCKINGBIRD LN list), the fake "Estimated
+  Leads" number (45 × types/3), renamed misleading mock vars, softened copy.
+
+- `[#026]` **Web-first responsive redesign — remove phone frame, add data-table
+  UI.** New CSS design system (`globals.css`): design tokens + responsive
+  component classes (app-shell, app-bar, results-layout, leads-table, action-bar)
+  replacing the fixed 375×812 phone frame + fake status bar. `App.jsx`: full-width
+  web shell with a sticky app bar (keeps state-based nav). Results: desktop =
+  filter sidebar + sortable data table + sticky action bar; collapses to cards on
+  mobile. All logic preserved (lazy/bulk CAD enrichment, sort/filter, multi-select,
+  save campaign, CSV export, DNC-gated contacts). Dropped the non-functional
+  "Outreach Settings" tab; folded name + save into the action bar. Dashboard +
+  Campaign Details rebuilt as responsive web layouts. Bundle 72 → 68.7 KB gzip;
+  frontend deploy only (backend unchanged).
+
+- `[#027]` **Estate / Inherited motivation signal (death signal).** When an owner
+  dies the property usually sells (heirs offload, surviving spouses downsize).
+  Detects deceased-owner records straight from the tax roll by owner-name pattern
+  (ESTATE OF / LIFE ESTATE / HEIRS / ET AL) — ~3,950 Dallas County properties;
+  patterns precise so "REAL ESTATE LLC" firms don't match.
+  - `TaxRollProcessor.searchCandidatesByArea`: ESTATE condition wired into the ALL
+    default, blend logic, and single-signal query (ranked weight 14, 8 in blend).
+  - `formatPropertyResult`: derive + expose `isEstate` from owner_name.
+  - `PropertyIntelligenceService.buildLeadFromTaxRecord`: pass estate signal.
+  - `MotivationScorer`: estate weight 18, context flag, `calculateEstateScore`
+    ("Estate / inherited — owner deceased, held by estate or heirs", severity high).
+  - Dashboard: "⚰️ Estate / Inherited" signal toggle (on by default).
+
+- `[#028]` **Fix non-deterministic results + estate starvation; add Signals
+  filter.** Two bugs surfaced once Estate shipped. (1) Identical searches returned
+  slightly different leads — discovery ORDER BY clauses had no stable tiebreaker,
+  so SQLite returned different rows under LIMIT when scores tied. Added
+  `account_id` as a final tiebreaker to every ranked query (delinquent,
+  non-delinquent, single-signal). (2) Estate leads were starved in blended
+  searches — the 60/40 delinquent split + balance-size ranking buried them
+  (Highland Park: 18 estate, only 2 surfaced). Added a reserved estate slice (up
+  to 30% of the limit, deduped) whenever the estate signal is selected, so death
+  leads are always represented. Frontend: new "Filter by signal" group in the
+  results sidebar (per-signal counts) — click ⚰️ Estate to isolate death leads,
+  or any other signal.
+
 ### Flagged for prior-art / patent review (Handoff Rule 6)
 - New `calculateUrgencyScore()` (0–100): weights balance size, years behind,
   absentee ownership (no homestead exemption), and foreclosure risk. Used as
