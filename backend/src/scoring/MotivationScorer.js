@@ -15,6 +15,7 @@
 const _ = require('lodash');
 const moment = require('moment');
 const Logger = require('../utils/Logger');
+const SellProbabilityModel = require('./SellProbabilityModel');
 
 class MotivationScorer {
   constructor(options = {}) {
@@ -27,6 +28,16 @@ class MotivationScorer {
     // Flip via `new MotivationScorer({ enableArrestSignal: true })` only after a
     // real arrest data feed exists and legal review has signed off.
     this.enableArrestSignal = options.enableArrestSignal === true;
+
+    // Trained, calibrated sell-probability model (the analytics moat, STRATEGY.md
+    // §0). Loaded defensively — if sell_model.json is absent, `available` is false
+    // and we simply omit the probability (the weighted score still works).
+    this.sellModel = new SellProbabilityModel();
+    if (this.sellModel.available) {
+      this.logger.info('Sell-probability model loaded', {
+        auc: this.sellModel.auc, baseRate: this.sellModel.baseRate
+      });
+    }
 
     // Core scoring weights (Patent Claim: Multi-factor weighted algorithm)
     this.scoringWeights = {
@@ -214,6 +225,11 @@ class MotivationScorer {
       currentValue: currentValue,
       taxAmount: propertyData.taxation?.taxAmount || parseFloat(propertyData.taxAmount) || 0,
       delinquentAmount: propertyData.taxDelinquency?.amountOwed || parseFloat(propertyData.delinquentAmount) || 0,
+      // Raw fields the sell-probability model needs (match the training features).
+      totalAmountDue: propertyData.taxation?.totalAmountDue != null
+        ? propertyData.taxation.totalAmountDue
+        : (propertyData.taxDelinquency?.amountOwed || 0),
+      yearsDelinquent: propertyData.taxDelinquency?.yearsDelinquent || 0,
       
       // NEW: Include complete property data for enhanced scoring
       propertyData: propertyData,
@@ -882,10 +898,29 @@ class MotivationScorer {
    */
   compileMotivationAnalysis(data) {
     const { finalScore, classification, factorScores, riskAnalysis, scoringContext, processingTime } = data;
-    
+
+    // Calibrated sell-probability (the analytics moat). Features must match the
+    // trained model (scripts/train_sell_model.js).
+    const sell = this.sellModel.score({
+      delinq: (scoringContext.delinquentAmount || 0) > 0,
+      absentee: scoringContext.isAbsentee,
+      elderly: scoringContext.isElderly,
+      suit: scoringContext.isTaxSuit,
+      estate: scoringContext.isEstate,
+      dyears: scoringContext.yearsDelinquent,
+      totalAmountDue: scoringContext.totalAmountDue,
+      totalValue: scoringContext.currentValue
+    });
+
     return {
       // Core Results
       totalScore: finalScore,
+      // Calibrated probability the owner sells within the model window (0-1), the
+      // ~base-rate-relative lift, and the top drivers. Null if no model loaded.
+      sellProbability: sell ? sell.probability : null,
+      sellProbabilityPct: sell ? Math.round(sell.probability * 1000) / 10 : null,
+      sellProbabilityLift: sell && sell.lift != null ? Math.round(sell.lift * 100) / 100 : null,
+      sellProbabilityDrivers: sell ? sell.drivers : [],
       maxPossibleScore: Object.values(this.scoringWeights).reduce((a, b) => a + b, 0),
       isMotivatedSeller: finalScore >= this.motivationThresholds.medium,
       motivationLevel: classification.level,

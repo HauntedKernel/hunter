@@ -548,6 +548,23 @@ Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 
   PIA — the engine is ready for whatever extract you obtain. Completeness caveat:
   a free-and-clear assertion is only as complete as the deed extract for that property.
 
+- `[#042]` **Phase 2: calibrated sell-probability wired into scoring + UI (the moat,
+  visible).** New `backend/src/scoring/SellProbabilityModel.js` loads `sell_model.json`
+  (#041) and turns a property's signals into a calibrated **P(sell)** + a per-feature
+  contribution breakdown (the "why"), loading defensively (omits the probability if
+  the model file is absent). `MotivationScorer` computes it and attaches
+  `sellProbability`/`sellProbabilityPct`/`sellProbabilityLift`/`sellProbabilityDrivers`
+  to every analysis; `buildLeadFromTaxRecord` now passes `total_amount_due` so the
+  model feature matches training; the API formatter + frontend service carry the
+  fields through. Results UI: the lead table now **leads with "Sell prob" %** (the
+  hero metric, coloured by lift, raw score kept as a tooltip), default-sorts by
+  probability, and the detail panel shows a **"Likelihood to sell"** block (%, lift
+  vs area average, top drivers). Verified end-to-end: probability flows from model →
+  scorer → discovery lead → UI, and it **re-ranks** leads vs the raw score (e.g. an
+  absentee lead scored 37 shows P(sell) 19.9% and outranks a delinquent+suit lead
+  scored 53 at 12.2% — the calibrated ranking the raw score gets wrong). Note: raw
+  tax-delinquency never appears as a positive driver (its learned weight is negative).
+
 ### Flagged for prior-art / patent review (Handoff Rule 6)
 - New `calculateUrgencyScore()` (0–100): weights balance size, years behind,
   absentee ownership (no homestead exemption), and foreclosure risk. Used as

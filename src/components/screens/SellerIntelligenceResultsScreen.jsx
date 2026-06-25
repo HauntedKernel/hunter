@@ -28,11 +28,19 @@ const firedSignals = (lead) => {
 };
 const leadHasEstate = (lead) => (lead.motivationFactors || []).some(f => f.type === 'estate' && f.points > 0);
 
+// Colour the calibrated sell-probability pill by its lift over the base rate.
+const probColor = (lift) => {
+  if (lift == null) return 'var(--score-low)';
+  if (lift >= 2) return 'var(--score-high)';
+  if (lift >= 1.3) return 'var(--score-med)';
+  return 'var(--score-low)';
+};
+
 const SellerIntelligenceResultsScreen = ({ onNavigate, searchParams }) => {
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedLead, setSelectedLead] = useState(null);
-  const [sortBy, setSortBy] = useState('score');
+  const [sortBy, setSortBy] = useState('probability');
   const [filterBy, setFilterBy] = useState('all');
   const [signalFilter, setSignalFilter] = useState('all');
   const [campaignName, setCampaignName] = useState('');
@@ -60,7 +68,12 @@ const SellerIntelligenceResultsScreen = ({ onNavigate, searchParams }) => {
       };
 
       const result = await SellerIntelligenceService.searchLeads(params);
-      setLeads(result.leads || []);
+      // Default ranking = calibrated sell-probability (the analytics moat), which
+      // can differ from the raw score (e.g. delinquency alone is a weak predictor).
+      const ranked = [...(result.leads || [])].sort(
+        (a, b) => (b.sellProbabilityPct ?? -1) - (a.sellProbabilityPct ?? -1)
+      );
+      setLeads(ranked);
     } catch (error) {
       console.error('Error loading leads:', error);
     } finally {
@@ -182,6 +195,7 @@ const SellerIntelligenceResultsScreen = ({ onNavigate, searchParams }) => {
     const sorted = [...leads];
     switch (type) {
       case 'score': sorted.sort((a, b) => b.motivationScore - a.motivationScore); break;
+      case 'probability': sorted.sort((a, b) => (b.sellProbabilityPct ?? -1) - (a.sellProbabilityPct ?? -1)); break;
       case 'value': sorted.sort((a, b) => (b.propertyValue || 0) - (a.propertyValue || 0)); break;
       case 'owed': sorted.sort((a, b) => (b.amountOwed || 0) - (a.amountOwed || 0)); break;
       case 'years': sorted.sort((a, b) => (b.yearsDelinquent || 0) - (a.yearsDelinquent || 0)); break;
@@ -404,7 +418,7 @@ const SellerIntelligenceResultsScreen = ({ onNavigate, searchParams }) => {
               <div className="lead-row lead-row--head">
                 <span></span>
                 <span>Owner / Address</span>
-                <button className="th-sort" onClick={() => handleSort('score')}>Score{sortArrow('score')}</button>
+                <button className="th-sort" onClick={() => handleSort('probability')}>Sell&nbsp;prob{sortArrow('probability')}</button>
                 <button className="th-sort" onClick={() => handleSort('owed')}>Owed{sortArrow('owed')}</button>
                 <button className="th-sort" onClick={() => handleSort('years')}>Yrs{sortArrow('years')}</button>
                 <button className="th-sort" onClick={() => handleSort('value')}>Value{sortArrow('value')}</button>
@@ -430,8 +444,16 @@ const SellerIntelligenceResultsScreen = ({ onNavigate, searchParams }) => {
                       <span className="addr">{lead.address}{lead.city ? `, ${lead.city}` : ''} {lead.zip}</span>
                     </span>
                     <span className="cell cell-num">
-                      <span className="cell-label">Score</span>
-                      <span className="score-pill" style={{ background: SellerIntelligenceService.getMotivationColor(lead.motivationScore) }}>{lead.motivationScore}</span>
+                      <span className="cell-label">Sell prob</span>
+                      {lead.sellProbabilityPct != null ? (
+                        <span
+                          className="score-pill"
+                          style={{ background: probColor(lead.sellProbabilityLift) }}
+                          title={`${lead.sellProbabilityLift}× the area average — score ${lead.motivationScore}`}
+                        >{lead.sellProbabilityPct}%</span>
+                      ) : (
+                        <span className="score-pill" style={{ background: SellerIntelligenceService.getMotivationColor(lead.motivationScore) }}>{lead.motivationScore}</span>
+                      )}
                     </span>
                     <span className="cell cell-num">
                       <span className="cell-label">Owed</span>
@@ -475,6 +497,23 @@ const SellerIntelligenceResultsScreen = ({ onNavigate, searchParams }) => {
 
                   {selectedLead?.id === lead.id && (
                     <div className="lead-detail">
+                      <div>
+                        <div className="detail-block-title">Likelihood to sell</div>
+                        {lead.sellProbabilityPct != null ? (
+                          <>
+                            <div className="prob-headline">
+                              <strong style={{ color: probColor(lead.sellProbabilityLift), fontSize: '1.4em' }}>{lead.sellProbabilityPct}%</strong>
+                              <span className="muted-note"> est. chance of selling (~10-mo window) · {lead.sellProbabilityLift}× the area average</span>
+                            </div>
+                            {(lead.sellProbabilityDrivers || []).length > 0 && (
+                              <div className="muted-note">Top drivers: {lead.sellProbabilityDrivers.join(' · ')}</div>
+                            )}
+                            <div className="muted-note" style={{ fontSize: '0.8em', opacity: 0.7 }}>Calibrated model · not a guarantee</div>
+                          </>
+                        ) : (
+                          <div className="muted-note">Probability model unavailable for this lead.</div>
+                        )}
+                      </div>
                       <div>
                         <div className="detail-block-title">Motivation factors</div>
                         {(lead.motivationFactors || []).filter(f => f.points > 0).map((factor, index) => (

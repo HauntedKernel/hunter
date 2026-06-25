@@ -553,7 +553,11 @@ function formatAnalysisResponse(analysis) {
       isMotivatedSeller: analysis.motivation?.isMotivatedSeller || false,
       motivationLevel: analysis.motivation?.motivationLevel || 'minimal',
       confidence: analysis.motivation?.confidence || 50,
-      factors: analysis.motivation?.factors || []
+      factors: analysis.motivation?.factors || [],
+      sellProbability: analysis.motivation?.sellProbability ?? null,
+      sellProbabilityPct: analysis.motivation?.sellProbabilityPct ?? null,
+      sellProbabilityLift: analysis.motivation?.sellProbabilityLift ?? null,
+      sellProbabilityDrivers: analysis.motivation?.sellProbabilityDrivers || []
     },
     geographic: {
       neighborhood: analysis.geographic?.neighborhood || 'Dallas',

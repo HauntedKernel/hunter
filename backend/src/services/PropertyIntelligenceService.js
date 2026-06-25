@@ -279,7 +279,7 @@ class PropertyIntelligenceService {
     const motivation = await this.motivationScorer.calculateMotivationScore({
       address: dp.address,
       correlationId,
-      taxation: { totalValue: currentValue, taxAmount: dp.taxAmount },
+      taxation: { totalValue: currentValue, taxAmount: dp.taxAmount, totalAmountDue: dp.totalAmountDue },
       taxDelinquency: {
         isDelinquent: true,
         amountOwed: dp.amountOwed,

@@ -197,6 +197,10 @@ class SellerIntelligenceService {
           
           // Motivation analysis
           motivationScore: seller.motivation.totalScore,
+          // Calibrated sell-probability (the analytics moat) + its drivers.
+          sellProbabilityPct: seller.motivation.sellProbabilityPct ?? null,
+          sellProbabilityLift: seller.motivation.sellProbabilityLift ?? null,
+          sellProbabilityDrivers: seller.motivation.sellProbabilityDrivers || [],
           motivationFactors: seller.motivation.factors?.filter(factor => factor.points > 0).map(factor => ({
             type: factor.type,
             description: factor.description,
