@@ -5,6 +5,27 @@
 
 ---
 
+## 0. Direction decision (2026-06-25): the analytics moat
+
+Competitive reality check vs PropStream/ATTOM (a $99/mo incumbent whose headline is
+also "find motivated sellers," with nationwide data + lien/equity built in): **we
+cannot win on data — they have more.** Decision: the wedge is **the analytics moat**
+(this doc's own §8.3 thesis) — a **calibrated, validated sell-probability**, not a
+filtered list. *"PropStream gives you a list; we tell you who'll actually sell."*
+
+What this changes:
+- **Stop competing on signal *count*** (every "add another signal" item is PropStream's
+  turf). Compete on the **score being provably better** — calibrated P(sell) + the
+  "why," trained and measured on our own data.
+- This session's snapshot-diff backtest is the first proof: signals have *measured*
+  lift (tax-suit 2.45x, absentee 1.64x), elderly-alone is 1.00x (a modifier, not a
+  trigger), and absentee×elderly is 3.07x (interaction the additive model can't see).
+  See `RESEARCH.md`. **Next build = a trained, calibrated sell-probability model**
+  (hazard/logistic on snapshot diffs), replacing hand-set weights with learned ones.
+- Two strategy items below are now CORRECTED — see §2 (elderly) and §4 (voter file).
+
+---
+
 ## 1. The reframe: we are building a *signal library*, not a tax-delinquency tool
 
 Today a "candidate" = tax-delinquent. The real product is bigger:
@@ -35,7 +56,7 @@ The Dallas tax roll already contains columns we ingest but don't use:
 
 | Signal | Column(s) we already have | Indicates |
 |---|---|---|
-| **Elderly / disabled owner** | `over65_exemption`, `disabled_exemption` | Downsizer, estate, aging-in-place → sale or death |
+| **Elderly / disabled owner** ⚠️ | `over65_exemption`, `disabled_exemption` | **CORRECTED (2026-06-25):** measured **1.00x standalone lift (none)** — elderly is a *modifier*, not a trigger. Only valuable combined (absentee×elderly = 3.07x). Do NOT surface elderly-only leads. |
 | **Absentee owner** | `owner_address` ≠ `property_address` | Tired landlord, out-of-state heir — high motivation |
 | **Long ownership** | (in scoring already) | Equity-rich, life-stage transitions |
 | **High tax burden** | `tax_amount` / `total_value` | Cost pressure |
@@ -78,6 +99,13 @@ Our hard constraint: most of this data is administered **county-by-county**, so
 ---
 
 ## 4. Demographics: age & family status
+
+> ⚠️ **CORRECTED (2026-06-25, RESEARCH.md §E): the voter file is OFF-LIMITS.** Texas
+> Election Code §18.067 makes commercial-marketing use of the statewide voter list a
+> **Class A misdemeanor**. Do NOT load it (roadmap #4 → do-not-ship). Owner age /
+> household must come from **licensed marketing data** (Experian/Acxiom household
+> files) instead — the "buy, not scrape" path noted at the bottom of this section.
+> (And per §2, age is a low priority anyway: elderly-alone has no standalone lift.)
 
 The **voter file is the unlock.** In Texas the roll is public and includes name,
 address, and birth year, and shows *who else is registered at the address*:

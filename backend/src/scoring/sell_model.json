@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "trainedAt": null,
+  "window": "2025-08-25..2026-06-22",
+  "n": 675101,
+  "baseRate": 0.06268987899588357,
+  "auc": 0.6172376732729049,
+  "features": [
+    "delinq",
+    "absentee",
+    "elderly",
+    "suit",
+    "estate",
+    "dyears",
+    "logdue",
+    "logval",
+    "absentee_x_elderly",
+    "delinq_x_suit"
+  ],
+  "weights": [
+    -0.12856285246539403,
+    0.720243338170365,
+    0.14022162348235678,
+    0.15676548613710825,
+    0.04011487285108015,
+    -0.010600325111647163,
+    0.11727834478871045,
+    0.10964486903571884,
+    0.2769112692155581,
+    0.07743081749727874
+  ],
+  "bias": -2.94764277405071,
+  "standardize": {
+    "cols": [
+      "dyears",
+      "logdue",
+      "logval"
+    ],
+    "mean": [
+      0.09792993630573249,
+      0.19625436972391458,
+      9.242621630943054
+    ],
+    "std": [
+      1.0847105416188974,
+      1.0276315656245334,
+      2.296965836975499
+    ]
+  },
+  "note": "Logistic regression on snapshot-diff labels; owner-name-change proxy for sale. Forward features from OLD snapshot. No class rebalancing."
+}

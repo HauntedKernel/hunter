@@ -185,6 +185,46 @@ Still additive + capped at 100; this is an interim calibration, not the hazard m
    do NOT class-rebalance. Once the lien feed lands, re-run §B to get *measured* lift
    for free-and-clear and re-weight.
 
+## F. Trained sell-probability model v1 (the analytics moat)
+
+First cut of the calibrated model (STRATEGY.md §0) — logistic regression on the
+snapshot-diff labels, features from the OLD snapshot (forward prediction), 675k
+real-property accounts, 80/20 split, no class rebalancing.
+Script: `backend/scripts/train_sell_model.js` → `backend/src/scoring/sell_model.json`.
+
+- **Held-out AUC = 0.617.** Modest discrimination (0.5 = coin flip) — honest: the
+  tax-roll-intrinsic signals only weakly rank-order sellers. BUT…
+- **Well-calibrated** — predicted vs actual sold-rate track closely across all
+  deciles (d1 4.2%/4.2% … d10 11.0%/11.6%). The probabilities are *trustworthy*,
+  which is the product artifact: **top decile sells at 11.6% vs a 6.3% base ≈ 1.85x
+  concentration** for lead prioritization.
+- **Multivariate odds ratios overturn the hand-set weights** (these control for
+  signal overlap, unlike the §B univariate lifts):
+
+  | feature | OR | read |
+  |---|---:|---|
+  | absentee | **2.05** | by far the strongest predictor |
+  | absentee × elderly | 1.32 | interaction survives on top of the mains |
+  | suit pending | 1.17 | much of its univariate 2.45x was shared with delinquency |
+  | elderly | 1.15 | mildly positive once controlling (vs 1.00x alone) |
+  | log(amount due) | 1.12 | more owed → slightly more likely |
+  | log(value) | 1.12 | higher value → slightly more likely |
+  | delinq × suit | 1.08 | escalation interaction |
+  | estate | 1.04 | weak once controlling |
+  | **delinquent (raw)** | **0.88** | ⚠️ **NEGATIVE** controlling for the above |
+
+- 🎯 **Headline finding:** **raw tax-delinquency — the product's original core signal,
+  hand-weighted highest (40) — is mildly *negative* once you know suit status, amount
+  owed, and absentee.** Its predictive content lives in its *escalations* (suit,
+  amount, absentee), not in delinquency itself. Merely-delinquent owners who aren't
+  escalated tend to *hold* the house. This is exactly the kind of insight a filter
+  tool (PropStream) can't surface and a calibrated model can.
+- **Caveats:** "sold" = owner-name-change proxy (includes non-arm's-length); 10-mo
+  window; **only tax-roll-intrinsic features** — liens/divorce/probate weren't in the
+  old snapshot, so this AUC is a **floor**. Adding those feeds as model *inputs* is
+  the path to lifting it. Next: wire calibrated P(sell) + the "why" into the scorer/UI
+  (replace the arbitrary 0-100), and re-train as feeds land.
+
 ## E. Data sources & compliance (round-2 deep research)
 
 Per-signal source map for a small Dallas operation. Cited; "stated" = vendor/marketing
