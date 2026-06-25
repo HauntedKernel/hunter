@@ -565,6 +565,19 @@ Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 
   scored 53 at 12.2% — the calibrated ranking the raw score gets wrong). Note: raw
   tax-delinquency never appears as a positive driver (its learned weight is negative).
 
+- `[#043]` **PropStream export → Hunter mapper (`backend/map_propstream.js`).** Turns
+  a PropStream list/skip-trace export into the CSVs our ingesters accept — `liens.csv`
+  (free-and-clear/equity → `ingest_liens.js`) and `contacts.csv` (phone/email →
+  `ingest_contacts.js`) — from one file. Fuzzy-matches PropStream's varying column
+  headers (APN, owner first/last, address, est value/equity, mortgage balance, phone*,
+  email*), resolves each row to a DCAD `account_id` (APN digits / zero-padded-to-17,
+  else property street+ZIP + owner-name fallback), and derives `free_and_clear` from
+  the mortgage balance, a `--all-clear` flag (when the export was filtered to "Free &
+  Clear"), or equity≥99%. Verified end-to-end (APN match + address fallback → ingest →
+  discovery surfaces the free-and-clear lead). Enables the PropStream 7-day trial to
+  light up the free-and-clear signal + contacts. (Use a targeted working set, not a
+  county dump — PropStream licenses *access*, not the data; see RESEARCH.md §E.)
+
 ### Flagged for prior-art / patent review (Handoff Rule 6)
 - New `calculateUrgencyScore()` (0–100): weights balance size, years behind,
   absentee ownership (no homestead exemption), and foreclosure risk. Used as
