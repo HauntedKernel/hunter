@@ -95,16 +95,23 @@ Backend lives at `~/hunter` on the Oracle box (`170.9.249.210`):
   The earlier `trycloudflare.com` quick-tunnel URLs are throwaway — don't rely on them.
 
 ## Data feeds
-- **Pre-foreclosure/lis-pendens → LIVE (partial).** New `backend/scrape_foreclosures.js`
+- **Pre-foreclosure/lis-pendens → LIVE, AUTO-REFRESHED.** `backend/scrape_foreclosures.js`
   OCRs the Dallas County Clerk's scanned foreclosure PDFs (needs poppler-utils +
   tesseract-ocr on the box) → CSV → `ingest_legal_events.js`. Matching is
   owner-aware (street+ZIP+owner surname) because the tax roll lacks house numbers.
-  To expand/refresh on the box:
-  `cd /tmp && node /tmp/scrape_foreclosures.js <Month> "" --dpi 200`
-  then `cd ~/hunter/backend && node ingest_legal_events.js --clear && node ingest_legal_events.js /tmp/foreclosures_<Month>.csv && pm2 restart hunter-api`.
-  Coverage is partial by design (only notices with an explicit address line; the
-  rest use Lot/Block legal descriptions). Worth scheduling monthly (sales are the
-  first Tuesday; notices post ~21 days prior). ~1.6 min/small file on the ARM box.
+  - **Automated:** `backend/refresh_foreclosures.sh` (cron on the box, `0 3 7 * *`
+    UTC) scrapes a rolling 4-month window (county lags ~1 mo, keeps ~3 mo up),
+    combines, and reloads — **safe**: it skips the reload if the scrape returns 0
+    records, so an outage/lag never wipes the live feed. Log:
+    `~/hunter/foreclosure_cron.log`. Run manually anytime:
+    `bash ~/hunter/backend/refresh_foreclosures.sh`.
+  - Coverage is partial by design (only notices with an explicit address line; the
+    rest use Lot/Block legal descriptions, ~30% precise-match on real data).
+    ~1.6 min/small file OCR on the ARM box; a full run is ~60-90 min (niced).
+  - **Recency caveat:** the county's online postings lag, so loaded sales may be
+    recent-past rather than strictly upcoming. Bigger recall lever = a fresher
+    `tax_roll.db` snapshot (current one is 2025-08, ~10 mo old → some grantors
+    have since changed hands and won't match).
 - **Owner age / empty-nester → pending** → `ingest_voters.js` (TX voter file).
 - **Phone/email → pending** → `ingest_contacts.js` (paid skip-trace) + DNC keys.
 

@@ -423,6 +423,13 @@ Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 
   - Infra: backend host hardened with a 2 GB swapfile; pm2-startup +
     cloudflared-on-boot confirmed (survives reboot).
 
+- `[#031]` **Automated monthly pre-foreclosure refresh.** New
+  `backend/refresh_foreclosures.sh` (installed as a box cron, `0 3 7 * *` UTC)
+  scrapes a rolling 4-month window (absorbs the county's posting lag), combines,
+  and reloads `legal_events`. Fail-safe: skips the reload when the scrape yields 0
+  records, so a county-site outage/lag can't wipe the live feed. Logs to
+  `~/hunter/foreclosure_cron.log`; runnable manually for ad-hoc refreshes.
+
 ### Flagged for prior-art / patent review (Handoff Rule 6)
 - New `calculateUrgencyScore()` (0–100): weights balance size, years behind,
   absentee ownership (no homestead exemption), and foreclosure risk. Used as
