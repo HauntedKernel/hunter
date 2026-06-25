@@ -430,6 +430,19 @@ Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 
   records, so a county-site outage/lag can't wipe the live feed. Logs to
   `~/hunter/foreclosure_cron.log`; runnable manually for ad-hoc refreshes.
 
+- `[#032]` **Refreshed the tax-roll snapshot to current data (2026-06-22 TRW).**
+  Rebuilt `tax_roll.db` from the current weekly Dallas County TRW export (was a
+  stale 2025-08 snapshot): 960,321 properties / 85,268 delinquent / 303,948
+  absentee (delinquency is now current — the old data predated the 2025 tax-year
+  delinquency date). Built in isolation and swapped atomically; old DB kept as
+  `tax_roll.db.bak-20250825`. `process_full_tax_roll.js` no longer hardcodes the
+  data filename — it takes an optional path arg or auto-picks the newest
+  `flat404.*` in `src/data` (the TRW file ID changes each release).
+  - FINDING: a fresher snapshot does NOT lift the foreclosure match rate (6 vs 7
+    on the same notices) — foreclosed owners change hands, so current ownership
+    *reduces* grantor-name matches on past foreclosures. The win is current
+    delinquency/absentee data for the core signals, not foreclosure recall.
+
 ### Flagged for prior-art / patent review (Handoff Rule 6)
 - New `calculateUrgencyScore()` (0–100): weights balance size, years behind,
   absentee ownership (no homestead exemption), and foreclosure risk. Used as

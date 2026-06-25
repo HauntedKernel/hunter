@@ -18,9 +18,24 @@ async function processFullTaxRoll() {
     await processor.initializeDatabase();
     await processor.db.exec('DELETE FROM tax_roll');
     
-    // Read the main data file
-    const dataFile = path.join(__dirname, 'src/data/flat404.DALLASCOUNTY.20250825.701243');
-    const readStream = require('fs').createReadStream(dataFile, { encoding: 'ascii' });
+    // Read the main data file. Pass an explicit path as argv[2], else auto-pick
+    // the newest flat404.* file in src/data (the unzipped TRW export). The TRW
+    // file ID changes each weekly release, so don't hardcode a name.
+    const realFs = require('fs');
+    const dataDir = path.join(__dirname, 'src/data');
+    let dataFile = process.argv[2];
+    if (!dataFile) {
+      const matches = realFs.readdirSync(dataDir).filter(f => f.startsWith('flat404.'));
+      if (!matches.length) {
+        throw new Error('No flat404.* tax-roll file in src/data. Download the current ' +
+          'TRW zip (URL on https://www.dallascounty.org/departments/tax/tax-roll.php) ' +
+          'and unzip it into src/data first.');
+      }
+      matches.sort((a, b) => realFs.statSync(path.join(dataDir, b)).mtimeMs - realFs.statSync(path.join(dataDir, a)).mtimeMs);
+      dataFile = path.join(dataDir, matches[0]);
+    }
+    console.log(`📄 Using tax-roll data file: ${dataFile}`);
+    const readStream = realFs.createReadStream(dataFile, { encoding: 'ascii' });
     
     let content = '';
     let lineCount = 0;

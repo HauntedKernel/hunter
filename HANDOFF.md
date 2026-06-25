@@ -109,9 +109,26 @@ Backend lives at `~/hunter` on the Oracle box (`170.9.249.210`):
     rest use Lot/Block legal descriptions, ~30% precise-match on real data).
     ~1.6 min/small file OCR on the ARM box; a full run is ~60-90 min (niced).
   - **Recency caveat:** the county's online postings lag, so loaded sales may be
-    recent-past rather than strictly upcoming. Bigger recall lever = a fresher
-    `tax_roll.db` snapshot (current one is 2025-08, ~10 mo old → some grantors
-    have since changed hands and won't match).
+    recent-past rather than strictly upcoming. NOTE (learned 2026-06-25): a fresher
+    tax-roll snapshot does NOT lift the foreclosure match rate — foreclosed owners
+    change hands, so fresh ownership *reduces* name matches for past foreclosures.
+    Recall is mainly capped by notices that use Lot/Block legal descriptions (no
+    address). The real recall lever would be DCAD account-id mapping, not freshness.
+
+## Tax-roll snapshot — refreshed 2026-06-25 to the 2026-06-22 TRW
+`tax_roll.db` is the current weekly TRW (960,321 properties / 85,268 delinquent /
+303,948 absentee), up from the stale 2025-08 snapshot (delinquency was ~10 mo old).
+Old DB kept as `~/hunter/backend/src/data/tax_roll.db.bak-20250825` (rollback:
+`mv` it back + `pm2 restart hunter-api`). To refresh again (the TRW updates weekly,
+Fridays):
+1. Get the current zip URL from https://www.dallascounty.org/departments/tax/tax-roll.php
+   (the `trwfile.NNNNNN.zip` id changes each release).
+2. Build in isolation (don't touch the live DB until verified):
+   `mkdir -p /tmp/tb && cp -r ~/hunter/backend/src /tmp/tb/src && ln -sf ~/hunter/backend/node_modules /tmp/tb/node_modules && cp ~/hunter/backend/*.js /tmp/tb/ && rm -f /tmp/tb/src/data/*.db`
+   `cd /tmp/tb/src/data && curl -A "Mozilla/5.0" -o trw.zip "<URL>" && unzip -o trw.zip` (needs `unzip`)
+   `cd /tmp/tb && node process_full_tax_roll.js src/data/usr2/spool/act/flat404.*` (auto-picks newest if no arg)
+   `node migrate_signal_columns.js` · re-ingest foreclosures: `node ingest_legal_events.js /tmp/fc_keep.csv`
+3. Verify counts, then swap: `cp ~/hunter/backend/src/data/tax_roll.db{,.bak-$(date +%Y%m%d)} && mv /tmp/tb/src/data/tax_roll.db ~/hunter/backend/src/data/ && pm2 restart hunter-api`
 - **Owner age / empty-nester → pending** → `ingest_voters.js` (TX voter file).
 - **Phone/email → pending** → `ingest_contacts.js` (paid skip-trace) + DNC keys.
 
