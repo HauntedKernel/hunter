@@ -513,6 +513,23 @@ Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 
   documented as open legal work. Recommended minimal stack: DCAD + Clerk deeds +
   per-hit skip-trace + 311.
 
+- `[#039]` **Free-and-clear (lien) signal + ingester (the #1 round-2 build).**
+  Mortgage rate lock-in is the best-quantified sale suppressor; the inversion is that
+  a **free-and-clear** owner (no open mortgage) faces no lock-in and is more sellable,
+  especially long-tenure/elderly (RESEARCH.md §A). New `backend/ingest_liens.js`
+  loads a lien feed into a `liens` table (auto-created in `initializeDatabase()`),
+  matched account_id → address+owner. `free_and_clear` is taken from the source or
+  derived (`open_lien_count == 0` / `mortgage_balance <= 0`); equity fields are stored
+  for a future high-equity signal. Wired through discovery (`FREECLEAR` condition +
+  ranking, `free_and_clear`/`equity_pct` in results), the scorer (`freeAndClear`
+  factor weight 10 — a positive *modifier*, not a distress trigger — plus a
+  free-and-clear × elderly **synergy** +8 "natural downsizer"), and the frontend (🏦
+  toggle + badge + filter). Feed PENDING (no native lien data): DCAD bulk + Clerk
+  deeds, or a PropStream export; `backend/liens.sample.csv` documents the CSV.
+  Verified end-to-end on the local snapshot (account match, derived FAC, discovery,
+  synergy scoring). The `liens` join is a column-scoped subquery to avoid an
+  `owner_name` ambiguity with the tax roll.
+
 ### Flagged for prior-art / patent review (Handoff Rule 6)
 - New `calculateUrgencyScore()` (0–100): weights balance size, years behind,
   absentee ownership (no homestead exemption), and foreclosure risk. Used as

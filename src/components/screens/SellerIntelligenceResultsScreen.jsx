@@ -14,6 +14,7 @@ const SIGNAL_META = {
   elderlyOwner:   { icon: '👵', label: 'Elderly', cls: 'badge-signal', priority: 6 },
   emptyNester:    { icon: '🪺', label: 'Empty-nester', cls: 'badge-signal', priority: 7 },
   absenteeOwner:  { icon: '🏚️', label: 'Absentee', cls: 'badge-signal', priority: 8 },
+  freeAndClear:   { icon: '🏦', label: 'Free & clear', cls: 'badge-signal', priority: 9 },
 };
 
 // Factors that actually fired (points > 0), known discovery signals first (by
@@ -332,7 +333,8 @@ const SellerIntelligenceResultsScreen = ({ onNavigate, searchParams }) => {
     { key: 'taxDelinquency', label: '🔴 Tax delinquent' },
     { key: 'elderlyOwner', label: '👵 Elderly / Disabled' },
     { key: 'absenteeOwner', label: '🏚️ Absentee' },
-    { key: 'emptyNester', label: '🪺 Empty-nester' }
+    { key: 'emptyNester', label: '🪺 Empty-nester' },
+    { key: 'freeAndClear', label: '🏦 Free & clear' }
   ];
   const signalCount = (key) => key === 'all'
     ? leads.length

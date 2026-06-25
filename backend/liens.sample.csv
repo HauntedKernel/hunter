@@ -1,0 +1,4 @@
+account_id,address,owner_name,free_and_clear,open_lien_count,mortgage_balance,est_value,est_equity,last_mortgage_date,last_mortgage_amount,source
+00000123456000000,123 Example St Dallas TX 75216,Jane Doe,1,0,0,250000,250000,,,propstream
+00000234567000000,,John Smith,,1,180000,300000,120000,2021-06-01,200000,propstream
+00000345678000000,456 Sample Ave Dallas TX 75217,Maria Garcia,,0,,210000,210000,,,clerk_deeds

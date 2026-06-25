@@ -174,6 +174,29 @@ class TaxRollProcessor {
         );
         CREATE INDEX IF NOT EXISTS idx_divorce_events_account ON divorce_events(account_id);
       `);
+
+      // Mortgage / lien status (free-and-clear + equity) — populated by
+      // ingest_liens.js from a lien feed (aggregator export or Clerk deed-of-trust
+      // records). free_and_clear=1 means no open mortgage → no rate lock-in, a
+      // positive sellability modifier (RESEARCH.md §A). Created here so discovery's
+      // LEFT JOIN always resolves even before any feed is loaded.
+      await this.db.exec(`
+        CREATE TABLE IF NOT EXISTS liens (
+          account_id TEXT PRIMARY KEY,
+          owner_name TEXT,
+          free_and_clear INTEGER DEFAULT 0,
+          open_lien_count INTEGER,
+          mortgage_balance REAL,
+          est_value REAL,
+          est_equity REAL,
+          equity_pct REAL,
+          last_mortgage_date TEXT,
+          last_mortgage_amount REAL,
+          source TEXT,
+          match_method TEXT,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
       
       this.logger.info('Database initialized successfully');
       
@@ -770,7 +793,7 @@ class TaxRollProcessor {
       // `taxSuit` (active tax-foreclosure suit) is the strongest single signal in
       // our snapshot-diff backtest (2.45x lift — see RESEARCH.md §B), so it's on
       // by default and surfaced rather than excluded.
-      const ALL = { delinquent: true, elderly: true, absentee: true, preForeclosure: true, emptyNester: true, estate: true, taxSuit: true, divorce: true };
+      const ALL = { delinquent: true, elderly: true, absentee: true, preForeclosure: true, emptyNester: true, estate: true, taxSuit: true, divorce: true, freeAndClear: true };
       let signals = options.signals || ALL;
       if (!Object.values(signals).some(Boolean)) signals = ALL;
 
@@ -811,11 +834,15 @@ class TaxRollProcessor {
           LEFT JOIN (
             SELECT account_id, filed_date FROM divorce_events
             WHERE account_id IS NOT NULL GROUP BY account_id
-          ) de ON de.account_id = t.account_id`;
+          ) de ON de.account_id = t.account_id
+          LEFT JOIN (
+            SELECT account_id, free_and_clear, equity_pct FROM liens
+          ) lq ON lq.account_id = t.account_id`;
       const SELECT = `t.*, le.event_type AS legal_event_type, le.sale_date AS legal_sale_date,
             (le.account_id IS NOT NULL) AS has_preforeclosure,
             vd.owner_age AS owner_age, vd.empty_nester AS empty_nester,
-            (de.account_id IS NOT NULL) AS has_divorce, de.filed_date AS divorce_filed_date`;
+            (de.account_id IS NOT NULL) AS has_divorce, de.filed_date AS divorce_filed_date,
+            lq.free_and_clear AS free_and_clear, lq.equity_pct AS equity_pct`;
 
       // elderly fires on the tax exemption OR a voter-file age >= 65.
       const ELDERLY = '(over65_exemption = 1 OR disabled_exemption = 1 OR vd.owner_age >= 65)';
@@ -832,10 +859,13 @@ class TaxRollProcessor {
       // Divorce / family-law filing matched to this owner (a top mobility driver).
       // Joined from divorce_events; empty until ingest_divorce_events.js loads a feed.
       const DIVORCE = '(de.account_id IS NOT NULL)';
+      // Free-and-clear — no open mortgage, so no rate lock-in friction (a positive
+      // sellability modifier). Joined from liens; empty until ingest_liens.js loads.
+      const FREECLEAR = '(lq.free_and_clear = 1)';
 
       // Blend (reserve slots for current owners) only when delinquent is hunted
       // alongside a non-delinquent signal — otherwise one ranked query is enough.
-      const blend = signals.delinquent && (signals.elderly || signals.absentee || signals.emptyNester || signals.estate || signals.divorce);
+      const blend = signals.delinquent && (signals.elderly || signals.absentee || signals.emptyNester || signals.estate || signals.divorce || signals.freeAndClear);
 
       if (blend) {
         const delqTarget = Math.ceil(limit * 0.6);
@@ -843,7 +873,7 @@ class TaxRollProcessor {
           SELECT ${SELECT} FROM ${FROM}
           WHERE ${baseWhere} AND is_delinquent = 1
           ORDER BY (${PREFORE} * 35) + (${signals.taxSuit ? TAXSUIT : '0'} * 30) + MIN(COALESCE(delinquent_amount, 0) / 1000.0, 40)
-            + (${ELDERLY} * 5) + (${ABSENTEE} * 5) + (${EMPTYNEST} * 5) + (${ESTATE} * 8) + (${DIVORCE} * 8) DESC,
+            + (${ELDERLY} * 5) + (${ABSENTEE} * 5) + (${EMPTYNEST} * 5) + (${ESTATE} * 8) + (${DIVORCE} * 8) + (${FREECLEAR} * 6) DESC,
             delinquent_amount DESC, account_id
           LIMIT ?`;
         const delq = await this.db.all(delqSql, [...baseParams, delqTarget]);
@@ -857,13 +887,14 @@ class TaxRollProcessor {
         if (signals.emptyNester) nonDelqConds.push(EMPTYNEST);
         if (signals.estate) nonDelqConds.push(ESTATE);
         if (signals.divorce) nonDelqConds.push(DIVORCE);
+        if (signals.freeAndClear) nonDelqConds.push(FREECLEAR);
         const nonDelqTarget = limit - delq.length;
         let nonDelq = [];
         if (nonDelqTarget > 0 && nonDelqConds.length) {
           const nonDelqSql = `
             SELECT ${SELECT} FROM ${FROM}
             WHERE ${baseWhere} AND is_delinquent = 0 AND (${nonDelqConds.join(' OR ')})
-            ORDER BY (${PREFORE} * 35) + (${ELDERLY} * 10) + (${ABSENTEE} * 12) + (${EMPTYNEST} * 12) + (${ESTATE} * 14) + (${DIVORCE} * 16) DESC, total_value DESC, account_id
+            ORDER BY (${PREFORE} * 35) + (${ELDERLY} * 10) + (${ABSENTEE} * 12) + (${EMPTYNEST} * 12) + (${ESTATE} * 14) + (${DIVORCE} * 16) + (${FREECLEAR} * 10) DESC, total_value DESC, account_id
             LIMIT ?`;
           nonDelq = await this.db.all(nonDelqSql, [...baseParams, nonDelqTarget]);
         }
@@ -926,6 +957,10 @@ class TaxRollProcessor {
         conds.push(DIVORCE);
         orderTerms.push(`(${DIVORCE} * 16)`);
       }
+      if (signals.freeAndClear) {
+        conds.push(FREECLEAR);
+        orderTerms.push(`(${FREECLEAR} * 10)`);
+      }
       const orderExpr = orderTerms.length ? orderTerms.join(' + ') : 'total_value';
 
       const sql = `
@@ -963,6 +998,9 @@ class TaxRollProcessor {
     const isTaxSuit = !!record.suit_pending;
     // Divorce / family-law filing matched to this owner (joined from divorce_events).
     const isDivorce = !!record.has_divorce;
+    // Free-and-clear — no open mortgage (joined from liens). No rate lock-in → more
+    // sellable, especially paired with elderly / long tenure.
+    const isFreeAndClear = record.free_and_clear === 1;
 
     // Calculate motivation score based on multiple factors
     let motivationScore = 0;
@@ -996,6 +1034,8 @@ class TaxRollProcessor {
       isTaxSuit: isTaxSuit,
       isDivorce: isDivorce,
       divorceFiledDate: record.divorce_filed_date || null,
+      isFreeAndClear: isFreeAndClear,
+      equityPct: record.equity_pct != null ? record.equity_pct : null,
       city: record.city,
       state: record.state,
       zipCode: record.zip_code,

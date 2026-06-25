@@ -138,7 +138,14 @@ Fridays):
   `initializeDatabase()`, so deploy needs only a `pm2 restart` (no migration). Load
   with `node ingest_divorce_events.js <file.csv>`. Source TBD (round-2 research).
   See `backend/divorce_events.sample.csv` for the CSV shape.
+- **Free-and-clear (lien) → ingester built, feed PENDING.** `ingest_liens.js` →
+  `liens` table (auto-created; deploy = pm2 restart, no migration). `freeAndClear`
+  signal + free-and-clear×elderly synergy. Highest-value new signal; feed from DCAD
+  bulk + Clerk deeds (free) or a PropStream export. `node ingest_liens.js <csv>`.
+  CSV shape in `backend/liens.sample.csv`.
 - **Owner age / empty-nester → pending** → `ingest_voters.js` (TX voter file).
+  ⚠️ NOTE: the TX voter file is illegal for commercial marketing (Elec. Code
+  §18.067) — use licensed marketing data instead (RESEARCH.md §E).
 - **Phone/email → pending** → `ingest_contacts.js` (paid skip-trace) + DNC keys.
 - **Signal research + on-data validation:** see `RESEARCH.md` (measured per-signal
   lift; scorer recalibrated to v1.1; elderly-alone has no lift, absentee×elderly

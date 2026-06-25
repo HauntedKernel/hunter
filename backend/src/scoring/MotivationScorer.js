@@ -64,6 +64,9 @@ class MotivationScorer {
       divorce: 16,               // Divorce/family-law filing matched to the owner. One of the largest
                                  // mobility drivers in the literature (RESEARCH.md §A); the marital home
                                  // is commonly sold. Not yet backtested on our data — conservative weight.
+      freeAndClear: 10,          // No open mortgage → no rate lock-in friction (RESEARCH.md §A). A
+                                 // positive sellability MODIFIER, not a distress trigger — modest weight.
+                                 // Most of its value is via the free-and-clear × elderly synergy below.
 
       // Signal-synergy (interaction) bonuses — empirically derived from the
       // 2025-08 → 2026-06 snapshot-diff backtest on 675k Dallas real-property
@@ -71,6 +74,8 @@ class MotivationScorer {
       // can't represent interaction; these capture it. See RESEARCH.md.
       absenteeElderlySynergy: 14, // absentee+elderly measured 3.07x lift (vs absentee 1.64x, elderly 1.00x)
       estateAbsenteeSynergy: 6,   // estate+absentee measured 1.87x lift (vs estate 1.60x)
+      freeClearElderlySynergy: 8, // free-and-clear + elderly = the "natural downsizer" (no lock-in + life
+                                  // stage). Literature-based (RESEARCH.md §A), not yet backtested on our data.
 
       // Legal-event signal (GATED OFF by default — see STRATEGY.md §6).
       // Public record, but high legal/reputational risk: requires an arrest
@@ -230,6 +235,7 @@ class MotivationScorer {
       isEstate: !!propertyData.signals?.estate,
       isTaxSuit: !!propertyData.signals?.taxSuit,
       isDivorce: !!propertyData.signals?.divorce,
+      isFreeAndClear: !!propertyData.signals?.freeAndClear,
       ownerAge: propertyData.signals?.ownerAge || null,
       preForeclosure: propertyData.signals?.preForeclosure || null,
       arrest: propertyData.signals?.arrest || null,
@@ -270,6 +276,7 @@ class MotivationScorer {
     factors.preForeclosure = this.calculatePreForeclosureScore(context);
     factors.taxSuit = this.calculateTaxSuitScore(context);
     factors.divorce = this.calculateDivorceScore(context);
+    factors.freeAndClear = this.calculateFreeAndClearScore(context);
 
     // Life-stage / ownership signals
     factors.absenteeOwner = this.calculateAbsenteeScore(context);
@@ -307,6 +314,10 @@ class MotivationScorer {
     if (context.isEstate && context.isAbsentee) {
       score += this.scoringWeights.estateAbsenteeSynergy;
       bonuses.push('estate + absentee (≈1.87x measured lift)');
+    }
+    if (context.isFreeAndClear && isElderly) {
+      score += this.scoringWeights.freeClearElderlySynergy;
+      bonuses.push('free-and-clear + elderly (natural downsizer)');
     }
 
     if (score === 0) {
@@ -377,6 +388,25 @@ class MotivationScorer {
       factor: 'Divorce / family-law filing matched to owner',
       category: 'life-stage',
       severity: 'high'
+    };
+  }
+
+  /**
+   * Free-and-clear — the owner has no open mortgage, so they face no rate lock-in
+   * friction (RESEARCH.md §A). A positive *sellability* modifier: free-and-clear
+   * owners (especially long-tenure / elderly) can transact without giving up a
+   * cheap mortgage. Joined from `liens`; null until a lien feed is ingested. Not a
+   * distress trigger and not yet backtested on our own data.
+   */
+  calculateFreeAndClearScore(context) {
+    if (!context.isFreeAndClear) {
+      return { score: 0, factor: 'Mortgage status unknown or financed', category: 'financial' };
+    }
+    return {
+      score: this.scoringWeights.freeAndClear,
+      factor: 'Free-and-clear — no open mortgage (no rate lock-in)',
+      category: 'financial',
+      severity: 'medium'
     };
   }
 

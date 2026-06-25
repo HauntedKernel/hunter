@@ -148,14 +148,17 @@ Still additive + capped at 100; this is an interim calibration, not the hazard m
 ## D. Next actions (ranked — updated after round-2 source research, §E)
 1. ✅ **DONE — `tax suit pending`** (CHANGELOG #036). Was *excluded* from every
    search; now a first-class signal (weight 28), on by default. The free 2.45x win.
-2. **Free-and-clear / lien signal → now the clear #1 build.** Round-2 confirms it's
-   both the highest-value new signal AND free/obtainable: **DCAD bulk files** (free,
+2. ✅ **DONE (ingester + signal) — free-and-clear** (CHANGELOG #039).
+   `ingest_liens.js` + `liens` table (auto-created) + `freeAndClear` signal across
+   discovery/scorer (weight 10, positive modifier) /UI (🏦), plus a free-and-clear ×
+   elderly **synergy** (+8, "natural downsizer"). Equity fields stored for a future
+   high-equity signal. ⏳ Needs the **lien data feed**: **DCAD bulk files** (free,
    ownership/value/tenure) + **Dallas County Clerk `dallas.tx.publicsearch.us`**
-   deeds + deeds-of-trust + releases (free to search). Derive free-and-clear =
-   no open deed-of-trust (or DOT with a matching release). ⚠️ Verify the property-
-   portal ToS before bulk/programmatic extraction (the *court* portal bans
-   commercial use; the property portal's terms are unconfirmed). Fastest validation
-   path: **PropStream ($99/mo)** already exposes a free-and-clear/equity filter.
+   deeds/DOTs/releases (free to search; derive FAC = no open DOT), OR a one-shot
+   **PropStream ($99/mo)** export (its free-and-clear/equity filter → CSV). ⚠️ Verify
+   the property-portal ToS before bulk extraction (the *court* portal bans commercial
+   use; the property portal's terms are unconfirmed). Load via
+   `node ingest_liens.js <file.csv>`.
 3. **311 code-compliance signal → cheap, free, easy add.** Dallas OpenData **311
    Service Requests (`gc4d-8a49`)** — hourly, PDDL public-domain, programmatic via
    SODA API; code-compliance request types are a distress signal. (NOT the archived

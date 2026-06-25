@@ -28,7 +28,8 @@ const SellersDashboardScreen = ({ onNavigate }) => {
     absentee: true,
     emptyNester: true,
     estate: true,
-    divorce: true
+    divorce: true,
+    freeAndClear: true
   });
 
   // Quick-fill suggestions for the area input — real Dallas neighborhoods/ZIPs.
@@ -83,7 +84,8 @@ const SellersDashboardScreen = ({ onNavigate }) => {
     { key: 'delinquent', icon: '🔴', label: 'Tax Delinquent', desc: 'Owes back property taxes' },
     { key: 'elderly', icon: '👵', label: 'Elderly / Disabled', desc: 'Over-65 or disability exemption' },
     { key: 'absentee', icon: '🏚️', label: 'Absentee Owner', desc: 'Mailing address differs from the property' },
-    { key: 'emptyNester', icon: '🪺', label: 'Empty Nester', desc: 'Voter file: kids likely moved out' }
+    { key: 'emptyNester', icon: '🪺', label: 'Empty Nester', desc: 'Voter file: kids likely moved out' },
+    { key: 'freeAndClear', icon: '🏦', label: 'Free & Clear', desc: 'No mortgage — no rate lock-in (needs lien feed)' }
   ];
 
   return (
