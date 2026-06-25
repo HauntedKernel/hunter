@@ -530,6 +530,24 @@ Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 
   synergy scoring). The `liens` join is a column-scoped subquery to avoid an
   `owner_name` ambiguity with the tax roll.
 
+- `[#040]` **Deed → free-and-clear derivation engine (DIY lien reconstruction).**
+  New `backend/derive_liens_from_deeds.js` reconstructs open-lien status from raw
+  Dallas County Clerk deed records (deeds-of-trust + releases) and emits the
+  `liens.csv` that `ingest_liens.js` consumes — the free path to the free-and-clear
+  signal (vs. paying PropStream). Model: for every property in the deed extract,
+  `free_and_clear = (open/unreleased deed-of-trust count == 0)`, which handles cash
+  buyers (deed, no DOT), paid-off mortgages (DOT + release), and open mortgages.
+  Releases pair to DOTs by `related_instrument` link, falling back to greedy
+  owner+property+date pairing. Instruments match to DCAD accounts via property
+  street+ZIP + either party name (name-only fallback). `backend/deeds.sample.csv`
+  documents the GovOS/Kofile-style input. Verified end-to-end on real local
+  accounts across all four scenarios (link-release, date-release, open, cash) →
+  derive → ingest → discovery surfaced exactly the 3 free-and-clear owners.
+  ⚠️ Still needs the actual deed data: the Clerk portal (dallas.tx.publicsearch.us)
+  is ToS-gated for bulk, so acquisition is per-property pulls / a bulk license /
+  PIA — the engine is ready for whatever extract you obtain. Completeness caveat:
+  a free-and-clear assertion is only as complete as the deed extract for that property.
+
 ### Flagged for prior-art / patent review (Handoff Rule 6)
 - New `calculateUrgencyScore()` (0–100): weights balance size, years behind,
   absentee ownership (no homestead exemption), and foreclosure risk. Used as

@@ -158,7 +158,10 @@ Still additive + capped at 100; this is an interim calibration, not the hazard m
    **PropStream ($99/mo)** export (its free-and-clear/equity filter → CSV). ⚠️ Verify
    the property-portal ToS before bulk extraction (the *court* portal bans commercial
    use; the property portal's terms are unconfirmed). Load via
-   `node ingest_liens.js <file.csv>`.
+   `node ingest_liens.js <file.csv>`. ✅ The free DIY path's derivation engine is
+   built + tested: `derive_liens_from_deeds.js` reconstructs open-lien status from
+   Clerk deeds-of-trust + releases → `liens.csv` (CHANGELOG #040). Only the deed
+   *data* (per-property pulls / bulk license / PIA) is still to be acquired.
 3. **311 code-compliance signal → cheap, free, easy add.** Dallas OpenData **311
    Service Requests (`gc4d-8a49`)** — hourly, PDDL public-domain, programmatic via
    SODA API; code-compliance request types are a distress signal. (NOT the archived
