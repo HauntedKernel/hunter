@@ -155,6 +155,25 @@ class TaxRollProcessor {
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
       `);
+
+      // Divorce / family-law filings (a top mobility-driver life event) —
+      // populated by ingest_divorce_events.js. Created here so discovery's LEFT
+      // JOIN always resolves even before any feed is loaded.
+      await this.db.exec(`
+        CREATE TABLE IF NOT EXISTS divorce_events (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          account_id TEXT,
+          party1_name TEXT,
+          party2_name TEXT,
+          filed_date TEXT,
+          case_number TEXT,
+          court TEXT,
+          source TEXT,
+          match_method TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_divorce_events_account ON divorce_events(account_id);
+      `);
       
       this.logger.info('Database initialized successfully');
       
@@ -746,10 +765,27 @@ class TaxRollProcessor {
       ];
       const govClause = GOV_OWNER_PATTERNS.map(() => 'owner_name NOT LIKE ?').join('\n          AND ');
 
+      // Which motivation signals to hunt for (UI toggles). Default: all.
+      // An all-off selection falls back to all-on so a search never returns empty.
+      // `taxSuit` (active tax-foreclosure suit) is the strongest single signal in
+      // our snapshot-diff backtest (2.45x lift — see RESEARCH.md §B), so it's on
+      // by default and surfaced rather than excluded.
+      const ALL = { delinquent: true, elderly: true, absentee: true, preForeclosure: true, emptyNester: true, estate: true, taxSuit: true, divorce: true };
+      let signals = options.signals || ALL;
+      if (!Object.values(signals).some(Boolean)) signals = ALL;
+
+      // Bankruptcy is always excluded (genuinely un-transactable). A pending tax
+      // suit USED to be excluded too, but it's a top motivation signal (owner is
+      // mid tax-foreclosure and can still sell to pay it off), so we only filter
+      // it out when the taxSuit signal is off.
+      const suitExclusion = signals.taxSuit
+        ? ''
+        : `AND suit_pending = 0
+          AND payment_status != 'SUIT_PENDING'`;
       const baseWhere = `${areaFilter.clause}
-          AND suit_pending = 0
           AND bankruptcy_filed = 0
-          AND payment_status NOT IN ('SUIT_PENDING', 'BANKRUPTCY')
+          AND payment_status != 'BANKRUPTCY'
+          ${suitExclusion}
           AND (is_delinquent = 0 OR delinquent_amount >= ?)
           AND owner_name IS NOT NULL
           AND ${govClause}
@@ -763,12 +799,6 @@ class TaxRollProcessor {
         ...(ptFilter ? ptFilter.params : [])
       ];
 
-      // Which motivation signals to hunt for (UI toggles). Default: all.
-      // An all-off selection falls back to all-on so a search never returns empty.
-      const ALL = { delinquent: true, elderly: true, absentee: true, preForeclosure: true, emptyNester: true, estate: true };
-      let signals = options.signals || ALL;
-      if (!Object.values(signals).some(Boolean)) signals = ALL;
-
       // Join legal events (pre-foreclosure / lis pendens) and voter demographics
       // (owner age / empty-nester). Both deduped to one row per account so joins
       // can't multiply results; both empty until their feeds are ingested.
@@ -777,10 +807,15 @@ class TaxRollProcessor {
             SELECT account_id, event_type, sale_date FROM legal_events
             WHERE account_id IS NOT NULL GROUP BY account_id
           ) le ON le.account_id = t.account_id
-          LEFT JOIN voter_demographics vd ON vd.account_id = t.account_id`;
+          LEFT JOIN voter_demographics vd ON vd.account_id = t.account_id
+          LEFT JOIN (
+            SELECT account_id, filed_date FROM divorce_events
+            WHERE account_id IS NOT NULL GROUP BY account_id
+          ) de ON de.account_id = t.account_id`;
       const SELECT = `t.*, le.event_type AS legal_event_type, le.sale_date AS legal_sale_date,
             (le.account_id IS NOT NULL) AS has_preforeclosure,
-            vd.owner_age AS owner_age, vd.empty_nester AS empty_nester`;
+            vd.owner_age AS owner_age, vd.empty_nester AS empty_nester,
+            (de.account_id IS NOT NULL) AS has_divorce, de.filed_date AS divorce_filed_date`;
 
       // elderly fires on the tax exemption OR a voter-file age >= 65.
       const ELDERLY = '(over65_exemption = 1 OR disabled_exemption = 1 OR vd.owner_age >= 65)';
@@ -791,18 +826,24 @@ class TaxRollProcessor {
       // estate or heirs (a top-tier "death" seller signal, per STRATEGY.md).
       // Precise patterns so "REAL ESTATE LLC" business names don't match.
       const ESTATE = "(owner_name LIKE '%ESTATE OF%' OR owner_name LIKE '%LIFE ESTATE%' OR owner_name LIKE '%HEIRS%' OR owner_name LIKE '% ET AL%')";
+      // Active tax-foreclosure suit — strongest single signal (2.45x). A suit
+      // implies the account is delinquent, so these rank within the delinquent pool.
+      const TAXSUIT = '(suit_pending = 1)';
+      // Divorce / family-law filing matched to this owner (a top mobility driver).
+      // Joined from divorce_events; empty until ingest_divorce_events.js loads a feed.
+      const DIVORCE = '(de.account_id IS NOT NULL)';
 
       // Blend (reserve slots for current owners) only when delinquent is hunted
       // alongside a non-delinquent signal — otherwise one ranked query is enough.
-      const blend = signals.delinquent && (signals.elderly || signals.absentee || signals.emptyNester || signals.estate);
+      const blend = signals.delinquent && (signals.elderly || signals.absentee || signals.emptyNester || signals.estate || signals.divorce);
 
       if (blend) {
         const delqTarget = Math.ceil(limit * 0.6);
         const delqSql = `
           SELECT ${SELECT} FROM ${FROM}
           WHERE ${baseWhere} AND is_delinquent = 1
-          ORDER BY (${PREFORE} * 35) + MIN(COALESCE(delinquent_amount, 0) / 1000.0, 40)
-            + (${ELDERLY} * 5) + (${ABSENTEE} * 5) + (${EMPTYNEST} * 5) + (${ESTATE} * 8) DESC,
+          ORDER BY (${PREFORE} * 35) + (${signals.taxSuit ? TAXSUIT : '0'} * 30) + MIN(COALESCE(delinquent_amount, 0) / 1000.0, 40)
+            + (${ELDERLY} * 5) + (${ABSENTEE} * 5) + (${EMPTYNEST} * 5) + (${ESTATE} * 8) + (${DIVORCE} * 8) DESC,
             delinquent_amount DESC, account_id
           LIMIT ?`;
         const delq = await this.db.all(delqSql, [...baseParams, delqTarget]);
@@ -815,13 +856,14 @@ class TaxRollProcessor {
         if (signals.preForeclosure) nonDelqConds.push(PREFORE);
         if (signals.emptyNester) nonDelqConds.push(EMPTYNEST);
         if (signals.estate) nonDelqConds.push(ESTATE);
+        if (signals.divorce) nonDelqConds.push(DIVORCE);
         const nonDelqTarget = limit - delq.length;
         let nonDelq = [];
         if (nonDelqTarget > 0 && nonDelqConds.length) {
           const nonDelqSql = `
             SELECT ${SELECT} FROM ${FROM}
             WHERE ${baseWhere} AND is_delinquent = 0 AND (${nonDelqConds.join(' OR ')})
-            ORDER BY (${PREFORE} * 35) + (${ELDERLY} * 10) + (${ABSENTEE} * 12) + (${EMPTYNEST} * 12) + (${ESTATE} * 14) DESC, total_value DESC, account_id
+            ORDER BY (${PREFORE} * 35) + (${ELDERLY} * 10) + (${ABSENTEE} * 12) + (${EMPTYNEST} * 12) + (${ESTATE} * 14) + (${DIVORCE} * 16) DESC, total_value DESC, account_id
             LIMIT ?`;
           nonDelq = await this.db.all(nonDelqSql, [...baseParams, nonDelqTarget]);
         }
@@ -876,6 +918,14 @@ class TaxRollProcessor {
         conds.push(ESTATE);
         orderTerms.push(`(${ESTATE} * 14)`);
       }
+      if (signals.taxSuit) {
+        conds.push(TAXSUIT);
+        orderTerms.push(`(${TAXSUIT} * 30)`);
+      }
+      if (signals.divorce) {
+        conds.push(DIVORCE);
+        orderTerms.push(`(${DIVORCE} * 16)`);
+      }
       const orderExpr = orderTerms.length ? orderTerms.join(' + ') : 'total_value';
 
       const sql = `
@@ -909,6 +959,10 @@ class TaxRollProcessor {
     // Estate / inherited — owner deceased, property held by an estate or heirs.
     // Read straight from the owner-name patterns (same as the ESTATE SQL filter).
     const isEstate = /ESTATE OF|LIFE ESTATE|HEIRS|\bET AL\b/i.test(record.owner_name || '');
+    // Active tax-foreclosure suit — strongest single motivation signal (2.45x).
+    const isTaxSuit = !!record.suit_pending;
+    // Divorce / family-law filing matched to this owner (joined from divorce_events).
+    const isDivorce = !!record.has_divorce;
 
     // Calculate motivation score based on multiple factors
     let motivationScore = 0;
@@ -939,6 +993,9 @@ class TaxRollProcessor {
       ownerAge: ownerAge,
       isEmptyNester: isEmptyNester,
       isEstate: isEstate,
+      isTaxSuit: isTaxSuit,
+      isDivorce: isDivorce,
+      divorceFiledDate: record.divorce_filed_date || null,
       city: record.city,
       state: record.state,
       zipCode: record.zip_code,

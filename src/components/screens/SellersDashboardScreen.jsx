@@ -22,11 +22,13 @@ const SellersDashboardScreen = ({ onNavigate }) => {
   // Motivation signals to hunt for (drives the backend discovery query).
   const [signals, setSignals] = useState({
     preForeclosure: true,
+    taxSuit: true,
     delinquent: true,
     elderly: true,
     absentee: true,
     emptyNester: true,
-    estate: true
+    estate: true,
+    divorce: true
   });
 
   // Quick-fill suggestions for the area input — real Dallas neighborhoods/ZIPs.
@@ -75,7 +77,9 @@ const SellersDashboardScreen = ({ onNavigate }) => {
   // estate) lead. `strong` flags the highest-intent signals for emphasis.
   const signalDefs = [
     { key: 'preForeclosure', icon: '⚖️', label: 'Pre-Foreclosure', desc: 'Notice of trustee sale / lis pendens', strong: true },
+    { key: 'taxSuit', icon: '🏛️', label: 'Tax Suit Pending', desc: 'County has filed to foreclose for unpaid taxes', strong: true },
     { key: 'estate', icon: '⚰️', label: 'Estate / Inherited', desc: 'Owner deceased — held by estate or heirs', strong: true },
+    { key: 'divorce', icon: '💔', label: 'Divorce Filing', desc: 'Family-law filing matched to the owner', strong: true },
     { key: 'delinquent', icon: '🔴', label: 'Tax Delinquent', desc: 'Owes back property taxes' },
     { key: 'elderly', icon: '👵', label: 'Elderly / Disabled', desc: 'Over-65 or disability exemption' },
     { key: 'absentee', icon: '🏚️', label: 'Absentee Owner', desc: 'Mailing address differs from the property' },

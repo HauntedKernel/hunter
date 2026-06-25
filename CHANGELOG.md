@@ -443,6 +443,76 @@ Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 
     *reduces* grantor-name matches on past foreclosures. The win is current
     delinquency/absentee data for the core signals, not foreclosure recall.
 
+## 2026-06-25 — Seller-signal research, on-data backtest, scorer recalibration
+
+- `[#033]` **Snapshot-diff signal backtest (validation on our own data).** New
+  `backend/scripts/validate_signals.js` joins the 2025-08-25 and 2026-06-22
+  tax-roll snapshots on `account_id` and treats a changed normalized `owner_name`
+  as a "sold" event (~10-mo window); signals are read from the OLD snapshot so it's
+  a genuine forward prediction. On 675,101 matched real-property accounts (base
+  ownership-change rate 6.27%/10mo) it measured per-signal **lift**: tax-suit-pending
+  2.45x, absentee 1.64x, estate 1.60x, delinquent 1.43x, **elderly-alone 1.00x
+  (no lift)**, and **absentee+elderly 3.07x**, delinquent+suit 2.80x, estate+absentee
+  1.87x. Full method + caveats + table in `RESEARCH.md` §B. (Backtest only; no
+  product behavior change.)
+- `[#034]` **MotivationScorer v1.0 → v1.1: empirical recalibration.**
+  `backend/src/scoring/MotivationScorer.js` — down-weighted standalone
+  `elderlyOwner` 10 → 6 (measured 1.00x standalone), and added a new
+  **signal-synergy** factor capturing interaction the additive model couldn't:
+  **absentee×elderly +14** (3.07x) and **estate×absentee +6** (1.87x), firing only
+  when the components co-occur. Smoke-tested. Interim calibration — the longer-term
+  plan (RESEARCH.md §D) is a calibrated survival/hazard model trained on snapshot
+  diffs (and explicitly NOT class-rebalanced).
+- `[#035]` **Added `RESEARCH.md`** — consolidated seller-motivation research: the
+  multi-source literature/industry deep-research pass (new predictive factors —
+  mortgage rate lock-in / free-and-clear, divorce filings, tenure/age priors;
+  modeling guidance; vendor-claim caveats) plus the on-data backtest and the
+  resulting next-actions (wire tax-suit-pending; round-2 source research in flight).
+
+- `[#036]` **Tax-suit-pending wired as a first-class signal (the free 2.45x win).**
+  `suit_pending` (county has filed to foreclose for unpaid taxes) was the strongest
+  single signal in the backtest but discovery was *excluding* it
+  (`AND suit_pending = 0` on every query — ~10k Dallas properties invisible).
+  `TaxRollProcessor.searchCandidatesByArea` — resolved `signals` before `baseWhere`
+  and made the suit exclusion conditional (only filtered out when the `taxSuit`
+  signal is off; bankruptcy still always excluded); added `TAXSUIT` condition +
+  high-weight ranking in the blend and single-query branches; `formatPropertyResult`
+  now exposes `isTaxSuit`. `PropertyIntelligenceService` passes `signals.taxSuit`.
+  `MotivationScorer` gained a `taxSuit` factor (weight 28). Frontend: 🏛️ "Tax Suit
+  Pending" discovery toggle (strong) + results badge + "Filter by signal" entry.
+  Verified on real data: taxSuit-only returns 20/20 suit properties; with it off
+  they're excluded; default search now surfaces them. `taxSuit` is on by default.
+
+- `[#037]` **Divorce-filing signal + ingester (roadmap: life-event triggers).**
+  Divorce/separation is among the largest residential mobility drivers (RESEARCH.md
+  §A). New `backend/ingest_divorce_events.js` loads Dallas County District Clerk
+  family-law filings into a `divorce_events` table, matched to tax-roll owners.
+  Matching is precision-first: account_id → address+name → name-only requiring ≥2
+  name tokens of a single party and preferring the homestead (the marital
+  residence), since filings name people and rarely carry a property address
+  (`ALLOW_LOOSE_MATCH=1` permits 1-token names). `divorce_events` is created in
+  `initializeDatabase()` so discovery's LEFT JOIN always resolves (empty until a
+  feed loads — there is no live source yet; round-2 research is finding it). Wired
+  through discovery (`DIVORCE` condition + ranking + `has_divorce`), the scorer
+  (`divorce` factor, weight 16 — conservative, not yet backtested on our data), and
+  the frontend (💔 toggle + badge + filter). `backend/divorce_events.sample.csv`
+  documents the expected CSV. Verified end-to-end: name + account_id matching,
+  discovery surfacing, and scoring all confirmed on the local snapshot.
+
+- `[#038]` **Round-2 data-source research → RESEARCH.md §E (sources + compliance).**
+  Cited source map for each signal (25 sources → 24 confirmed). Key results that
+  reshape the roadmap: **free-and-clear/lien is free + obtainable** (DCAD bulk files
+  + County Clerk `dallas.tx.publicsearch.us` deeds) → promoted to the #1 build; the
+  free hourly **311 dataset** (`gc4d-8a49`) is a cheap code-compliance distress
+  signal; **divorce records have no public online access** (TX Supreme Court 2014
+  order; attorneys-only) — the ingester (#037) needs the county's paid bulk
+  subscription or a vendor, so its source note was corrected; **the TX voter file is
+  illegal for commercial marketing** (Election Code §18.067, Class A misdemeanor) →
+  age/household must come from licensed marketing data, dropped as a near-term feed.
+  Compliance flags (TCPA/DNC/CAN-SPAM/DPPA, non-FCRA skip-trace, deed-portal ToS)
+  documented as open legal work. Recommended minimal stack: DCAD + Clerk deeds +
+  per-hit skip-trace + 311.
+
 ### Flagged for prior-art / patent review (Handoff Rule 6)
 - New `calculateUrgencyScore()` (0–100): weights balance size, years behind,
   absentee ownership (no homestead exemption), and foreclosure risk. Used as

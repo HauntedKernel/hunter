@@ -1,0 +1,4 @@
+party1_name,party2_name,address,account_id,filed_date,case_number,court,source
+Jane A Doe,John B Doe,1234 Example St Dallas TX 75216,,2026-03-01,DF-26-12345,Dallas 256th District Court,dallas_district_clerk
+Maria Garcia,Carlos Garcia,,,2026-02-14,DF-26-12346,Dallas 255th District Court,dallas_district_clerk
+,,,00000123456000000,2026-01-10,DF-26-12347,Dallas 254th District Court,dallas_district_clerk

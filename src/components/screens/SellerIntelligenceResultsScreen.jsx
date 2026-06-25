@@ -8,10 +8,12 @@ const prettifySignal = (t) => String(t || '').replace(/[_-]+/g, ' ').replace(/\b
 const SIGNAL_META = {
   estate:         { icon: '⚰️', label: 'Estate', cls: 'badge-estate', priority: 1 },
   preForeclosure: { icon: '⚖️', label: 'Pre-foreclosure', cls: 'badge-foreclosure', priority: 2 },
-  taxDelinquency: { icon: '🔴', label: 'Tax delinquent', cls: 'badge-delinquent', priority: 3 },
-  elderlyOwner:   { icon: '👵', label: 'Elderly', cls: 'badge-signal', priority: 4 },
-  emptyNester:    { icon: '🪺', label: 'Empty-nester', cls: 'badge-signal', priority: 5 },
-  absenteeOwner:  { icon: '🏚️', label: 'Absentee', cls: 'badge-signal', priority: 6 },
+  taxSuit:        { icon: '🏛️', label: 'Tax suit', cls: 'badge-foreclosure', priority: 3 },
+  divorce:        { icon: '💔', label: 'Divorce', cls: 'badge-estate', priority: 4 },
+  taxDelinquency: { icon: '🔴', label: 'Tax delinquent', cls: 'badge-delinquent', priority: 5 },
+  elderlyOwner:   { icon: '👵', label: 'Elderly', cls: 'badge-signal', priority: 6 },
+  emptyNester:    { icon: '🪺', label: 'Empty-nester', cls: 'badge-signal', priority: 7 },
+  absenteeOwner:  { icon: '🏚️', label: 'Absentee', cls: 'badge-signal', priority: 8 },
 };
 
 // Factors that actually fired (points > 0), known discovery signals first (by
@@ -325,6 +327,8 @@ const SellerIntelligenceResultsScreen = ({ onNavigate, searchParams }) => {
     { key: 'all', label: 'All signals' },
     { key: 'estate', label: '⚰️ Estate / Inherited' },
     { key: 'preForeclosure', label: '⚖️ Pre-foreclosure' },
+    { key: 'taxSuit', label: '🏛️ Tax suit pending' },
+    { key: 'divorce', label: '💔 Divorce filing' },
     { key: 'taxDelinquency', label: '🔴 Tax delinquent' },
     { key: 'elderlyOwner', label: '👵 Elderly / Disabled' },
     { key: 'absenteeOwner', label: '🏚️ Absentee' },

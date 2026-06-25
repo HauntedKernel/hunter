@@ -129,8 +129,20 @@ Fridays):
    `cd /tmp/tb && node process_full_tax_roll.js src/data/usr2/spool/act/flat404.*` (auto-picks newest if no arg)
    `node migrate_signal_columns.js` · re-ingest foreclosures: `node ingest_legal_events.js /tmp/fc_keep.csv`
 3. Verify counts, then swap: `cp ~/hunter/backend/src/data/tax_roll.db{,.bak-$(date +%Y%m%d)} && mv /tmp/tb/src/data/tax_roll.db ~/hunter/backend/src/data/ && pm2 restart hunter-api`
+- **Tax-suit-pending → LIVE in code (no feed needed).** `suit_pending` is already
+  in the tax roll; it's now a first-class signal (was being *excluded* before).
+  Strongest single signal in the backtest (2.45x). On by default. No DB migration.
+- **Divorce filings → ingester built, feed PENDING.** `ingest_divorce_events.js`
+  loads Dallas County District Clerk family-law filings into `divorce_events`
+  (name-aware matching, homestead-preferred). Table auto-creates in
+  `initializeDatabase()`, so deploy needs only a `pm2 restart` (no migration). Load
+  with `node ingest_divorce_events.js <file.csv>`. Source TBD (round-2 research).
+  See `backend/divorce_events.sample.csv` for the CSV shape.
 - **Owner age / empty-nester → pending** → `ingest_voters.js` (TX voter file).
 - **Phone/email → pending** → `ingest_contacts.js` (paid skip-trace) + DNC keys.
+- **Signal research + on-data validation:** see `RESEARCH.md` (measured per-signal
+  lift; scorer recalibrated to v1.1; elderly-alone has no lift, absentee×elderly
+  is 3.07x). Re-run `backend/scripts/validate_signals.js` after each new feed lands.
 
 ## Open product threads (not blocking)
 - **Monetization** (MONETIZATION.md): free unlimited discovery + metered contact

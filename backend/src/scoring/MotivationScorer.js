@@ -48,12 +48,29 @@ class MotivationScorer {
 
       // Legal-event signals (added — see STRATEGY.md §3)
       preForeclosure: 35,        // Notice of Trustee Sale / lis pendens — strongest "about to sell or lose it" signal
+      taxSuit: 28,               // Active tax-foreclosure suit (suit_pending). Measured 2.45x lift — the
+                                 // strongest *single* tax-roll signal in the snapshot-diff backtest
+                                 // (RESEARCH.md §B), above raw delinquency (1.43x). Just below mortgage
+                                 // pre-foreclosure (a scheduled auction is more imminent than a filed suit).
 
       // Life-stage / ownership signals (added — see STRATEGY.md §2/§4)
       absenteeOwner: 12,         // Mailing address != property: tired landlord / out-of-state heir
-      elderlyOwner: 10,          // Over-65 or disability exemption (or voter age >= 65): downsizer / estate
+      elderlyOwner: 6,           // Over-65/disability exemption (or voter age >= 65). NOTE: measured
+                                 // standalone lift ~1.00x (none) on our own snapshot-diff backtest —
+                                 // it's a *modifier*, not a trigger. Down-weighted from 10; most of its
+                                 // value is realized via the absentee×elderly synergy below.
       emptyNester: 12,           // Voter file: mid/senior owner, no young adults in household (kids moved out)
       estate: 18,                // Owner deceased — held by an estate/heirs: a top-tier "death" sale signal
+      divorce: 16,               // Divorce/family-law filing matched to the owner. One of the largest
+                                 // mobility drivers in the literature (RESEARCH.md §A); the marital home
+                                 // is commonly sold. Not yet backtested on our data — conservative weight.
+
+      // Signal-synergy (interaction) bonuses — empirically derived from the
+      // 2025-08 → 2026-06 snapshot-diff backtest on 675k Dallas real-property
+      // accounts (base ownership-change rate ~6.3% / 10mo). The additive model
+      // can't represent interaction; these capture it. See RESEARCH.md.
+      absenteeElderlySynergy: 14, // absentee+elderly measured 3.07x lift (vs absentee 1.64x, elderly 1.00x)
+      estateAbsenteeSynergy: 6,   // estate+absentee measured 1.87x lift (vs estate 1.60x)
 
       // Legal-event signal (GATED OFF by default — see STRATEGY.md §6).
       // Public record, but high legal/reputational risk: requires an arrest
@@ -211,6 +228,8 @@ class MotivationScorer {
       isElderly: !!propertyData.signals?.elderlyOwner,
       isEmptyNester: !!propertyData.signals?.emptyNester,
       isEstate: !!propertyData.signals?.estate,
+      isTaxSuit: !!propertyData.signals?.taxSuit,
+      isDivorce: !!propertyData.signals?.divorce,
       ownerAge: propertyData.signals?.ownerAge || null,
       preForeclosure: propertyData.signals?.preForeclosure || null,
       arrest: propertyData.signals?.arrest || null,
@@ -249,6 +268,8 @@ class MotivationScorer {
 
     // Legal-event signals
     factors.preForeclosure = this.calculatePreForeclosureScore(context);
+    factors.taxSuit = this.calculateTaxSuitScore(context);
+    factors.divorce = this.calculateDivorceScore(context);
 
     // Life-stage / ownership signals
     factors.absenteeOwner = this.calculateAbsenteeScore(context);
@@ -256,10 +277,47 @@ class MotivationScorer {
     factors.emptyNester = this.calculateEmptyNesterScore(context);
     factors.estate = this.calculateEstateScore(context);
 
+    // Multi-signal interaction bonuses (empirically measured — see RESEARCH.md)
+    factors.signalSynergy = this.calculateSignalSynergyScore(context);
+
     // Legal-event signal (gated)
     factors.arrestRecord = this.calculateArrestScore(context);
 
     return factors;
+  }
+
+  /**
+   * Signal-synergy (interaction) scoring. Some weak/moderate signals are far
+   * more predictive together than the additive sum of their parts. These
+   * bonuses are derived from our own snapshot-diff backtest (RESEARCH.md):
+   *   - absentee + elderly  -> 3.07x lift (elderly alone is only ~1.00x)
+   *   - estate   + absentee -> 1.87x lift
+   * Fires only when the component signals co-occur on the same property.
+   */
+  calculateSignalSynergyScore(context) {
+    const byAge = context.ownerAge && context.ownerAge >= 65;
+    const isElderly = context.isElderly || byAge;
+    const bonuses = [];
+    let score = 0;
+
+    if (context.isAbsentee && isElderly) {
+      score += this.scoringWeights.absenteeElderlySynergy;
+      bonuses.push('absentee + elderly (≈3.07x measured lift)');
+    }
+    if (context.isEstate && context.isAbsentee) {
+      score += this.scoringWeights.estateAbsenteeSynergy;
+      bonuses.push('estate + absentee (≈1.87x measured lift)');
+    }
+
+    if (score === 0) {
+      return { score: 0, factor: 'No multi-signal synergy', category: 'synergy' };
+    }
+    return {
+      score,
+      factor: `Signal synergy — ${bonuses.join('; ')}`,
+      category: 'synergy',
+      severity: 'high'
+    };
   }
 
   /**
@@ -282,6 +340,42 @@ class MotivationScorer {
       score: base,
       factor: `${label}${saleSuffix}`,
       category: 'legal',
+      severity: 'high'
+    };
+  }
+
+  /**
+   * Active tax-foreclosure suit (`suit_pending`). The county has filed suit to
+   * foreclose for unpaid taxes — the owner is mid-process and highly motivated to
+   * sell before the sheriff's sale. Measured 2.45x lift (RESEARCH.md §B), the
+   * strongest single tax-roll signal. Distinct from mortgage pre-foreclosure.
+   */
+  calculateTaxSuitScore(context) {
+    if (!context.isTaxSuit) {
+      return { score: 0, factor: 'No active tax-foreclosure suit', category: 'legal' };
+    }
+    return {
+      score: this.scoringWeights.taxSuit,
+      factor: 'Active tax-foreclosure suit pending (delinquent taxes in litigation)',
+      category: 'legal',
+      severity: 'high'
+    };
+  }
+
+  /**
+   * Divorce / family-law filing matched to the owner. A divorcing couple commonly
+   * sells the marital home; divorce is among the largest residential mobility
+   * drivers in the literature (RESEARCH.md §A). Joined from divorce_events; null
+   * until a feed is ingested. Not yet backtested on our own data.
+   */
+  calculateDivorceScore(context) {
+    if (!context.isDivorce) {
+      return { score: 0, factor: 'No divorce / family-law filing', category: 'life-stage' };
+    }
+    return {
+      score: this.scoringWeights.divorce,
+      factor: 'Divorce / family-law filing matched to owner',
+      category: 'life-stage',
       severity: 'high'
     };
   }
@@ -807,7 +901,7 @@ class MotivationScorer {
       
       // Processing Metadata
       metadata: {
-        scoringVersion: '1.0',
+        scoringVersion: '1.1',
         processingTime,
         scoredAt: new Date().toISOString(),
         correlationId: scoringContext.correlationId
