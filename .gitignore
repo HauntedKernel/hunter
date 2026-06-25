@@ -71,3 +71,12 @@ nul
 temp_response.json
 practice.py
 *.output
+# PropStream / skip-trace / lien working files — contain PII or licensed data.
+# Keep the *.sample.csv templates (force-added), ignore everything else.
+backend/propstream_*.csv
+backend/*_liens.csv
+backend/*_contacts.csv
+backend/liens_derived.csv
+backend/deeds_*.csv
+backend/contacts_*.csv
+!backend/*.sample.csv
