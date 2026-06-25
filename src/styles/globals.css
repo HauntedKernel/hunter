@@ -155,6 +155,11 @@ body {
 }
 .badge-delinquent { background: var(--danger-soft); color: var(--danger); border-color: #fecaca; }
 .badge-signal { background: var(--brand-soft); color: var(--brand-dark); border-color: var(--brand-line); }
+/* Estate ("death" sale) — distinct violet so the highest-intent signal stands out. */
+.badge-estate { background: rgba(124, 58, 237, 0.10); color: #6d28d9; border-color: rgba(124, 58, 237, 0.30); }
+/* Pre-foreclosure — strongest financial-distress signal, solid red. */
+.badge-foreclosure { background: var(--danger); color: #fff; border-color: var(--danger); }
+.badge-more { background: var(--surface-2); color: var(--muted); border-color: var(--line); }
 .score-pill {
   display: inline-flex; align-items: center; justify-content: center;
   min-width: 34px; height: 26px; padding: 0 6px;
@@ -211,6 +216,8 @@ body {
 .lead-row--body { cursor: pointer; transition: background .12s; }
 .lead-row--body:hover { background: var(--surface-2); }
 .lead-row--selected { background: var(--brand-soft); }
+/* Estate leads get a violet left accent so they pop while scanning the table. */
+.lead-row--estate { box-shadow: inset 3px 0 0 #7c3aed; }
 .th-sort { background: none; border: none; padding: 0; font: inherit; color: inherit; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; text-transform: inherit; letter-spacing: inherit; }
 .th-sort:hover { color: var(--ink); }
 .cell-label { display: none; }

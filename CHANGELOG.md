@@ -391,6 +391,38 @@ Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 
   results sidebar (per-signal counts) — click ⚰️ Estate to isolate death leads,
   or any other signal.
 
+## 2026-06-24 — Estate UI polish, backend hardening, real pre-foreclosure feed
+
+- `[#029]` **Estate signal UI polish.** `SellerIntelligenceResultsScreen.jsx` —
+  the results "Signals" column showed the first 3 factors *regardless of points*
+  (so zero-point factors like "Tax Burden Ratio" could display); now it shows
+  only signals that actually fired (`points > 0`), prioritized by intent (estate
+  ⚰️, pre-foreclosure ⚖️ first) with a `+N` overflow. Distinct badges
+  (`.badge-estate` violet, `.badge-foreclosure` red) + a violet left-accent on
+  estate rows (`.lead-row--estate`). Lead detail lists only contributing factors.
+  `SellersDashboardScreen.jsx` — estate moved from last → 2nd (after
+  pre-foreclosure), both tagged "Strong". `globals.css` — new badge/row styles.
+
+- `[#030]` **Real pre-foreclosure feed via OCR (free public Dallas data).** The
+  county posts foreclosure notices ONLY as scanned-image PDFs (JBIG2, no text
+  layer) grouped by city/month — no list/CSV. New `backend/scrape_foreclosures.js`
+  downloads them, rasterizes (pdftoppm) + OCRs (tesseract) each page, and parses
+  out `Property Address` + grantor + sale date → the `ingest_legal_events.js` CSV
+  (deps: poppler-utils, tesseract-ocr; writes incrementally). Coverage is partial
+  by design: only notices with an explicit address line are emitted (the rest use
+  Lot/Block legal descriptions that can't match the tax roll).
+  - `ingest_legal_events.js`: **owner-aware precise matching.** The tax roll's
+    `property_address` has NO house numbers, so street+ZIP alone resolves to an
+    arbitrary house on the street (verified: matched the wrong owners). Now when a
+    notice has a grantor name, matching REQUIRES street + ZIP + owner surname;
+    the imprecise street-only fallback is gated off by default
+    (`ALLOW_LOOSE_MATCH=1` to opt in).
+  - Verified live on real April data: pre-foreclosure searches return exactly the
+    matched properties with the 35-pt factor (e.g. FLORES/CALLE BELLA DR;
+    SHAW/VIDA CT scores 45 — pre-foreclosure stacked with estate).
+  - Infra: backend host hardened with a 2 GB swapfile; pm2-startup +
+    cloudflared-on-boot confirmed (survives reboot).
+
 ### Flagged for prior-art / patent review (Handoff Rule 6)
 - New `calculateUrgencyScore()` (0–100): weights balance size, years behind,
   absentee ownership (no homestead exemption), and foreclosure risk. Used as

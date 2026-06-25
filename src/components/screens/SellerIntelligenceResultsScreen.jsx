@@ -3,6 +3,28 @@ import SellerIntelligenceService from '../../services/SellerIntelligenceService'
 
 const prettifySignal = (t) => String(t || '').replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 
+// Discovery signals → display chrome. Ordered by intent strength so the most
+// telling signals (estate death-sale, pre-foreclosure) always surface first.
+const SIGNAL_META = {
+  estate:         { icon: '⚰️', label: 'Estate', cls: 'badge-estate', priority: 1 },
+  preForeclosure: { icon: '⚖️', label: 'Pre-foreclosure', cls: 'badge-foreclosure', priority: 2 },
+  taxDelinquency: { icon: '🔴', label: 'Tax delinquent', cls: 'badge-delinquent', priority: 3 },
+  elderlyOwner:   { icon: '👵', label: 'Elderly', cls: 'badge-signal', priority: 4 },
+  emptyNester:    { icon: '🪺', label: 'Empty-nester', cls: 'badge-signal', priority: 5 },
+  absenteeOwner:  { icon: '🏚️', label: 'Absentee', cls: 'badge-signal', priority: 6 },
+};
+
+// Factors that actually fired (points > 0), known discovery signals first (by
+// intent priority), then any other contributing factor.
+const firedSignals = (lead) => {
+  const fired = (lead.motivationFactors || []).filter(f => f.points > 0);
+  const known = fired.filter(f => SIGNAL_META[f.type])
+    .sort((a, b) => SIGNAL_META[a.type].priority - SIGNAL_META[b.type].priority);
+  const other = fired.filter(f => !SIGNAL_META[f.type]);
+  return [...known, ...other];
+};
+const leadHasEstate = (lead) => (lead.motivationFactors || []).some(f => f.type === 'estate' && f.points > 0);
+
 const SellerIntelligenceResultsScreen = ({ onNavigate, searchParams }) => {
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -391,7 +413,7 @@ const SellerIntelligenceResultsScreen = ({ onNavigate, searchParams }) => {
               {filteredLeads.map((lead) => (
                 <React.Fragment key={lead.id}>
                   <div
-                    className={`lead-row lead-row--body ${lead.selected ? 'lead-row--selected' : ''}`}
+                    className={`lead-row lead-row--body ${lead.selected ? 'lead-row--selected' : ''} ${leadHasEstate(lead) ? 'lead-row--estate' : ''}`}
                     onClick={() => handleSelectLead(lead)}
                   >
                     <span className="cell" onClick={(e) => e.stopPropagation()}>
@@ -423,12 +445,25 @@ const SellerIntelligenceResultsScreen = ({ onNavigate, searchParams }) => {
                     </span>
                     <span className="cell cell-signals">
                       <span className="cell-label">Signals</span>
-                      {(lead.motivationFactors || []).slice(0, 3).map((f, i) => (
-                        <span key={i} className={`badge ${/delinq/i.test(f.type || f.description) ? 'badge-delinquent' : 'badge-signal'}`}>
-                          {prettifySignal(f.type || f.description)}
-                        </span>
-                      ))}
-                      {(!lead.motivationFactors || lead.motivationFactors.length === 0) && '—'}
+                      {(() => {
+                        const fired = firedSignals(lead);
+                        if (fired.length === 0) return '—';
+                        const shown = fired.slice(0, 3);
+                        const extra = fired.length - shown.length;
+                        return (
+                          <>
+                            {shown.map((f, i) => {
+                              const m = SIGNAL_META[f.type];
+                              return (
+                                <span key={i} className={`badge ${m ? m.cls : 'badge-signal'}`}>
+                                  {m ? `${m.icon} ${m.label}` : prettifySignal(f.type || f.description)}
+                                </span>
+                              );
+                            })}
+                            {extra > 0 && <span className="badge badge-more">+{extra}</span>}
+                          </>
+                        );
+                      })()}
                     </span>
                   </div>
 
@@ -436,13 +471,13 @@ const SellerIntelligenceResultsScreen = ({ onNavigate, searchParams }) => {
                     <div className="lead-detail">
                       <div>
                         <div className="detail-block-title">Motivation factors</div>
-                        {(lead.motivationFactors || []).map((factor, index) => (
+                        {(lead.motivationFactors || []).filter(f => f.points > 0).map((factor, index) => (
                           <div key={index} className="factor">
                             <span className="dot" style={{ background: factor.severity === 'high' ? 'var(--score-high)' : factor.severity === 'medium' ? 'var(--score-med)' : 'var(--score-low)' }}></span>
                             <span>{factor.description}</span>
                           </div>
                         ))}
-                        {(!lead.motivationFactors || lead.motivationFactors.length === 0) && (
+                        {(lead.motivationFactors || []).filter(f => f.points > 0).length === 0 && (
                           <div className="muted-note">No individual factors recorded.</div>
                         )}
                       </div>

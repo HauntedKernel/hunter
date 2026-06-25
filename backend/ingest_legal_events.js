@@ -91,7 +91,13 @@ function streetToken(addr) {
   const rows = parseCsv(text);
   console.log(`parsed ${rows.length} rows from ${path.basename(arg)}`);
 
-  let byAccount = 0, byAddress = 0, unmatched = 0;
+  // Name tokens (surnames etc.) for owner-aware matching — excludes joiners and
+  // estate/legal boilerplate so we match on real name parts.
+  const NAME_STOP = new Set(['AND', 'THE', 'LIFE', 'ESTATE', 'HEIRS', 'TRUST', 'LLC', 'INC', 'COMPANY', 'UNKNOWN', 'SPOUSE', 'HUSBAND', 'WIFE']);
+  const nameTokens = (name) => ([...new Set((String(name || '').toUpperCase().match(/[A-Z]{4,}/g) || []))])
+    .filter(t => !NAME_STOP.has(t));
+
+  let byAccount = 0, byAddress = 0, byAddressOwner = 0, unmatched = 0;
   await db.exec('BEGIN');
   for (const r of rows) {
     let accountId = (r.account_id || '').trim();
@@ -105,14 +111,32 @@ function streetToken(addr) {
     if (!accountId && r.address) {
       const tok = streetToken(r.address);
       const zip = (r.address.match(/\b(\d{5})\b/) || [])[1];
-      if (tok) {
-        const hit = await db.get(
+      const names = nameTokens(r.owner_name);
+      // The tax roll's property_address has NO house numbers, so street+ZIP
+      // alone resolves to an arbitrary house on the street. When the notice
+      // gives a grantor name, REQUIRE the owner to match too (precise). Only
+      // when no owner name is available do we fall back to street+ZIP.
+      let hit = null;
+      if (tok && zip && names.length) {
+        const ownerOr = names.map(() => 'UPPER(owner_name) LIKE ?').join(' OR ');
+        hit = await db.get(
+          `SELECT account_id FROM tax_roll WHERE UPPER(property_address) LIKE ? AND zip_code LIKE ? AND (${ownerOr}) LIMIT 1`,
+          [`%${tok}%`, `${zip}%`, ...names.map(n => `%${n}%`)]
+        );
+        if (hit) { accountId = hit.account_id; method = 'address+owner'; byAddressOwner++; }
+      }
+      if (!hit && tok && !names.length && process.env.ALLOW_LOOSE_MATCH === '1') {
+        // No owner name to disambiguate. The tax roll lacks house numbers, so a
+        // street+ZIP-only match lands on an ARBITRARY house on the street (often
+        // wrong). Off by default — opt in with ALLOW_LOOSE_MATCH=1 only if you
+        // accept false positives. Precision-first: otherwise leave unmatched.
+        hit = await db.get(
           `SELECT account_id FROM tax_roll WHERE UPPER(property_address) LIKE ? ${zip ? 'AND zip_code LIKE ?' : ''} LIMIT 1`,
           zip ? [`%${tok}%`, `${zip}%`] : [`%${tok}%`]
         );
         if (hit) { accountId = hit.account_id; method = 'address'; byAddress++; }
-        else unmatched++;
-      } else unmatched++;
+      }
+      if (!hit) unmatched++;
     } else if (!accountId) unmatched++;
 
     await db.run(
@@ -124,7 +148,7 @@ function streetToken(addr) {
   }
   await db.exec('COMMIT');
 
-  console.log(`ingested: ${byAccount} matched by account_id, ${byAddress} by address, ${unmatched} unmatched`);
+  console.log(`ingested: ${byAccount} by account_id, ${byAddressOwner} by address+owner, ${byAddress} by address-only, ${unmatched} unmatched`);
   const total = await db.get('SELECT COUNT(*) c FROM legal_events');
   console.log(`legal_events total rows: ${total.c}`);
   await db.close();

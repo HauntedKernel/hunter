@@ -57,29 +57,31 @@ non-service process) and load the still-pending real signal feeds (below).
   `{success, data:{…}}`.
 - **Domain/DNS:** both `hunter.living` and `api.hunter.living` resolve to
   Cloudflare. ✓
-- **Caveat — backend host:** the API process is NOT yet a managed service /
-  always-on box (uptime/footprint differ from the local :3001 dev process, so
-  it's running off some non-service process). If that host/process dies, the API
-  drops. Hardening = Phase 2 below (move to a free always-on box + pm2 + tunnel
-  as a service).
+- **Backend host — HARDENED (Oracle Always Free, `170.9.249.210`):** the API runs
+  on an Ubuntu Oracle VM as `hunter-api` under **pm2** (pm2-startup enabled + dump
+  saved → auto-resurrects on reboot); the **cloudflared** named tunnel runs as a
+  **systemd service** (enabled on boot). 5.8 GB RAM + a 2 GB swapfile (added
+  2026-06-24, in `/etc/fstab`). Survives reboot/crash. SSH:
+  `ssh -i ~/.ssh/hunter_oracle ubuntu@170.9.249.210`.
 
-## NEXT ACTION — optional hardening (deployment itself is done)
-1. **Make the backend durable** — move it to a free always-on box (Phase 2) or at
-   minimum run the tunnel + Node under a service manager so it survives reboot.
-2. **Load real signal feeds** (still empty — signals stay inactive until fed):
-   pre-foreclosure/lis-pendens, voter demographics, skip-trace contacts (below).
+## NEXT ACTION — core done; remaining is feed expansion + product
+1. ~~Deploy~~ ✅ live · ~~Harden the backend~~ ✅ pm2 + cloudflared service + swap.
+2. **Pre-foreclosure feed — LIVE (partial, April)** via the new OCR pipeline
+   (below). Re-run for the latest month / all cities to expand coverage. Voter
+   (empty-nester/age) + skip-trace (contact) feeds still pending.
 3. **Monetization/expansion** — only when demand shows (don't pre-build billing).
 
-## Phase 2 (optional hardening) — move backend to a free always-on box
-Get the backend onto a managed always-on host. Full detail in DEPLOYMENT.md → "Phase 2 Oracle":
-1. `ssh -i ~/.ssh/hunter_oracle ubuntu@<PUBLIC_IP>`
-2. *(if AMD micro)* add ~2 GB swap
-3. `sudo apt update && sudo apt install -y nodejs npm git build-essential python3 curl` · `sudo npm i -g pm2`
-4. `git clone https://github.com/HauntedKernel/hunter.git` · `cd hunter/backend && npm install`
-5. from local: `scp backend/src/data/tax_roll.db ubuntu@<IP>:~/hunter/backend/src/data/` (347 MB, already has the absentee column + indexes — no rebuild)
-6. `pm2 start server.js --name hunter-api` · `pm2 save && pm2 startup`
-7. cloudflared on the box → tunnel `api.hunter.living` → `localhost:3001` → install as service (re-point the same DNS route off the laptop)
-- VM options if pursuing Oracle: **(A)** retry A1 off-peak (free, full power, capacity lottery); **(B)** `VM.Standard.E2.1.Micro` AMD always-free + swapfile (available now, cramped 1 GB); **(C)** ~$5/mo Hetzner for reliable.
+## Backend deploy (DONE) — reference
+Backend lives at `~/hunter` on the Oracle box (`170.9.249.210`):
+- **Update:** `git pull && cd backend && npm install && pm2 restart hunter-api`.
+  (Restart needed to load new code AND to re-read the DB after an ingest.)
+- **DB:** `backend/src/data/tax_roll.db` (~347 MB, scp'd up; absentee column +
+  indexes). `cad_cache.db` + a populated `legal_events` live alongside.
+- **Tunnel:** cloudflared systemd service → `api.hunter.living` → `localhost:3001`.
+- **NOTE (sync):** the box working tree has local edits to `ingest_legal_events.js`
+  + an untracked `scrape_foreclosures.js` (scp'd during feed work) that match the
+  pending commit. After pushing, run `git fetch && git reset --hard origin/main`
+  on the box to sync cleanly.
 
 ## Key artifacts
 - **SSH public key** (paste into Oracle if recreating the VM):
@@ -92,10 +94,19 @@ Get the backend onto a managed always-on host. Full detail in DEPLOYMENT.md → 
   backend `cd backend && npm start` (:3001) · frontend `npm run dev` (:5173, proxies `/api`).
   The earlier `trycloudflare.com` quick-tunnel URLs are throwaway — don't rely on them.
 
-## Still-pending data feeds (optional; signals stay inactive until loaded)
-- Pre-foreclosure/lis-pendens → `ingest_legal_events.js` (Dallas County Clerk feed)
-- Owner age / empty-nester → `ingest_voters.js` (TX voter file)
-- Phone/email → `ingest_contacts.js` (paid skip-trace vendor) + DNC provider env keys
+## Data feeds
+- **Pre-foreclosure/lis-pendens → LIVE (partial).** New `backend/scrape_foreclosures.js`
+  OCRs the Dallas County Clerk's scanned foreclosure PDFs (needs poppler-utils +
+  tesseract-ocr on the box) → CSV → `ingest_legal_events.js`. Matching is
+  owner-aware (street+ZIP+owner surname) because the tax roll lacks house numbers.
+  To expand/refresh on the box:
+  `cd /tmp && node /tmp/scrape_foreclosures.js <Month> "" --dpi 200`
+  then `cd ~/hunter/backend && node ingest_legal_events.js --clear && node ingest_legal_events.js /tmp/foreclosures_<Month>.csv && pm2 restart hunter-api`.
+  Coverage is partial by design (only notices with an explicit address line; the
+  rest use Lot/Block legal descriptions). Worth scheduling monthly (sales are the
+  first Tuesday; notices post ~21 days prior). ~1.6 min/small file on the ARM box.
+- **Owner age / empty-nester → pending** → `ingest_voters.js` (TX voter file).
+- **Phone/email → pending** → `ingest_contacts.js` (paid skip-trace) + DNC keys.
 
 ## Open product threads (not blocking)
 - **Monetization** (MONETIZATION.md): free unlimited discovery + metered contact

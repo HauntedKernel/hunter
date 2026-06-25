@@ -71,13 +71,15 @@ const SellersDashboardScreen = ({ onNavigate }) => {
     rawLand: 'Raw Land'
   };
 
+  // Ordered by intent strength — the "about to sell" signals (pre-foreclosure,
+  // estate) lead. `strong` flags the highest-intent signals for emphasis.
   const signalDefs = [
-    { key: 'preForeclosure', icon: '⚖️', label: 'Pre-Foreclosure', desc: 'Notice of trustee sale / lis pendens' },
+    { key: 'preForeclosure', icon: '⚖️', label: 'Pre-Foreclosure', desc: 'Notice of trustee sale / lis pendens', strong: true },
+    { key: 'estate', icon: '⚰️', label: 'Estate / Inherited', desc: 'Owner deceased — held by estate or heirs', strong: true },
     { key: 'delinquent', icon: '🔴', label: 'Tax Delinquent', desc: 'Owes back property taxes' },
     { key: 'elderly', icon: '👵', label: 'Elderly / Disabled', desc: 'Over-65 or disability exemption' },
     { key: 'absentee', icon: '🏚️', label: 'Absentee Owner', desc: 'Mailing address differs from the property' },
-    { key: 'emptyNester', icon: '🪺', label: 'Empty Nester', desc: 'Voter file: kids likely moved out' },
-    { key: 'estate', icon: '⚰️', label: 'Estate / Inherited', desc: 'Owner deceased — held by estate or heirs' }
+    { key: 'emptyNester', icon: '🪺', label: 'Empty Nester', desc: 'Voter file: kids likely moved out' }
   ];
 
   return (
@@ -166,7 +168,10 @@ const SellersDashboardScreen = ({ onNavigate }) => {
                     />
                     <span style={{ fontSize: 18 }}>{sig.icon}</span>
                     <span style={{ display: 'flex', flexDirection: 'column' }}>
-                      <span style={{ fontWeight: 600 }}>{sig.label}</span>
+                      <span style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {sig.label}
+                        {sig.strong && <span className="badge badge-signal" style={{ fontSize: 10 }}>Strong</span>}
+                      </span>
                       <span className="page-sub" style={{ fontSize: 12 }}>{sig.desc}</span>
                     </span>
                   </label>
