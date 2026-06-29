@@ -833,7 +833,7 @@ class TaxRollProcessor {
       // `taxSuit` (active tax-foreclosure suit) is the strongest single signal in
       // our snapshot-diff backtest (2.45x lift — see RESEARCH.md §B), so it's on
       // by default and surfaced rather than excluded.
-      const ALL = { delinquent: true, elderly: true, absentee: true, preForeclosure: true, emptyNester: true, estate: true, taxSuit: true, divorce: true, freeAndClear: true, codeCompliance: true };
+      const ALL = { delinquent: true, elderly: true, absentee: true, preForeclosure: true, emptyNester: true, estate: true, taxSuit: true, divorce: true, freeAndClear: true, codeCompliance: true, tenure: true };
       let signals = options.signals || ALL;
       if (!Object.values(signals).some(Boolean)) signals = ALL;
 
@@ -891,8 +891,11 @@ class TaxRollProcessor {
             ad.tenure_years AS tenure_years, ad.deed_year AS deed_year, ad.year_built AS year_built,
             (cv.account_id IS NOT NULL) AS has_code_violation, cv.request_type AS code_request_type`;
 
-      // elderly fires on the tax exemption OR a voter-file age >= 65.
-      const ELDERLY = '(over65_exemption = 1 OR disabled_exemption = 1 OR vd.owner_age >= 65)';
+      // Elderly fires on the tax exemption OR an age-data age >= 60. The county
+      // grants the over-65 exemption at a hard 65, but where we have ACTUAL age
+      // (voter/marketing append) we use 60+: the median Texas seller is 63-64,
+      // *below* 65 (RESEARCH.md §A.4), so a 65 age cutoff aims slightly old.
+      const ELDERLY = '(over65_exemption = 1 OR disabled_exemption = 1 OR vd.owner_age >= 60)';
       const ABSENTEE = '(is_absentee = 1)';
       const PREFORE = '(le.account_id IS NOT NULL)';
       const EMPTYNEST = '(vd.empty_nester = 1)';
@@ -915,6 +918,11 @@ class TaxRollProcessor {
       // junk, tall grass) signals a neglected / over-extended owner. Joined from
       // code_violations; empty until ingest_311.js loads a feed.
       const CODECOMPLIANCE = '(cv.account_id IS NOT NULL)';
+      // Tenure is a positive PRIOR, not a hunt filter — long-held homes turn over
+      // more (RESEARCH §A). Graded ranking nudge (0/2/4/6 by band), matching the
+      // scorer's tenure bands. Never a standalone WHERE condition. Joined from
+      // appraisal_detail; 0 until ingest_appraisal.js loads the free DCAD file.
+      const TENURE_RANK = '(CASE WHEN ad.tenure_years >= 30 THEN 6 WHEN ad.tenure_years >= 15 THEN 4 WHEN ad.tenure_years >= 7 THEN 2 ELSE 0 END)';
 
       // Blend (reserve slots for current owners) only when delinquent is hunted
       // alongside a non-delinquent signal — otherwise one ranked query is enough.
@@ -926,7 +934,7 @@ class TaxRollProcessor {
           SELECT ${SELECT} FROM ${FROM}
           WHERE ${baseWhere} AND is_delinquent = 1
           ORDER BY (${PREFORE} * 35) + (${signals.taxSuit ? TAXSUIT : '0'} * 30) + MIN(COALESCE(delinquent_amount, 0) / 1000.0, 40)
-            + (${ELDERLY} * 5) + (${ABSENTEE} * 5) + (${EMPTYNEST} * 5) + (${ESTATE} * 8) + (${DIVORCE} * 8) + (${FREECLEAR} * 6) + (${signals.codeCompliance ? CODECOMPLIANCE : '0'} * 6) DESC,
+            + (${ELDERLY} * 5) + (${ABSENTEE} * 5) + (${EMPTYNEST} * 5) + (${ESTATE} * 8) + (${DIVORCE} * 8) + (${FREECLEAR} * 6) + (${signals.codeCompliance ? CODECOMPLIANCE : '0'} * 6) + ${signals.tenure ? TENURE_RANK : '0'} DESC,
             delinquent_amount DESC, account_id
           LIMIT ?`;
         const delq = await this.db.all(delqSql, [...baseParams, delqTarget]);
@@ -948,7 +956,7 @@ class TaxRollProcessor {
           const nonDelqSql = `
             SELECT ${SELECT} FROM ${FROM}
             WHERE ${baseWhere} AND is_delinquent = 0 AND (${nonDelqConds.join(' OR ')})
-            ORDER BY (${PREFORE} * 35) + (${ELDERLY} * 10) + (${ABSENTEE} * 12) + (${EMPTYNEST} * 12) + (${ESTATE} * 14) + (${DIVORCE} * 16) + (${FREECLEAR} * 10) + (${CODECOMPLIANCE} * 12) DESC, total_value DESC, account_id
+            ORDER BY (${PREFORE} * 35) + (${ELDERLY} * 10) + (${ABSENTEE} * 12) + (${EMPTYNEST} * 12) + (${ESTATE} * 14) + (${DIVORCE} * 16) + (${FREECLEAR} * 10) + (${CODECOMPLIANCE} * 12) + ${signals.tenure ? TENURE_RANK : '0'} DESC, total_value DESC, account_id
             LIMIT ?`;
           nonDelq = await this.db.all(nonDelqSql, [...baseParams, nonDelqTarget]);
         }
@@ -1019,11 +1027,19 @@ class TaxRollProcessor {
         conds.push(CODECOMPLIANCE);
         orderTerms.push(`(${CODECOMPLIANCE} * 12)`);
       }
+      // Tenure is a ranking PRIOR only — it boosts long-held owners but never gates
+      // which rows return (so it's added to orderTerms, not conds).
+      if (signals.tenure) {
+        orderTerms.push(TENURE_RANK);
+      }
       const orderExpr = orderTerms.length ? orderTerms.join(' + ') : 'total_value';
+      // conds can be empty if ONLY non-condition signals (tenure) are selected; fall
+      // back to the area/base filter alone rather than emitting an invalid `AND ()`.
+      const condClause = conds.length ? `AND (${conds.join(' OR ')})` : '';
 
       const sql = `
         SELECT ${SELECT} FROM ${FROM}
-        WHERE ${baseWhere} AND (${conds.join(' OR ')})
+        WHERE ${baseWhere} ${condClause}
         ORDER BY ${orderExpr} DESC, total_value DESC, account_id
         LIMIT ?`;
       const results = await this.db.all(sql, [...baseParams, limit]);

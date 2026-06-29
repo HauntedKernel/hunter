@@ -29,7 +29,9 @@ const SellersDashboardScreen = ({ onNavigate }) => {
     emptyNester: true,
     estate: true,
     divorce: true,
-    freeAndClear: true
+    freeAndClear: true,
+    codeCompliance: true,
+    tenure: true
   });
 
   // Quick-fill suggestions for the area input — real Dallas neighborhoods/ZIPs.
@@ -82,9 +84,11 @@ const SellersDashboardScreen = ({ onNavigate }) => {
     { key: 'estate', icon: '⚰️', label: 'Estate / Inherited', desc: 'Owner deceased — held by estate or heirs', strong: true },
     { key: 'divorce', icon: '💔', label: 'Divorce Filing', desc: 'Family-law filing matched to the owner', strong: true },
     { key: 'delinquent', icon: '🔴', label: 'Tax Delinquent', desc: 'Owes back property taxes' },
-    { key: 'elderly', icon: '👵', label: 'Elderly / Disabled', desc: 'Over-65 or disability exemption' },
+    { key: 'codeCompliance', icon: '🚧', label: 'Code Violation', desc: 'Open 311 code-compliance request (needs 311 feed)' },
+    { key: 'elderly', icon: '👵', label: 'Elderly / Downsizer', desc: 'Age 60+ or over-65/disability exemption' },
     { key: 'absentee', icon: '🏚️', label: 'Absentee Owner', desc: 'Mailing address differs from the property' },
     { key: 'emptyNester', icon: '🪺', label: 'Empty Nester', desc: 'Voter file: kids likely moved out' },
+    { key: 'tenure', icon: '⏳', label: 'Long Tenure', desc: 'Owned 7+ yrs — turns over more (ranking prior; needs DCAD file)' },
     { key: 'freeAndClear', icon: '🏦', label: 'Free & Clear', desc: 'No mortgage — no rate lock-in (needs lien feed)' }
   ];
 

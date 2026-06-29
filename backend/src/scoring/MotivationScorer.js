@@ -342,7 +342,9 @@ class MotivationScorer {
    * Fires only when the component signals co-occur on the same property.
    */
   calculateSignalSynergyScore(context) {
-    const byAge = context.ownerAge && context.ownerAge >= 65;
+    // Age-data path uses 60+ (median TX seller is 63-64, below the 65 exemption —
+    // RESEARCH §A.4). The exemption itself is still a hard 65 (county-granted).
+    const byAge = context.ownerAge && context.ownerAge >= 60;
     const isElderly = context.isElderly || byAge;
     const isDelinquent = (context.delinquentAmount || 0) > 0 ||
       !!context.propertyData?.taxDelinquency?.isDelinquent;
@@ -532,10 +534,12 @@ class MotivationScorer {
    * Correlates with downsizing, estate sales, aging-in-place transitions.
    */
   calculateElderlyScore(context) {
-    // Fires on the tax over-65/disability exemption OR a voter-file age >= 65.
-    const byAge = context.ownerAge && context.ownerAge >= 65;
+    // Fires on the tax over-65/disability exemption OR an age-data age >= 60. The
+    // 60+ band (not 65) matches the median TX seller age 63-64 (RESEARCH §A.4); the
+    // exemption path is still a hard county-granted 65.
+    const byAge = context.ownerAge && context.ownerAge >= 60;
     if (!context.isElderly && !byAge) {
-      return { score: 0, factor: 'No over-65/disability exemption', category: 'life-stage' };
+      return { score: 0, factor: 'No over-65 exemption and age under 60', category: 'life-stage' };
     }
     const detail = byAge ? `owner age ${context.ownerAge}` : 'over-65 or disability exemption';
     return {
