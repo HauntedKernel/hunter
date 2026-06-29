@@ -692,6 +692,22 @@ Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 
   filled template → ingest → officers land in the right column. Worklist outputs
   gitignored (hold officer data once filled).
 
+- `[#053]` **Framing brief + research pack — the free "PI layer"
+  (`export_curated.js`).** Two new columns on every curated lead, both synthesized
+  from data we already own (public records + our signals — no scraping, no cost):
+  (1) `framing_brief` — a plain-English APPROACH note for the salesperson
+  (WHO / SITUATION / APPROACH), e.g. "Corp-owned by a real-estate investor (…),
+  managing ~3 properties. Situation: tax suit. Approach: B2B — talk numbers, lead
+  with a clean cash offer." Adapts by owner type (investor/professional/estate/
+  senior), pressures (suit/divorce/free-and-clear), and routes to family/heirs
+  where relevant. (2) `research_links` — pre-built, DISAMBIGUATED OSINT entry
+  points (Google with name+business+Dallas, news, business reviews, SOS entity,
+  obituary for estates, and industry-scoped license lookups — bar/medical/TREC via
+  site: queries). Manual review only — keeps platform-scraping (ToS/CFAA) and deep
+  personal profiling out; outreach framing only, never eligibility decisions. The
+  paid V2 (search API + Claude auto-composite, on-demand per top lead) fills this
+  frame later. Verified across business/estate/elderly/suit lead types.
+
 ### Flagged for prior-art / patent review (Handoff Rule 6)
 - New `calculateUrgencyScore()` (0–100): weights balance size, years behind,
   absentee ownership (no homestead exemption), and foreclosure risk. Used as

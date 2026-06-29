@@ -51,6 +51,74 @@ function ownerType(name) {
   if (BUSINESS_RE.test(n)) return 'Business';
   return 'Individual';
 }
+
+const cleanEstateName = (n) => String(n || '').replace(/\b(EST OF|ESTATE OF|LIFE ESTATE|HEIRS|ET AL|ETAL)\b/gi, '').replace(/&.*/, '').trim();
+
+// A plain-English APPROACH note for the salesperson, synthesized from what we
+// already know (public records + our signals). Outreach framing, not a profile.
+function framingBrief(f) {
+  const ind = f.industries || [];
+  const role = ind.includes('Law/Attorney') ? 'an attorney'
+    : (ind.includes('Medical') || ind.includes('Dental')) ? 'a medical professional'
+    : ind.includes('Construction/Trades') ? 'a builder/contractor'
+    : ind.includes('Accounting/Finance') ? 'a finance professional'
+    : ind.includes('Real estate / Investor') ? 'a real-estate investor'
+    : ind.length ? `a ${ind[0].toLowerCase()} business owner` : 'a business owner';
+  const parts = [];
+  if (f.estate) parts.push('Estate/inherited — the heirs are the decision-makers.');
+  else if (f.isBiz) {
+    let s = `${f.oType}-owned by ${role}`;
+    const ppl = (f.peopleBehind || []).slice(0, 3);
+    if (ppl.length) s += ` (${ppl.join(', ')})`;
+    if (f.portfolioSize >= 3) s += `, managing ~${f.portfolioSize} properties`;
+    parts.push(s + '.');
+  } else if (f.elderly) parts.push(`Senior owner${f.longTenure >= 30 ? `, owned ${f.longTenure}+ yrs (likely downsizing)` : ''}.`);
+  else if (f.absentee) parts.push('Out-of-area / absentee owner.');
+  else parts.push('Owner-occupant.');
+
+  const sit = [];
+  if (f.suit) sit.push('active tax-foreclosure suit (time pressure)');
+  else if (f.delinqYears) sit.push(`${f.delinqYears}y behind on taxes`);
+  if (f.divorce) sit.push('divorce in process');
+  if (f.bankruptcy) sit.push('bankruptcy filed');
+  if (f.freeClear) sit.push('owns free & clear (flexible on price/terms)');
+  if (sit.length) parts.push('Situation: ' + sit.join('; ') + '.');
+
+  const ap = [];
+  if (f.isBiz && /investor|builder|contractor/.test(role)) ap.push('B2B — talk numbers, lead with a clean cash offer; they know the process');
+  else if (f.isBiz && /attorney|medical|finance/.test(role)) ap.push('time-poor professional — be concise and direct');
+  if (f.estate || f.elderly || f.family) ap.push('low-pressure and patient; involve the family/heirs — reach the decision-maker');
+  if (f.suit) ap.push('emphasize speed and certainty of close, no fees');
+  else if (f.freeClear) ap.push("they don't need to sell — sell convenience/certainty, not desperation");
+  if (!ap.length) ap.push('build rapport; understand their timeline');
+  parts.push('Approach: ' + ap.join('; ') + '.');
+  return parts.join(' ');
+}
+
+// Pre-built, disambiguated research links (manual OSINT entry points — no scraping).
+function researchPack(f) {
+  const q = (s) => `https://www.google.com/search?q=${encodeURIComponent(s)}`;
+  const news = (s) => `https://www.google.com/search?tbm=nws&q=${encodeURIComponent(s)}`;
+  const name = f.ownerName || '';
+  const ind = f.industries || [];
+  const person = f.person || (!f.isBiz ? name : '');
+  const links = [];
+  if (f.isBiz) {
+    links.push(`Web: ${q(`"${name}" Dallas TX`)}`);
+    if (f.person) links.push(`Principal: ${q(`"${f.person}" "${name}" Dallas`)}`);
+    links.push(`Reviews: ${q(`${name} Dallas reviews`)}`);
+    links.push(`Entity: ${q(`"${name}" Texas Secretary of State`)}`);
+  } else {
+    const ctx = f.contextBiz ? ` "${f.contextBiz}"` : '';
+    links.push(`Web: ${q(`"${name}"${ctx} Dallas TX`)}`);
+    links.push(`News: ${news(`"${name}" Dallas`)}`);
+  }
+  if (f.estate) links.push(`Obituary: ${q(`"${cleanEstateName(name)}" obituary Dallas`)}`);
+  if (person && ind.includes('Law/Attorney')) links.push(`Bar: ${q(`"${person}" site:texasbar.com`)}`);
+  if (person && (ind.includes('Medical') || ind.includes('Dental'))) links.push(`Med board: ${q(`"${person}" site:profile.tmb.state.tx.us`)}`);
+  if (person && ind.includes('Real estate / Investor')) links.push(`TREC: ${q(`"${person}" site:trec.texas.gov`)}`);
+  return links.join(' | ');
+}
 const NOW_YEAR = new Date().getFullYear();
 const TODAY = new Date().toISOString().slice(0, 10);
 
@@ -197,7 +265,8 @@ const jparse = (s) => { try { const v = JSON.parse(s); return v; } catch { retur
     // Everyone individual at the mailing address = candidate humans behind the LLC(s).
     const peopleBehind = clusterIndividuals.join('; ');
     // Every OTHER business at the same address (the owner's other entities).
-    const otherBusinesses = clusterBusinesses.filter(b => b !== r.owner_name).join('; ');
+    const otherBizList = clusterBusinesses.filter(b => b !== r.owner_name);
+    const otherBusinesses = otherBizList.join('; ');
 
     // Contacts: owner phones/emails + family (for elderly).
     const ownerPhones = (jparse(r.c_phones) || []).map(p => (p && p.number) || p).filter(Boolean);
@@ -213,11 +282,25 @@ const jparse = (s) => { try { const v = JSON.parse(s); return v; } catch { retur
     const equityStatus = freeClear ? 'Free & clear'
       : (r.equity_pct != null && r.equity_pct !== '' ? `${Math.round(Number(r.equity_pct) * (Number(r.equity_pct) <= 1 ? 100 : 1))}% equity` : '');
 
+    // Framing brief (approach note) + research pack (disambiguated OSINT links).
+    const brief = framingBrief({
+      oType, isBiz, industries: clusterIndustries, peopleBehind: clusterIndividuals,
+      portfolioSize, suit: r.suit_pending, delinqYears: r.delinquent_years, absentee: r.is_absentee,
+      estate, divorce: r.has_divorce, freeClear, elderly, longTenure: r.tenure_years || 0,
+      bankruptcy: r.bankruptcy_filed, family: recommendedContact.startsWith('FAMILY'),
+    });
+    const research = researchPack({
+      ownerName: r.owner_name, isBiz, estate, industries: clusterIndustries,
+      person: clusterIndividuals[0] || (isBiz ? '' : r.owner_name),
+      contextBiz: !isBiz ? (otherBizList[0] || '') : '',
+    });
+
     out.push({
       account_id: r.account_id,
       prob, motivation,
       sell_prob_pct: prob != null ? (prob * 100).toFixed(1) : '',
       signals: signals.join(' · '),
+      framing_brief: brief,
       owner_name: r.owner_name,
       owner_type: oType,
       industries: clusterIndustries.join(', '),
@@ -238,6 +321,7 @@ const jparse = (s) => { try { const v = JSON.parse(s); return v; } catch { retur
       business_contact: businessContact,
       people_behind: peopleBehind,
       other_businesses: otherBusinesses,
+      research_links: research,
       cluster_size: r.oc_members && r.oc_members > 1 ? r.oc_members + (clusterInst ? ' (bulk/agent addr)' : '') : '',
       mailing_address: r.owner_address || '',
     });
@@ -248,10 +332,10 @@ const jparse = (s) => { try { const v = JSON.parse(s); return v; } catch { retur
   const top = out.slice(0, limit);
   top.forEach((o, i) => { o.rank = i + 1; });
 
-  const header = ['rank', 'sell_prob_pct', 'signals', 'owner_name', 'owner_type', 'industries', 'property_address', 'zip',
+  const header = ['rank', 'sell_prob_pct', 'signals', 'framing_brief', 'owner_name', 'owner_type', 'industries', 'property_address', 'zip',
     'est_value', 'equity_status', 'other_properties', 'portfolio_value', 'cluster_size', 'years_owned', 'years_delinquent', 'amount_due',
     'recommended_contact', 'owner_phones', 'owner_emails', 'family_contact', 'family_phones',
-    'business_contact', 'people_behind', 'other_businesses', 'mailing_address', 'account_id'];
+    'business_contact', 'people_behind', 'other_businesses', 'research_links', 'mailing_address', 'account_id'];
   const body = top.map(o => header.map(h => csvCell(o[h] ?? '')).join(','));
   fs.writeFileSync(outPath, [header.join(','), ...body].join('\n') + '\n');
 
