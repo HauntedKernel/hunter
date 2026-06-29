@@ -21,7 +21,7 @@ LOG="$HOME/hunter/taxroll_cron.log"
 WORK="$HOME/hunter/.refresh_work"            # same filesystem as $DATA -> atomic mv
 PAGE="https://www.dallascounty.org/departments/tax/tax-roll.php"
 BASE="https://www.dallascounty.org/Assets/uploads/docs/tax/trw"
-MIN_ZIP_BYTES=524288000                        # 500MB sanity floor for the download
+MIN_ZIP_BYTES=104857600                        # 100MB floor (zip is ~266MB; unzips to ~2.6GB) — rejects error pages
 MIN_ROWS=700000                                # rebuilt roll must have >= this many rows
 
 log(){ echo "[$(date)] $*" >> "$LOG"; }
