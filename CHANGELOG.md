@@ -722,6 +722,21 @@ Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 
   lets the build target the copy. Cron: `0 3 * * 2` (Tuesdays, TRW posts Monday).
   Joins the existing monthly foreclosure-refresh cron — the box now self-updates.
 
+- `[#055]` **Land-list mode (`export_curated.js --land`) — first paid-client
+  deliverable.** New `--land` flag retargets the curated exporter from "motivated
+  sellers" to "vacant land": universe becomes SPTB category `C*` (C11 vacant
+  residential lot, C12 vacant commercial, etc.), spanning roll_code R **and** C
+  (motivated lists are R-only). Excludes owners that won't sell raw land to a
+  developer (CITY OF / COUNTY / ISD / STATE OF / HOUSING AUTH / DART / SCHOOL DIST /
+  REDEVELOPMENT / community colleges). Adds a `land_type` column (decoded subtype)
+  in place of `sell_prob_pct` (P(sell) is home-oriented, meaningless for raw lots),
+  and ranks by motivation score then lot value. **Reuses the full enrichment stack
+  unchanged** — owner type, portfolio, owner-cluster (LLC→human), framing brief,
+  research links, contacts. Flags the known limitation: tax roll has no lot-size/
+  acreage field (buyer pulls dimensions per parcel from DCAD). First use: 75214/
+  75218/75206 land for realtor Lee Lamont's developer (958 parcels in territory →
+  top 150 delivered). Outputs gitignored (`backend/land_*.csv`).
+
 ### Flagged for prior-art / patent review (Handoff Rule 6)
 - New `calculateUrgencyScore()` (0–100): weights balance size, years behind,
   absentee ownership (no homestead exemption), and foreclosure risk. Used as

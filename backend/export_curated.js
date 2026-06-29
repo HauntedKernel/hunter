@@ -138,7 +138,8 @@ const jparse = (s) => { try { const v = JSON.parse(s); return v; } catch { retur
   const label = arg('--label', zips.join('-'));
   const exclusive = hasFlag('--exclusive');
   const diffDb = arg('--diff');
-  const outPath = arg('--out', `curated_${label.replace(/[^a-z0-9]+/gi, '_')}_${TODAY}${diffDb ? '_NEW' : ''}.csv`);
+  const landMode = hasFlag('--land');   // vacant-land inventory instead of motivated sellers
+  const outPath = arg('--out', `${landMode ? 'land' : 'curated'}_${label.replace(/[^a-z0-9]+/gi, '_')}_${TODAY}${diffDb ? '_NEW' : ''}.csv`);
 
   const dbPath = path.join(__dirname, 'src', 'data', 'tax_roll.db');
   const db = await open({ filename: dbPath, driver: sqlite3.Database });
@@ -169,7 +170,7 @@ const jparse = (s) => { try { const v = JSON.parse(s); return v; } catch { retur
   const zipParams = zips.map(z => z.slice(0, 5) + '%');
   const baseCols = `t.account_id, t.owner_name, t.property_address, t.zip_code, t.owner_address,
     t.is_delinquent, t.is_absentee, t.over65_exemption, t.suit_pending, t.bankruptcy_filed,
-    t.delinquent_years, t.total_amount_due, t.total_value`;
+    t.delinquent_years, t.total_amount_due, t.total_value, t.category_code`;
 
   // Motivated universe: any escalation/intent signal present.
   const motivatedWhere = `(t.suit_pending=1 OR t.is_delinquent=1 OR t.is_absentee=1
@@ -177,13 +178,26 @@ const jparse = (s) => { try { const v = JSON.parse(s); return v; } catch { retur
     ${has('liens') ? 'OR l.free_and_clear=1' : ''}
     OR t.owner_name LIKE '%ESTATE OF%' OR t.owner_name LIKE '% EST OF%' OR t.owner_name LIKE '%HEIRS%')`;
 
+  // Land universe: vacant land (SPTB category C*), minus owners that won't sell to a developer
+  // (government, schools, transit, housing authorities — they don't sell raw land for profit).
+  const GOV_EXCLUDE = `AND t.owner_name NOT LIKE 'CITY OF %' AND t.owner_name NOT LIKE '%ISD%'
+    AND t.owner_name NOT LIKE 'COUNTY OF %' AND t.owner_name NOT LIKE '%DALLAS COUNTY%'
+    AND t.owner_name NOT LIKE 'STATE OF %' AND t.owner_name NOT LIKE '%HOUSING AUTH%'
+    AND t.owner_name NOT LIKE 'UNITED STATES%' AND t.owner_name NOT LIKE '%DART%'
+    AND t.owner_name NOT LIKE '%REDEVELOPMENT%' AND t.owner_name NOT LIKE 'DEPARTMENT OF %'
+    AND t.owner_name NOT LIKE '%SCHOOL DIST%' AND t.owner_name NOT LIKE '%COMMUNITY COLLEGE%'`;
+  const landWhere = `t.category_code LIKE 'C%' ${GOV_EXCLUDE}`;
+
+  // Land lists span roll_code R (residential lots) AND C (commercial vacant); motivated lists are R.
+  const rollFilter = landMode ? '' : "t.roll_code='R' AND ";
+  const universeWhere = landMode ? landWhere : motivatedWhere;
   const sql = `SELECT ${baseCols}${cols.length ? ',\n    ' + cols.join(',\n    ') : ''}
     FROM tax_roll t
     ${joins.join('\n    ')}
-    WHERE t.roll_code='R' AND t.owner_name IS NOT NULL AND (${zipWhere}) AND ${motivatedWhere}`;
+    WHERE ${rollFilter}t.owner_name IS NOT NULL AND (${zipWhere}) AND ${universeWhere}`;
 
   const rows = await db.all(sql, zipParams);
-  console.log(`territory ${zips.join(', ')}: ${rows.length} motivated properties`);
+  console.log(`territory ${zips.join(', ')}: ${rows.length} ${landMode ? 'vacant-land parcels' : 'motivated properties'}`);
 
   // Diff mode: keep only properties NEWLY in distress vs an older snapshot.
   let newlyDistressed = null;
@@ -207,6 +221,10 @@ const jparse = (s) => { try { const v = JSON.parse(s); return v; } catch { retur
   // Score with the calibrated P(sell) model (fall back to a motivation count).
   let model = null;
   try { const M = require('./src/scoring/SellProbabilityModel'); model = new M(path.join(__dirname, 'src', 'scoring', 'sell_model.json')); if (!model.available) model = null; } catch { model = null; }
+
+  // SPTB vacant-land subtype decode (for the land-list "land_type" column).
+  const LAND_TYPE = { C1: 'Vacant residential lot', C11: 'Vacant residential lot', C12: 'Vacant commercial lot',
+    C13: 'Vacant lot', C14: 'Vacant lot', C2: 'Vacant commercial lot', C3: 'Vacant lot', C4: 'Vacant lot' };
 
   const out = [];
   for (const r of rows) {
@@ -295,10 +313,13 @@ const jparse = (s) => { try { const v = JSON.parse(s); return v; } catch { retur
       contextBiz: !isBiz ? (otherBizList[0] || '') : '',
     });
 
+    const landType = landMode ? (LAND_TYPE[(r.category_code || '').trim()] || 'Vacant land') : '';
+
     out.push({
       account_id: r.account_id,
       prob, motivation,
       sell_prob_pct: prob != null ? (prob * 100).toFixed(1) : '',
+      land_type: landType,
       signals: signals.join(' · '),
       framing_brief: brief,
       owner_name: r.owner_name,
@@ -327,12 +348,14 @@ const jparse = (s) => { try { const v = JSON.parse(s); return v; } catch { retur
     });
   }
 
-  // Rank by calibrated P(sell) when available, else the motivation score.
-  out.sort((a, b) => (b.prob ?? 0) - (a.prob ?? 0) || b.motivation - a.motivation);
+  // Land: P(sell) is home-oriented and meaningless for raw lots — rank by motivation, then lot value.
+  // Otherwise rank by calibrated P(sell) when available, else the motivation score.
+  if (landMode) out.sort((a, b) => b.motivation - a.motivation || (Number(b.est_value) || 0) - (Number(a.est_value) || 0));
+  else out.sort((a, b) => (b.prob ?? 0) - (a.prob ?? 0) || b.motivation - a.motivation);
   const top = out.slice(0, limit);
   top.forEach((o, i) => { o.rank = i + 1; });
 
-  const header = ['rank', 'sell_prob_pct', 'signals', 'framing_brief', 'owner_name', 'owner_type', 'industries', 'property_address', 'zip',
+  const header = ['rank', ...(landMode ? ['land_type'] : ['sell_prob_pct']), 'signals', 'framing_brief', 'owner_name', 'owner_type', 'industries', 'property_address', 'zip',
     'est_value', 'equity_status', 'other_properties', 'portfolio_value', 'cluster_size', 'years_owned', 'years_delinquent', 'amount_due',
     'recommended_contact', 'owner_phones', 'owner_emails', 'family_contact', 'family_phones',
     'business_contact', 'people_behind', 'other_businesses', 'research_links', 'mailing_address', 'account_id'];
@@ -341,8 +364,9 @@ const jparse = (s) => { try { const v = JSON.parse(s); return v; } catch { retur
 
   const withContacts = top.filter(o => o.owner_phones || o.family_phones).length;
   const elderlyFamily = top.filter(o => o.recommended_contact.startsWith('FAMILY')).length;
-  console.log(`\n${exclusive ? 'EXCLUSIVE ' : ''}curated list -> ${outPath}`);
-  console.log(`  ${top.length} leads${diffDb ? ' (NEW this period)' : ''}, ranked by ${model ? 'P(sell)' : 'motivation score'}`);
+  console.log(`\n${exclusive ? 'EXCLUSIVE ' : ''}${landMode ? 'land list' : 'curated list'} -> ${outPath}`);
+  console.log(`  ${top.length} ${landMode ? 'parcels' : 'leads'}${diffDb ? ' (NEW this period)' : ''}, ranked by ${landMode ? 'motivation, then lot value' : (model ? 'P(sell)' : 'motivation score')}`);
+  if (landMode) console.log('  NOTE: tax roll has no lot-size/acreage field — buyer should pull dimensions per parcel from DCAD.');
   console.log(`  ${withContacts} have a phone on file; ${elderlyFamily} elderly leads routed to a family contact`);
   if (!withContacts) console.log('  NOTE: no contacts yet — skip-trace a PropStream pull, map_propstream.js, ingest_contacts.js, then re-run.');
   console.log('  COMPLIANCE: phones are NOT DNC-scrubbed — buyer must scrub before calling.');
