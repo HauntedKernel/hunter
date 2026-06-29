@@ -665,6 +665,21 @@ Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 
   in the roll. Validated end-to-end (sample registry matched, all columns flow).
   `business_affiliations.sample.csv` shows the input. CHANGELOG #050.
 
+- `[#051]` **Owner-cluster entity resolution + industry tags — the free "LLC
+  breaker" (`backend/build_owner_clusters.js` → `owner_cluster` table).** Groups
+  every parcel + owner-name variant sharing a mailing address into one cluster
+  (same normalization as owner_portfolio, so it joins on portfolio_key). For 3,800
+  clusters a business AND an individual share the address — the human behind the
+  LLC, free, no registry. Per Cole, lists EVERYTHING: ALL individuals + ALL
+  businesses in the cluster (no single-principal guess; replaced the old
+  likely_principal heuristic). Infers industry tags from business names
+  (Dental/Law/Pet/Construction/Real-estate/…) for sales-approach context.
+  Registered-agent-service addresses (≥40 distinct names) flagged institutional,
+  lists withheld (false grouping, not trimmed). Wired into `export_curated.js`:
+  new columns `industries`, `people_behind`, `other_businesses`, `cluster_size`;
+  `business_contact` now lists agent + all officers + phone. Verified: RJC CUSTOM
+  BUILDERS LLC → the two Guel individuals + their 4 other businesses + industries.
+
 ### Flagged for prior-art / patent review (Handoff Rule 6)
 - New `calculateUrgencyScore()` (0–100): weights balance size, years behind,
   absentee ownership (no homestead exemption), and foreclosure risk. Used as

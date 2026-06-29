@@ -90,6 +90,7 @@ const jparse = (s) => { try { const v = JSON.parse(s); return v; } catch { retur
   if (has('appraisal_detail')) { joins.push('LEFT JOIN appraisal_detail ap ON ap.account_id=t.account_id'); cols.push('ap.tenure_years AS tenure_years', 'ap.year_built AS year_built'); }
   if (has('owner_portfolio')) { joins.push('LEFT JOIN owner_portfolio op ON op.account_id=t.account_id'); cols.push('op.portfolio_size AS portfolio_size', 'op.portfolio_value AS portfolio_value', 'op.is_institutional AS portfolio_institutional', 'op.portfolio_key AS portfolio_key'); }
   if (has('business_affiliations')) { joins.push('LEFT JOIN business_affiliations ba ON ba.account_id=t.account_id'); cols.push('ba.registered_agent AS ba_agent', 'ba.officers AS ba_officers', 'ba.business_phone AS ba_phone', 'ba.entity_type AS ba_type', 'ba.status AS ba_status'); }
+  if (has('owner_cluster') && has('owner_portfolio')) { joins.push('LEFT JOIN owner_cluster oc ON oc.portfolio_key = op.portfolio_key'); cols.push('oc.individuals AS oc_individuals', 'oc.businesses AS oc_businesses', 'oc.industries AS oc_industries', 'oc.member_count AS oc_members', 'oc.is_institutional AS oc_institutional'); }
   if (has('contacts')) {
     joins.push('LEFT JOIN contacts c ON c.account_id=t.account_id');
     cols.push('c.phones AS c_phones', 'c.emails AS c_emails',
@@ -139,22 +140,6 @@ const jparse = (s) => { try { const v = JSON.parse(s); return v; } catch { retur
   let model = null;
   try { const M = require('./src/scoring/SellProbabilityModel'); model = new M(path.join(__dirname, 'src', 'scoring', 'sell_model.json')); if (!model.available) model = null; } catch { model = null; }
 
-  // Free "human behind the LLC": if exactly one INDIVIDUAL shares a business's
-  // mailing address, they're the likely principal. Ambiguous (0 or >1) -> skip.
-  const principalCache = new Map();
-  async function likelyPrincipal(key) {
-    if (!key || !has('owner_portfolio')) return null;
-    if (principalCache.has(key)) return principalCache.get(key);
-    const mates = await db.all(
-      `SELECT DISTINCT t.owner_name FROM owner_portfolio op JOIN tax_roll t ON t.account_id=op.account_id
-       WHERE op.portfolio_key = ? LIMIT 60`, [key]);
-    const people = [...new Set(mates.map(m => m.owner_name)
-      .filter(n => n && !BUSINESS_RE.test(n) && !ESTATE_RE.test(n) && !/\bTRUST\b/i.test(n)))];
-    const val = people.length === 1 ? people[0] : null;
-    principalCache.set(key, val);
-    return val;
-  }
-
   const out = [];
   for (const r of rows) {
     if (newlyDistressed && !newlyDistressed(r)) continue;
@@ -197,13 +182,22 @@ const jparse = (s) => { try { const v = JSON.parse(s); return v; } catch { retur
     const oType = ownerType(r.owner_name);
     const isBiz = oType !== 'Individual' && oType !== 'Estate';
     if (isBiz) signals.push(`${oType}-owned`);
-    let businessContact = r.ba_agent ? `${r.ba_agent}${r.ba_phone ? ` · ${r.ba_phone}` : ''}` : '';
-    if (!businessContact && r.ba_officers) businessContact = r.ba_officers;
-    let likelyPrincipalName = '';
-    if (isBiz && !businessContact) {
-      const p = await likelyPrincipal(r.portfolio_key);
-      if (p) likelyPrincipalName = `${p} (shares mailing addr)`;
-    }
+    // Registry contact: list ALL of it (agent + every officer + phone), no guessing.
+    const businessContact = [
+      r.ba_agent ? `Agent: ${r.ba_agent}` : '',
+      r.ba_officers ? `Officers: ${r.ba_officers}` : '',
+      r.ba_phone ? `Tel: ${r.ba_phone}` : '',
+    ].filter(Boolean).join(' | ');
+
+    // Owner cluster (entity resolution by mailing address) — list ALL members.
+    const clusterInst = r.oc_institutional === 1;
+    const clusterIndividuals = clusterInst ? [] : (jparse(r.oc_individuals) || []);
+    const clusterBusinesses = clusterInst ? [] : (jparse(r.oc_businesses) || []);
+    const clusterIndustries = clusterInst ? [] : (jparse(r.oc_industries) || []);
+    // Everyone individual at the mailing address = candidate humans behind the LLC(s).
+    const peopleBehind = clusterIndividuals.join('; ');
+    // Every OTHER business at the same address (the owner's other entities).
+    const otherBusinesses = clusterBusinesses.filter(b => b !== r.owner_name).join('; ');
 
     // Contacts: owner phones/emails + family (for elderly).
     const ownerPhones = (jparse(r.c_phones) || []).map(p => (p && p.number) || p).filter(Boolean);
@@ -226,6 +220,7 @@ const jparse = (s) => { try { const v = JSON.parse(s); return v; } catch { retur
       signals: signals.join(' · '),
       owner_name: r.owner_name,
       owner_type: oType,
+      industries: clusterIndustries.join(', '),
       property_address: r.property_address,
       zip: String(r.zip_code).slice(0, 5),
       est_value: r.total_value ? Math.round(r.total_value) : '',
@@ -241,7 +236,9 @@ const jparse = (s) => { try { const v = JSON.parse(s); return v; } catch { retur
       family_contact: child ? `${child.name || ''}${child.relationship ? ` (${child.relationship})` : ''}` : '',
       family_phones: familyPhones.join(' / '),
       business_contact: businessContact,
-      likely_principal: likelyPrincipalName,
+      people_behind: peopleBehind,
+      other_businesses: otherBusinesses,
+      cluster_size: r.oc_members && r.oc_members > 1 ? r.oc_members + (clusterInst ? ' (bulk/agent addr)' : '') : '',
       mailing_address: r.owner_address || '',
     });
   }
@@ -251,10 +248,10 @@ const jparse = (s) => { try { const v = JSON.parse(s); return v; } catch { retur
   const top = out.slice(0, limit);
   top.forEach((o, i) => { o.rank = i + 1; });
 
-  const header = ['rank', 'sell_prob_pct', 'signals', 'owner_name', 'owner_type', 'property_address', 'zip',
-    'est_value', 'equity_status', 'other_properties', 'portfolio_value', 'years_owned', 'years_delinquent', 'amount_due',
+  const header = ['rank', 'sell_prob_pct', 'signals', 'owner_name', 'owner_type', 'industries', 'property_address', 'zip',
+    'est_value', 'equity_status', 'other_properties', 'portfolio_value', 'cluster_size', 'years_owned', 'years_delinquent', 'amount_due',
     'recommended_contact', 'owner_phones', 'owner_emails', 'family_contact', 'family_phones',
-    'business_contact', 'likely_principal', 'mailing_address', 'account_id'];
+    'business_contact', 'people_behind', 'other_businesses', 'mailing_address', 'account_id'];
   const body = top.map(o => header.map(h => csvCell(o[h] ?? '')).join(','));
   fs.writeFileSync(outPath, [header.join(','), ...body].join('\n') + '\n');
 
