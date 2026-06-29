@@ -46,7 +46,8 @@ if [ "$SZ" -lt "$MIN_ZIP_BYTES" ]; then log "ABORT: download too small ($SZ byte
 
 # 3. Unzip + locate the flat404.* data file.
 if ! unzip -o -q "$WORK/trw.zip" -d "$WORK"; then log "ABORT: unzip failed"; exit 0; fi
-FLAT=$(ls "$WORK"/flat404.* 2>/dev/null | head -1)
+# The flat file is nested (usr2/spool/act/flat404.DALLASCOUNTY.YYYYMMDD.NNNNNN) — find it.
+FLAT=$(find "$WORK" -type f -name 'flat404.*' 2>/dev/null | head -1)
 if [ -z "$FLAT" ]; then log "ABORT: no flat404.* file in zip"; exit 0; fi
 log "flat file: $(basename "$FLAT")"
 
