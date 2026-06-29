@@ -2,6 +2,29 @@
 
 Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 5).
 
+## 2026-06-29 — Delinquency recalibration + back-training plan
+
+- `[#059]` **Raw tax-delinquency down-weighted 40 → 22 (model reconciliation).**
+  The trained model (RESEARCH §F) gives raw delinquency a multivariate OR of 0.88 —
+  mildly *negative* once controlling for suit status, amount owed, and absentee — yet
+  it was hand-weighted highest (40). Its predictive value lives in its escalations
+  (suit, amount, absentee), which are already scored separately. Down-weighted to 22
+  so it stays a meaningful actionability signal without dominating the score.
+  Before/after on real + archetype leads: a *merely-delinquent* lead now ranks
+  **below** an estate+absentee (non-delinquent) lead, while suit/absentee-escalated
+  delinquent leads hold the top — the model-aligned ordering. Flagged but NOT yet
+  changed: absentee is the model's strongest predictor (OR 2.05) but still only
+  weight 12 — bump it after the back-train. `SIGNAL_GAPS.md §4`.
+- **`SIGNAL_GAPS.md §7` — back-training the model with the new features IS possible.**
+  Corrected the earlier "blocked until a future snapshot" claim: the blocker is
+  point-in-time reconstruction, not time. **Tenure** (DCAD annual appraisal archives,
+  2021–2026 — use the 2025 file's deed date, leakage-safe) and **311** (Socrata
+  created/closed dates → "open as of 2025-08-25") are both **free and back-trainable
+  now** against the existing 2025-08→2026-06 labeled snapshot. The multi-year archives
+  also enable several snapshot pairs → enough labels for the discrete-time hazard
+  model. Free-and-clear/divorce need dated historical records (a current PropStream
+  snapshot would leak). Concrete steps in §7.
+
 ## 2026-06-29 — Signal-gap audit + three lift fixes
 
 - `[#057]` **Signal/combination gap audit + 3 closeable gaps shipped (`SIGNAL_GAPS.md`).**

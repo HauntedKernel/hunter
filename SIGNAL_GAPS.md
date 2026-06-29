@@ -109,20 +109,24 @@ These are not "add a feed" — they're "the current weights disagree with the
 measured data," and fixing them shifts existing results (incl. the Lamont land
 ranking), so flagging rather than unilaterally changing:
 
-1. **Raw tax-delinquency is hand-weighted highest (40) but the trained model gives
-   it OR 0.88 — mildly *negative* once controlling for suit / amount-owed /
-   absentee.** Its predictive value lives in its escalations, not itself. The
-   honest fix is to down-weight raw delinquency and let suit/amount/absentee carry
-   it. Impact: re-ranks every delinquency-driven list.
+1. ✅ **DONE (2026-06-29, CHANGELOG #059): raw tax-delinquency down-weighted 40 → 22.**
+   The trained model gives raw delinquency OR 0.88 — mildly *negative* once
+   controlling for suit / amount-owed / absentee; its predictive value lives in its
+   escalations. Down-weighted so it stays a meaningful actionability signal without
+   dominating. Before/after: a *merely-delinquent* lead now ranks **below** an
+   estate+absentee (non-delinquent) lead; suit/absentee-escalated leads hold the top.
+   ⏭️ Still inverted vs. the model: **absentee is the strongest predictor (OR 2.05)
+   but only weight 12** — a future pass should bump it.
 2. **The calibrated `sell_model.json` only uses 8 tax-roll features + 2
    interactions.** It ignores divorce, free-and-clear, empty-nester, pre-foreclosure,
-   estate-interactions, and now tenure. So the P(sell)% we surface is a **floor**.
+   estate-interactions, and now tenure/311. So the P(sell)% we surface is a **floor**.
    Retraining with the new feeds as inputs is the path to lifting AUC (0.617 today).
+   **This IS back-trainable now for the free signals — see §7.**
 
-**Recommended decision:** keep weights as-is until tenure + one paid feed land, then
-**re-run `validate_signals.js` and retrain `train_sell_model.js`** with the new
-features and let the *measured* coefficients set the weights (kills the hand-tuning
-guesswork). Do NOT class-rebalance (RESEARCH §A).
+**Recommended decision:** ✅ delinquency down-weight applied. Next: **back-train the
+model with tenure + 311** (both free, point-in-time reconstructable — §7), re-run
+`validate_signals.js`, and let the *measured* coefficients set the weights. Do NOT
+class-rebalance (RESEARCH §A).
 
 ---
 
@@ -170,11 +174,50 @@ guesswork). Do NOT class-rebalance (RESEARCH §A).
 
 ---
 
-## 6. Status of this pass
+## 7. Back-training the model with the new features (it IS possible)
+
+Earlier I said the new features "can't be retrained until a future snapshot." That
+was **wrong for the free signals.** The blocker isn't time — it's getting each
+feature's value **as it was at the OLD snapshot date** (point-in-time), so you don't
+leak the outcome. For features that are *timestamped historical facts*, that value is
+reconstructable today. The model's AUC (0.617) is a floor precisely because we left
+these out.
+
+**The backtest spine (already built):** OLD snapshot = 2025-08-25 tax roll
+(`tax_roll.db.bak-20250825`, on the box) → NEW = 2026-06-22 → label = owner-name
+changed. `scripts/validate_signals.js` + `scripts/train_sell_model.js` already do
+this; we just add columns.
+
+| New feature | Point-in-time source | Leakage-safe? | Cost | Status |
+|---|---|---|---|---|
+| **Tenure** | DCAD **annual** appraisal archives (DataProducts has 2021–2026 ZIPs). Use the **2025** file's deed-transfer date → `tenure_as_of_2025 = 2025 − deed_year`. | ✅ The 2025 file predates the labeled sales, so sold parcels don't show their post-sale deed. (Using *today's* appraisal file WOULD leak — sold parcels show the new owner's deed.) | **Free** | ✅ **Do now** |
+| **311 code-compliance** | Socrata 311 (`gc4d-8a49`) carries `created_date` + `closed_date`. Reconstruct "open on 2025-08-25" = created ≤ 2025-08-25 AND (closed null OR > 2025-08-25). | ✅ Pure as-of filter on dates. | **Free** | ✅ **Do now** |
+| Free-and-clear | Dated Clerk deed-of-trust + release records as of 2025-08. (PropStream's *current* snapshot would LEAK — sold homes show the new owner's mortgage.) | ⚠️ Needs dated clerk records, not a current snapshot | gated/paid | Blocked on data |
+| Divorce | Family-court filings with `filed_date` ≤ 2025-08 | ✅ if acquired | paid/call | Blocked on data |
+
+**Bigger win the archives unlock:** DCAD + tax-roll snapshots exist for **multiple
+years (2021–2026)**, so we can build **several** OLD→NEW snapshot pairs (21→22, 22→23,
+…), not just one. That's far more labeled sale-events → enough for the **discrete-time
+hazard model** RESEARCH §A recommended (and multiple years smooth out one-window
+noise). The data genuinely exists; it's a download + join job on the box.
+
+**Concrete next step (free, ~half a day on the box):**
+1. Download the **2025 DCAD annual appraisal ZIP** → `node ingest_appraisal.js` against
+   a 2025-as-of column; pull **historical 311** with an as-of-2025-08 filter.
+2. Add `tenure_as_of`, `code_open_as_of` to `train_sell_model.js` features; retrain;
+   read the new ORs + AUC.
+3. Re-weight the hand-scorer from the *measured* coefficients (replaces the remaining
+   hand-tuning, incl. the absentee under-weight).
+
+---
+
+## 8. Status of this pass
 - ✅ (a) `delinquent+suit` synergy added; triple deliberately omitted (documented).
 - ✅ (b) 311 code-compliance feed built + wired (precision caveat noted).
 - ✅ (c) Tenure signal wired from the existing free DCAD appraisal ingester.
-- ✅ §5 cost numbers — researched & filled (PropStream $99/mo; age-append 2–5¢/rec; divorce call-required).
-- ⏭️ Follow-ups: ingest the free DCAD appraisal file on the box (lights up tenure),
-  re-run `validate_signals.js` + retrain the model with the new features (§4),
-  build the DCAD situs-address crosswalk to sharpen 311/foreclosure matching.
+- ✅ Frontend: codeCompliance + tenure toggles; elderly age band 65→60 (CHANGELOG #058).
+- ✅ Delinquency down-weight 40→22 applied + before/after verified (CHANGELOG #059).
+- ✅ §5 cost numbers researched; §7 back-training path corrected & planned.
+- ⏭️ Follow-ups: ingest the free DCAD appraisal file + historical 311 on the box,
+  **back-train the model with tenure + 311** (§7), bump absentee weight from the new
+  ORs, build the DCAD situs-address crosswalk to sharpen 311/foreclosure matching.

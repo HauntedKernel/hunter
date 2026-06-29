@@ -41,8 +41,17 @@ class MotivationScorer {
 
     // Core scoring weights (Patent Claim: Multi-factor weighted algorithm)
     this.scoringWeights = {
-      // Financial Distress Factors (60% of total score)
-      taxDelinquency: 40,        // Tax delinquency is strongest predictor
+      // Financial Distress Factors
+      taxDelinquency: 22,        // RECALIBRATED 40 -> 22 (2026-06-29). The trained model
+                                 // (RESEARCH §F) gives RAW delinquency a multivariate OR of
+                                 // 0.88 — mildly *negative* once you control for suit status,
+                                 // amount owed, and absentee. Its predictive value lives in its
+                                 // escalations, not itself; those are captured by taxSuit (28),
+                                 // the amount-scaled urgency inside calculateTaxDelinquencyScore,
+                                 // and the delinquent+suit synergy. Down-weighted so it stays a
+                                 // meaningful actionability signal without dominating the score.
+                                 // (NOTE: model's strongest predictor is ABSENTEE, OR 2.05 — still
+                                 // only weight 12 here; a future pass should bump it. See §4.)
       taxBurdenRatio: 15,        // High taxes relative to value
       valueDeclining: 5,         // Declining property values
       
