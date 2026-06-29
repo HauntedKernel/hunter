@@ -27,7 +27,7 @@ const instI = process.argv.indexOf('--inst');
 const INSTITUTIONAL = instI !== -1 && process.argv[instI + 1] ? Number(process.argv[instI + 1]) : 25;
 const normAddr = (a) => String(a || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 
-const dbPath = path.join(__dirname, 'src', 'data', 'tax_roll.db');
+const dbPath = process.env.TAX_ROLL_DB_PATH || path.join(__dirname, 'src', 'data', 'tax_roll.db');
 const db = new sqlite3.Database(dbPath);
 
 db.serialize(() => {

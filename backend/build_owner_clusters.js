@@ -64,7 +64,7 @@ function industriesOf(name) {
   return out;
 }
 
-const db = new sqlite3.Database(path.join(__dirname, 'src', 'data', 'tax_roll.db'));
+const db = new sqlite3.Database(process.env.TAX_ROLL_DB_PATH || path.join(__dirname, 'src', 'data', 'tax_roll.db'));
 
 db.serialize(() => {
   db.run(`CREATE TABLE IF NOT EXISTS owner_cluster (

@@ -708,6 +708,20 @@ Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 
   paid V2 (search API + Claude auto-composite, on-demand per top lead) fills this
   frame later. Verified across business/estate/elderly/suit lead types.
 
+- `[#054]` **Weekly tax-roll auto-refresh + enrichment rebuild
+  (`backend/refresh_tax_roll.sh`).** Fully automates what was a manual weekly chore:
+  discovers the current TRW zip on the county page (filename changes weekly; excludes
+  the sample file), downloads it, and rebuilds the roll. FAIL-SAFE like the
+  foreclosure refresh: builds into a COPY of the live DB (preserving the divorce/
+  liens/foreclosure/contacts feed tables — a from-scratch rebuild would wipe them),
+  validates row count (≥700k), then ATOMICALLY swaps and `pm2 restart`s. Any failure
+  before the swap leaves the live DB + feeds untouched. Also rebuilds
+  owner_portfolio + owner_cluster on the fresh data each run. `--dry-run` does
+  everything except the swap (safe end-to-end test). New env override
+  `TAX_ROLL_DB_PATH` (in TaxRollProcessor + build_portfolios + build_owner_clusters)
+  lets the build target the copy. Cron: `0 3 * * 2` (Tuesdays, TRW posts Monday).
+  Joins the existing monthly foreclosure-refresh cron — the box now self-updates.
+
 ### Flagged for prior-art / patent review (Handoff Rule 6)
 - New `calculateUrgencyScore()` (0–100): weights balance size, years behind,
   absentee ownership (no homestead exemption), and foreclosure risk. Used as

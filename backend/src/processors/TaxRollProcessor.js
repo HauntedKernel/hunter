@@ -22,7 +22,8 @@ class TaxRollProcessor {
     
     this.taxRollURL = 'https://www.dallascounty.org/Assets/uploads/docs/tax/trw/trwfile.701243.zip';
     this.dataDir = path.join(__dirname, '../data');
-    this.dbPath = path.join(this.dataDir, 'tax_roll.db');
+    // TAX_ROLL_DB_PATH lets the auto-refresh build into a COPY then atomically swap.
+    this.dbPath = process.env.TAX_ROLL_DB_PATH || path.join(this.dataDir, 'tax_roll.db');
     this.zipPath = path.join(this.dataDir, 'tax_roll.zip');
     
     this.db = null;
