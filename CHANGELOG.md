@@ -638,6 +638,18 @@ Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 
   (validated-on-675k, 2.45×/3.07× measured lift) + proof-by-demo + risk reversal.
   Styling added to globals.css (`.lp-*`, responsive). Build green.
 
+- `[#049]` **Owner-portfolio enrichment — free, from data we already have
+  (`backend/build_portfolios.js` → `owner_portfolio` table).** Answers "how many
+  other properties does this owner hold?" by grouping the 960k roll on OWNER
+  MAILING ADDRESS (industry-standard portfolio key — groups an investor's holdings
+  even across different LLC names; owner-occupants = portfolio of 1). One pass over
+  the roll; bulk/servicer mailing addresses (≥25 parcels) flagged is_institutional
+  so they're labeled "bulk mailing addr" not an owner portfolio. Found 61,370
+  owners with 3+ properties, 15,766 with 10+. Wired into `export_curated.js`: adds
+  `other_properties` + `portfolio_value` columns, an "Owns N properties" signal
+  chip (tired-landlord / investor cue), and a small motivation bump. Zero data
+  cost — pure leverage on the existing DB. Re-run after a tax-roll refresh.
+
 ### Flagged for prior-art / patent review (Handoff Rule 6)
 - New `calculateUrgencyScore()` (0–100): weights balance size, years behind,
   absentee ownership (no homestead exemption), and foreclosure risk. Used as

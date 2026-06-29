@@ -76,6 +76,7 @@ const jparse = (s) => { try { const v = JSON.parse(s); return v; } catch { retur
   if (has('liens')) { joins.push('LEFT JOIN (SELECT account_id, free_and_clear, equity_pct FROM liens) l ON l.account_id=t.account_id'); cols.push('l.free_and_clear AS free_and_clear', 'l.equity_pct AS equity_pct'); }
   if (has('divorce_events')) { joins.push('LEFT JOIN (SELECT DISTINCT account_id FROM divorce_events) dv ON dv.account_id=t.account_id'); cols.push('dv.account_id AS has_divorce'); }
   if (has('appraisal_detail')) { joins.push('LEFT JOIN appraisal_detail ap ON ap.account_id=t.account_id'); cols.push('ap.tenure_years AS tenure_years', 'ap.year_built AS year_built'); }
+  if (has('owner_portfolio')) { joins.push('LEFT JOIN owner_portfolio op ON op.account_id=t.account_id'); cols.push('op.portfolio_size AS portfolio_size', 'op.portfolio_value AS portfolio_value', 'op.is_institutional AS portfolio_institutional'); }
   if (has('contacts')) {
     joins.push('LEFT JOIN contacts c ON c.account_id=t.account_id');
     cols.push('c.phones AS c_phones', 'c.emails AS c_emails',
@@ -142,9 +143,11 @@ const jparse = (s) => { try { const v = JSON.parse(s); return v; } catch { retur
       prob = sm ? sm.probability : null;
     }
     // Fallback rank key if no model: weighted signal count.
+    const bigPortfolio = (r.portfolio_size || 1) >= 3 && r.portfolio_institutional !== 1;
     const motivation = (r.suit_pending ? 28 : 0) + (r.is_absentee ? 18 : 0) + (estate ? 16 : 0)
       + (r.has_divorce ? 16 : 0) + (r.is_delinquent ? 12 : 0) + (freeClear ? 10 : 0)
-      + (longTenure ? 8 : 0) + (elderly ? 6 : 0) + (r.bankruptcy_filed ? 8 : 0);
+      + (longTenure ? 8 : 0) + (elderly ? 6 : 0) + (r.bankruptcy_filed ? 8 : 0)
+      + (bigPortfolio ? 8 : 0);
 
     // Plain-English reasons.
     const signals = [];
@@ -157,6 +160,10 @@ const jparse = (s) => { try { const v = JSON.parse(s); return v; } catch { retur
     if (freeClear) signals.push('Free & clear');
     if (elderly) signals.push('Senior owner (65+)');
     if (longTenure) signals.push(`Owned ${r.tenure_years}+ yrs`);
+    // Portfolio: owner holds multiple properties (tired-landlord / investor cue).
+    const portfolioSize = r.portfolio_size || 1;
+    const isInstitutional = r.portfolio_institutional === 1;
+    if (portfolioSize >= 3 && !isInstitutional) signals.push(`Owns ${portfolioSize} properties`);
 
     // Contacts: owner phones/emails + family (for elderly).
     const ownerPhones = (jparse(r.c_phones) || []).map(p => (p && p.number) || p).filter(Boolean);
@@ -182,6 +189,8 @@ const jparse = (s) => { try { const v = JSON.parse(s); return v; } catch { retur
       zip: String(r.zip_code).slice(0, 5),
       est_value: r.total_value ? Math.round(r.total_value) : '',
       equity_status: equityStatus,
+      other_properties: portfolioSize > 1 ? portfolioSize - 1 + (isInstitutional ? ' (bulk mailing addr)' : '') : '',
+      portfolio_value: (portfolioSize > 1 && r.portfolio_value && !isInstitutional) ? Math.round(r.portfolio_value) : '',
       years_owned: r.tenure_years ?? '',
       years_delinquent: r.delinquent_years || '',
       amount_due: r.total_amount_due ? Math.round(r.total_amount_due) : '',
@@ -200,7 +209,7 @@ const jparse = (s) => { try { const v = JSON.parse(s); return v; } catch { retur
   top.forEach((o, i) => { o.rank = i + 1; });
 
   const header = ['rank', 'sell_prob_pct', 'signals', 'owner_name', 'property_address', 'zip',
-    'est_value', 'equity_status', 'years_owned', 'years_delinquent', 'amount_due',
+    'est_value', 'equity_status', 'other_properties', 'portfolio_value', 'years_owned', 'years_delinquent', 'amount_due',
     'recommended_contact', 'owner_phones', 'owner_emails', 'family_contact', 'family_phones',
     'mailing_address', 'account_id'];
   const body = top.map(o => header.map(h => csvCell(o[h] ?? '')).join(','));
