@@ -78,6 +78,13 @@ class MotivationScorer {
       freeAndClear: 10,          // No open mortgage → no rate lock-in friction (RESEARCH.md §A). A
                                  // positive sellability MODIFIER, not a distress trigger — modest weight.
                                  // Most of its value is via the free-and-clear × elderly synergy below.
+      codeCompliance: 12,        // Open Dallas 311 code-compliance request (substandard structure,
+                                 // junk/debris, tall grass) → a neglected / over-extended owner. Distress
+                                 // proxy; free feed (ingest_311.js). Not yet backtested on our data.
+      tenure: 8,                 // Ownership TENURE as a positive prior — the strongest residential-
+                                 // mobility predictor in the literature (RESEARCH.md §A: weight 7+ yr for
+                                 // Texas). A *prior*, not a trigger, so modest; banded in the scorer.
+                                 // Long tenure (30+) also proxies free-and-clear (a 30-yr note is paid).
 
       // Signal-synergy (interaction) bonuses — empirically derived from the
       // 2025-08 → 2026-06 snapshot-diff backtest on 675k Dallas real-property
@@ -87,6 +94,16 @@ class MotivationScorer {
       estateAbsenteeSynergy: 6,   // estate+absentee measured 1.87x lift (vs estate 1.60x)
       freeClearElderlySynergy: 8, // free-and-clear + elderly = the "natural downsizer" (no lock-in + life
                                   // stage). Literature-based (RESEARCH.md §A), not yet backtested on our data.
+      longTenureElderlySynergy: 6, // 30+ yr tenure + elderly = high-confidence paid-off downsizer (tenure
+                                  // is a free free-and-clear proxy when no lien feed is loaded).
+      delinquentSuitSynergy: 4,   // delinquent + suit-pending measured 2.80x (RESEARCH §B), and the trained
+                                  // model confirms the interaction (delinq_x_suit OR 1.08). Kept MODEST on
+                                  // purpose: the additive delinquency (≤40) + taxSuit (28) weights already
+                                  // reward the pair, so this only acknowledges the escalation interaction
+                                  // without double-dominating. (No delinquent+absentee+elderly *triple*
+                                  // bonus: it measures 2.68x — LOWER than absentee+elderly alone (3.07x) —
+                                  // so adding delinquency to that pair would push the wrong way. See §3 of
+                                  // SIGNAL_GAPS.md and the negative raw-delinquency OR in RESEARCH §F.)
 
       // Legal-event signal (GATED OFF by default — see STRATEGY.md §6).
       // Public record, but high legal/reputational risk: requires an arrest
@@ -252,6 +269,11 @@ class MotivationScorer {
       isTaxSuit: !!propertyData.signals?.taxSuit,
       isDivorce: !!propertyData.signals?.divorce,
       isFreeAndClear: !!propertyData.signals?.freeAndClear,
+      isCodeViolation: !!propertyData.signals?.codeCompliance,
+      codeRequestType: propertyData.signals?.codeRequestType || null,
+      tenureYears: propertyData.tenureYears != null
+        ? propertyData.tenureYears
+        : (propertyData.signals?.tenureYears != null ? propertyData.signals.tenureYears : null),
       ownerAge: propertyData.signals?.ownerAge || null,
       preForeclosure: propertyData.signals?.preForeclosure || null,
       arrest: propertyData.signals?.arrest || null,
@@ -293,6 +315,8 @@ class MotivationScorer {
     factors.taxSuit = this.calculateTaxSuitScore(context);
     factors.divorce = this.calculateDivorceScore(context);
     factors.freeAndClear = this.calculateFreeAndClearScore(context);
+    factors.codeCompliance = this.calculateCodeComplianceScore(context);
+    factors.tenure = this.calculateTenureScore(context);
 
     // Life-stage / ownership signals
     factors.absenteeOwner = this.calculateAbsenteeScore(context);
@@ -320,6 +344,8 @@ class MotivationScorer {
   calculateSignalSynergyScore(context) {
     const byAge = context.ownerAge && context.ownerAge >= 65;
     const isElderly = context.isElderly || byAge;
+    const isDelinquent = (context.delinquentAmount || 0) > 0 ||
+      !!context.propertyData?.taxDelinquency?.isDelinquent;
     const bonuses = [];
     let score = 0;
 
@@ -334,6 +360,21 @@ class MotivationScorer {
     if (context.isFreeAndClear && isElderly) {
       score += this.scoringWeights.freeClearElderlySynergy;
       bonuses.push('free-and-clear + elderly (natural downsizer)');
+    }
+    // Long tenure (30+) + elderly ≈ a paid-off downsizer — the free-and-clear
+    // "natural downsizer" play even with no lien feed loaded. Skip if free-and-clear
+    // already fired its synergy above (don't double-count the same proxy).
+    if (!context.isFreeAndClear && isElderly && context.tenureYears != null && context.tenureYears >= 30) {
+      score += this.scoringWeights.longTenureElderlySynergy;
+      bonuses.push('30+ yr tenure + elderly (paid-off downsizer proxy)');
+    }
+    if (isDelinquent && context.isTaxSuit) {
+      // Escalation interaction: a *filed* tax-foreclosure suit on top of arrears
+      // is more predictive than either alone (2.80x measured). Deliberately NOT
+      // extended to a delinquent+absentee+elderly triple — that measures 2.68x,
+      // below absentee+elderly's 3.07x, so delinquency *subtracts* from that pair.
+      score += this.scoringWeights.delinquentSuitSynergy;
+      bonuses.push('delinquent + tax-suit (≈2.80x measured lift)');
     }
 
     if (score === 0) {
@@ -423,6 +464,50 @@ class MotivationScorer {
       factor: 'Free-and-clear — no open mortgage (no rate lock-in)',
       category: 'financial',
       severity: 'medium'
+    };
+  }
+
+  /**
+   * Code-compliance / 311 distress — an open Dallas 311 code request (substandard
+   * structure, junk/debris, tall grass, etc.) matched to this property. Signals a
+   * neglected or over-extended owner. Joined from `code_violations`; null until a
+   * 311 feed is ingested (ingest_311.js). Not yet backtested on our own data.
+   */
+  calculateCodeComplianceScore(context) {
+    if (!context.isCodeViolation) {
+      return { score: 0, factor: 'No open code-compliance / 311 request', category: 'distress' };
+    }
+    const type = context.codeRequestType ? ` — ${context.codeRequestType}` : '';
+    return {
+      score: this.scoringWeights.codeCompliance,
+      factor: `Open code-compliance / 311 request${type}`,
+      category: 'distress',
+      severity: 'medium'
+    };
+  }
+
+  /**
+   * Ownership tenure as a positive prior. Long-held homes turn over more (the
+   * strongest residential-mobility predictor in the literature, RESEARCH.md §A —
+   * weight 7+ yr for Texas). A *prior*, not a trigger, so banded and modest. Tenure
+   * comes from the DCAD appraisal file (appraisal_detail.tenure_years); null until
+   * ingest_appraisal.js loads the free DCAD bulk file.
+   */
+  calculateTenureScore(context) {
+    const t = context.tenureYears;
+    if (t == null || t < 7) {
+      return { score: 0, factor: 'Tenure under 7 yr or unknown', category: 'ownership' };
+    }
+    // Band the prior: 7-14 yr modest, 15-29 stronger, 30+ full (also a paid-off proxy).
+    let frac, band;
+    if (t >= 30) { frac = 1.0; band = '30+ yr (likely paid-off)'; }
+    else if (t >= 15) { frac = 0.75; band = '15-29 yr'; }
+    else { frac = 0.5; band = '7-14 yr'; }
+    return {
+      score: Math.round(this.scoringWeights.tenure * frac),
+      factor: `Long ownership tenure — ${t} yr held (${band})`,
+      category: 'ownership',
+      severity: 'low'
     };
   }
 

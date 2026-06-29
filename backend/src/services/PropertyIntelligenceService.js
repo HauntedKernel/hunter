@@ -286,6 +286,9 @@ class PropertyIntelligenceService {
         yearsDelinquent: dp.yearsDelinquent
       },
       ownerName: dp.ownerName,
+      // Ownership tenure (years held), from the DCAD appraisal file. Drives the
+      // tenure prior + the long-tenure×elderly free-and-clear proxy in the scorer.
+      tenureYears: dp.tenureYears != null ? dp.tenureYears : null,
       // Life-stage / legal signals (see STRATEGY.md). Absentee + elderly come
       // straight from the tax roll; pre-foreclosure is joined from legal_events;
       // arrest stays null until a feed is wired.
@@ -299,6 +302,9 @@ class PropertyIntelligenceService {
         taxSuit: !!dp.isTaxSuit,
         divorce: !!dp.isDivorce,
         freeAndClear: !!dp.isFreeAndClear,
+        codeCompliance: !!dp.isCodeViolation,
+        codeRequestType: dp.codeRequestType || null,
+        tenureYears: dp.tenureYears != null ? dp.tenureYears : null,
         ownerAge: dp.ownerAge || null,
         preForeclosure: dp.isPreForeclosure
           ? { eventType: dp.legalEventType, saleDate: dp.legalSaleDate }

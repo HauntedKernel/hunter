@@ -2,6 +2,41 @@
 
 Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 5).
 
+## 2026-06-29 — Signal-gap audit + three lift fixes
+
+- `[#057]` **Signal/combination gap audit + 3 closeable gaps shipped (`SIGNAL_GAPS.md`).**
+  Audited which lift-bearing signals/combinations the live scorer actually captures
+  vs. the backtest/research. New `SIGNAL_GAPS.md` ranks every closeable gap and flags
+  two scoring miscalibrations (raw-delinquency over-weight; the calibrated model
+  ignores the newer feeds → its P(sell) is a floor). Three fixes landed:
+  - **(a) `delinquent + suit` synergy (+4)** in `MotivationScorer` — measured 2.80x,
+    confirmed by the model's `delinq_x_suit` term. Deliberately did NOT add a
+    delinquent+absentee+elderly *triple* bonus: it measures **2.68x, below
+    absentee+elderly's 3.07x**, so delinquency *subtracts* from that pair — a positive
+    triple would push the wrong way (documented in code + doc).
+  - **(b) 311 code-compliance feed** — `fetch_311.js` (free Dallas OpenData SODA API,
+    dataset gc4d-8a49, fuzzy column mapping) + `ingest_311.js` → new `code_violations`
+    table, wired end-to-end as a `codeCompliance` distress signal (discovery JOIN +
+    ranking + scorer weight 12 + UI-ready). ⚠️ Match precision capped by the tax
+    roll's missing house numbers (same wall as foreclosures); loose street+ZIP
+    matching gated behind `ALLOW_LOOSE_MATCH=1`. Real fix = a DCAD situs-address
+    crosswalk (logged).
+  - **(c) Tenure prior wired** — the free DCAD appraisal ingester (`ingest_appraisal.js`
+    → `appraisal_detail.tenure_years`) existed but was never joined into discovery, so
+    tenure scored 0. Added the JOIN + a banded `tenure` signal (weight 8: 7-14/15-29/30+
+    yr) + a `30+ yr tenure × elderly` "paid-off downsizer" synergy (a free
+    free-and-clear proxy). Lights up once the free DCAD file is ingested on the box.
+  - **Cost research (paid feeds):** PropStream **$99/mo** is the cheapest real
+    free-and-clear path (county free sources lack bulk mortgage data); owner-age via
+    free DCAD over-65 flag + **2–5¢/record** append as needed; divorce has no clean
+    priced small-operator path (county subscription is call-required + scope-uncertain;
+    commercial lists thin — <5% of divorces are recorded). These are home-seller
+    signals — low relevance to the raw-land lists. Full table in `SIGNAL_GAPS.md §5`.
+  - Validated: all files syntax-clean; scorer smoke test confirms each new factor +
+    the no-triple behavior; discovery SQL runs against the live 540 MB DB (new tables
+    auto-create, leads return). Follow-ups: ingest the free DCAD appraisal file on the
+    box, re-run `validate_signals.js` + retrain the model with the new features.
+
 ## 2026-06-16 — Consolidation, DB-first redesign, public test deploy
 
 - `[#001]` **Consolidated 6 scattered project folders → 1 canonical.**

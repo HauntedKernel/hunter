@@ -198,7 +198,46 @@ class TaxRollProcessor {
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
       `);
-      
+
+      // Code-compliance / 311 distress events — populated by ingest_311.js from the
+      // FREE Dallas OpenData 311 feed (gc4d-8a49). Open code-compliance requests
+      // (substandard structure, junk/debris, tall grass, etc.) are a property-distress
+      // proxy. Created here so discovery's LEFT JOIN always resolves even before the
+      // feed loads. NOTE: 311 carries a full street address (house number included)
+      // but the tax roll's property_address has none — see ingest_311.js for the
+      // precision-first matching that handles this.
+      await this.db.exec(`
+        CREATE TABLE IF NOT EXISTS code_violations (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          account_id TEXT,
+          request_type TEXT,
+          address TEXT,
+          status TEXT,
+          opened_date TEXT,
+          closed_date TEXT,
+          source TEXT,
+          match_method TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_code_violations_account ON code_violations(account_id);
+      `);
+
+      // Ownership tenure + year-built (the strongest residential-mobility prior,
+      // RESEARCH §A) — populated by ingest_appraisal.js from the FREE DCAD bulk
+      // appraisal file (the collections tax roll has no deed/sale date). Created
+      // here so discovery's LEFT JOIN always resolves even before the file is
+      // loaded. tenure_years = current year − deed-transfer year.
+      await this.db.exec(`
+        CREATE TABLE IF NOT EXISTS appraisal_detail (
+          account_id TEXT PRIMARY KEY,
+          deed_transfer_date TEXT,
+          deed_year INTEGER,
+          tenure_years INTEGER,
+          year_built INTEGER,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+
       this.logger.info('Database initialized successfully');
       
     } catch (error) {
@@ -794,7 +833,7 @@ class TaxRollProcessor {
       // `taxSuit` (active tax-foreclosure suit) is the strongest single signal in
       // our snapshot-diff backtest (2.45x lift — see RESEARCH.md §B), so it's on
       // by default and surfaced rather than excluded.
-      const ALL = { delinquent: true, elderly: true, absentee: true, preForeclosure: true, emptyNester: true, estate: true, taxSuit: true, divorce: true, freeAndClear: true };
+      const ALL = { delinquent: true, elderly: true, absentee: true, preForeclosure: true, emptyNester: true, estate: true, taxSuit: true, divorce: true, freeAndClear: true, codeCompliance: true };
       let signals = options.signals || ALL;
       if (!Object.values(signals).some(Boolean)) signals = ALL;
 
@@ -838,12 +877,19 @@ class TaxRollProcessor {
           ) de ON de.account_id = t.account_id
           LEFT JOIN (
             SELECT account_id, free_and_clear, equity_pct FROM liens
-          ) lq ON lq.account_id = t.account_id`;
+          ) lq ON lq.account_id = t.account_id
+          LEFT JOIN appraisal_detail ad ON ad.account_id = t.account_id
+          LEFT JOIN (
+            SELECT account_id, request_type FROM code_violations
+            WHERE account_id IS NOT NULL GROUP BY account_id
+          ) cv ON cv.account_id = t.account_id`;
       const SELECT = `t.*, le.event_type AS legal_event_type, le.sale_date AS legal_sale_date,
             (le.account_id IS NOT NULL) AS has_preforeclosure,
             vd.owner_age AS owner_age, vd.empty_nester AS empty_nester,
             (de.account_id IS NOT NULL) AS has_divorce, de.filed_date AS divorce_filed_date,
-            lq.free_and_clear AS free_and_clear, lq.equity_pct AS equity_pct`;
+            lq.free_and_clear AS free_and_clear, lq.equity_pct AS equity_pct,
+            ad.tenure_years AS tenure_years, ad.deed_year AS deed_year, ad.year_built AS year_built,
+            (cv.account_id IS NOT NULL) AS has_code_violation, cv.request_type AS code_request_type`;
 
       // elderly fires on the tax exemption OR a voter-file age >= 65.
       const ELDERLY = '(over65_exemption = 1 OR disabled_exemption = 1 OR vd.owner_age >= 65)';
@@ -865,10 +911,14 @@ class TaxRollProcessor {
       // Free-and-clear — no open mortgage, so no rate lock-in friction (a positive
       // sellability modifier). Joined from liens; empty until ingest_liens.js loads.
       const FREECLEAR = '(lq.free_and_clear = 1)';
+      // Code-compliance / 311 distress — an open code request (substandard structure,
+      // junk, tall grass) signals a neglected / over-extended owner. Joined from
+      // code_violations; empty until ingest_311.js loads a feed.
+      const CODECOMPLIANCE = '(cv.account_id IS NOT NULL)';
 
       // Blend (reserve slots for current owners) only when delinquent is hunted
       // alongside a non-delinquent signal — otherwise one ranked query is enough.
-      const blend = signals.delinquent && (signals.elderly || signals.absentee || signals.emptyNester || signals.estate || signals.divorce || signals.freeAndClear);
+      const blend = signals.delinquent && (signals.elderly || signals.absentee || signals.emptyNester || signals.estate || signals.divorce || signals.freeAndClear || signals.codeCompliance);
 
       if (blend) {
         const delqTarget = Math.ceil(limit * 0.6);
@@ -876,7 +926,7 @@ class TaxRollProcessor {
           SELECT ${SELECT} FROM ${FROM}
           WHERE ${baseWhere} AND is_delinquent = 1
           ORDER BY (${PREFORE} * 35) + (${signals.taxSuit ? TAXSUIT : '0'} * 30) + MIN(COALESCE(delinquent_amount, 0) / 1000.0, 40)
-            + (${ELDERLY} * 5) + (${ABSENTEE} * 5) + (${EMPTYNEST} * 5) + (${ESTATE} * 8) + (${DIVORCE} * 8) + (${FREECLEAR} * 6) DESC,
+            + (${ELDERLY} * 5) + (${ABSENTEE} * 5) + (${EMPTYNEST} * 5) + (${ESTATE} * 8) + (${DIVORCE} * 8) + (${FREECLEAR} * 6) + (${signals.codeCompliance ? CODECOMPLIANCE : '0'} * 6) DESC,
             delinquent_amount DESC, account_id
           LIMIT ?`;
         const delq = await this.db.all(delqSql, [...baseParams, delqTarget]);
@@ -891,13 +941,14 @@ class TaxRollProcessor {
         if (signals.estate) nonDelqConds.push(ESTATE);
         if (signals.divorce) nonDelqConds.push(DIVORCE);
         if (signals.freeAndClear) nonDelqConds.push(FREECLEAR);
+        if (signals.codeCompliance) nonDelqConds.push(CODECOMPLIANCE);
         const nonDelqTarget = limit - delq.length;
         let nonDelq = [];
         if (nonDelqTarget > 0 && nonDelqConds.length) {
           const nonDelqSql = `
             SELECT ${SELECT} FROM ${FROM}
             WHERE ${baseWhere} AND is_delinquent = 0 AND (${nonDelqConds.join(' OR ')})
-            ORDER BY (${PREFORE} * 35) + (${ELDERLY} * 10) + (${ABSENTEE} * 12) + (${EMPTYNEST} * 12) + (${ESTATE} * 14) + (${DIVORCE} * 16) + (${FREECLEAR} * 10) DESC, total_value DESC, account_id
+            ORDER BY (${PREFORE} * 35) + (${ELDERLY} * 10) + (${ABSENTEE} * 12) + (${EMPTYNEST} * 12) + (${ESTATE} * 14) + (${DIVORCE} * 16) + (${FREECLEAR} * 10) + (${CODECOMPLIANCE} * 12) DESC, total_value DESC, account_id
             LIMIT ?`;
           nonDelq = await this.db.all(nonDelqSql, [...baseParams, nonDelqTarget]);
         }
@@ -964,6 +1015,10 @@ class TaxRollProcessor {
         conds.push(FREECLEAR);
         orderTerms.push(`(${FREECLEAR} * 10)`);
       }
+      if (signals.codeCompliance) {
+        conds.push(CODECOMPLIANCE);
+        orderTerms.push(`(${CODECOMPLIANCE} * 12)`);
+      }
       const orderExpr = orderTerms.length ? orderTerms.join(' + ') : 'total_value';
 
       const sql = `
@@ -1004,6 +1059,12 @@ class TaxRollProcessor {
     // Free-and-clear — no open mortgage (joined from liens). No rate lock-in → more
     // sellable, especially paired with elderly / long tenure.
     const isFreeAndClear = record.free_and_clear === 1;
+    // Code-compliance / 311 distress — open request matched to this account (joined
+    // from code_violations; empty until ingest_311.js loads a feed).
+    const isCodeViolation = !!record.has_code_violation;
+    // Ownership tenure (years held) from the DCAD appraisal file (joined from
+    // appraisal_detail; null until ingest_appraisal.js loads the free DCAD file).
+    const tenureYears = record.tenure_years != null ? record.tenure_years : null;
 
     // Calculate motivation score based on multiple factors
     let motivationScore = 0;
@@ -1039,6 +1100,11 @@ class TaxRollProcessor {
       divorceFiledDate: record.divorce_filed_date || null,
       isFreeAndClear: isFreeAndClear,
       equityPct: record.equity_pct != null ? record.equity_pct : null,
+      isCodeViolation: isCodeViolation,
+      codeRequestType: record.code_request_type || null,
+      tenureYears: tenureYears,
+      deedYear: record.deed_year != null ? record.deed_year : null,
+      yearBuilt: record.year_built != null ? record.year_built : null,
       city: record.city,
       state: record.state,
       zipCode: record.zip_code,
