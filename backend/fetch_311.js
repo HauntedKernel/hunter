@@ -17,6 +17,11 @@
  *   node fetch_311.js [--months=12] [--out=imports/dallas_311_code.csv] [--max=50000]
  *   then: node ingest_311.js imports/dallas_311_code.csv
  *
+ * For BACK-TRAINING (reconstruct what was open on a past as-of date) pull ALL statuses
+ * over a wide window so closed-now-but-open-then cases survive — the backtrain script
+ * applies the as-of filter from each record's opened/closed dates:
+ *   node fetch_311.js --since=2018-01-01 --keep-closed --max=400000 --out=imports/dallas_311_hist.csv
+ *
  * NOTE: 311 has no parcel/account id, so account_id is left blank — see ingest_311.js
  * for the precision-first address matching (and its ALLOW_LOOSE_MATCH caveat).
  */
@@ -35,6 +40,11 @@ const MONTHS = Number(args.months || 12);
 const MAX = Number(args.max || 50000);
 const OUT = args.out || path.join('imports', 'dallas_311_code.csv');
 const TOKEN = process.env.SODA_APP_TOKEN || '';
+// --since=YYYY-MM-DD overrides the months-from-now recency window (use for historical
+// back-training pulls). --keep-closed retains closed requests (so a past as-of date can
+// see cases that were open then but are closed now).
+const SINCE = typeof args.since === 'string' ? args.since.slice(0, 10) : null;
+const KEEP_CLOSED = !!args['keep-closed'];
 
 // A request is "code compliance" if its department/type/description hits one of
 // these. Broad on purpose; tighten if the result is noisy.
@@ -73,7 +83,7 @@ function csvCell(v) {
 }
 
 (async () => {
-  const cutoff = new Date(Date.now() - MONTHS * 30 * 86400000).toISOString().slice(0, 10);
+  const cutoff = SINCE || new Date(Date.now() - MONTHS * 30 * 86400000).toISOString().slice(0, 10);
   const PAGE = 5000;
   let offset = 0, col = null, kept = 0, scanned = 0;
   const outRows = [];
@@ -102,7 +112,7 @@ function csvCell(v) {
       const hay = `${type} ${dept}`.toUpperCase();
       if (!CODE_KEYWORDS.some(k => hay.includes(k))) continue;
       const status = (col.status ? r[col.status] : '') || '';
-      if (CLOSED_HINTS.some(h => status.toUpperCase().includes(h))) continue; // keep OPEN only
+      if (!KEEP_CLOSED && CLOSED_HINTS.some(h => status.toUpperCase().includes(h))) continue; // live feed: open only
       const opened = (col.opened ? r[col.opened] : '') || '';
       if (opened && opened.slice(0, 10) < cutoff) continue;                   // recency window
       outRows.push({
