@@ -2,6 +2,27 @@
 
 Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 5).
 
+## 2026-06-29 — Reverse long-tenure → recency + recency×distress (measured)
+
+- `[#064]` **Wired the recency findings into the scorer (RESEARCH §G).** Acting on the
+  back-tested result that long tenure is *negative* and recency is a real signal:
+  - **Removed** the long-tenure positive prior (`tenure` weight 8) and the
+    long-tenure×elderly synergy (both measured 0.72–0.90x — backwards).
+  - **Added `recency`** (weight 14), banded by measured lift: bought <1yr ≈ full
+    (2.98x), 1yr → half, 2yr → small, ≥3yr → 0. Replaces `calculateTenureScore` with
+    `calculateRecencyScore`; reads the same `appraisal_detail.tenure_years` input.
+  - **Added `recency × delinquent` (+12, measured 2.46x) and `recency × tax-suit`
+    (+8, 2.16x) synergies** — the "overextended recent buyer," the standout new signal
+    (delinquency alone is 1.00x; the interaction is the whole signal).
+  - Discovery: `TENURE_RANK` → `RECENCY_RANK` (favours short tenure); signal toggle
+    `tenure` → `recency` across backend defaults, the blend/single-query ranking,
+    and the frontend (🆕 "Recent Buyer"). 
+  - Verified: recency bands 14/7/3/0; long tenure now scores 0 with no synergy;
+    recent+delinquent totals 48 vs long-held+delinquent 22; discovery SQL + the
+    recency-only edge case run on the live DB; frontend builds (73 KB gzip).
+  - ⚠️ Lights up only where `appraisal_detail` (DCAD tenure) is loaded — free via
+    `load_dcad_tenure.py`. Live API unchanged until a `pm2 restart` deploys it.
+
 ## 2026-06-29 — Back-training script (tenure + 311, leakage-safe)
 
 - `[#060]` **`scripts/backtrain_sell_model.js` — back-train the sell model with the

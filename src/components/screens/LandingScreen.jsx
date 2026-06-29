@@ -50,7 +50,7 @@ export default function LandingScreen({ onNavigate }) {
           signals: {
             preForeclosure: true, taxSuit: true, delinquent: true, elderly: true, absentee: true,
             emptyNester: true, estate: true, divorce: true, freeAndClear: true,
-            codeCompliance: true, tenure: true,
+            codeCompliance: true, recency: true,
           },
         })
         const top = (leads || [])

@@ -90,10 +90,12 @@ class MotivationScorer {
       codeCompliance: 12,        // Open Dallas 311 code-compliance request (substandard structure,
                                  // junk/debris, tall grass) → a neglected / over-extended owner. Distress
                                  // proxy; free feed (ingest_311.js). Not yet backtested on our data.
-      tenure: 8,                 // Ownership TENURE as a positive prior — the strongest residential-
-                                 // mobility predictor in the literature (RESEARCH.md §A: weight 7+ yr for
-                                 // Texas). A *prior*, not a trigger, so modest; banded in the scorer.
-                                 // Long tenure (30+) also proxies free-and-clear (a 30-yr note is paid).
+      recency: 14,               // RECENT purchase (short tenure) — MEASURED on our data (RESEARCH §G):
+                                 // 0-1yr tenure ≈ 2.98x lift even among owner-occupied individuals (real
+                                 // arm's-length resales, not flippers/paperwork). Owner forced out fast
+                                 // (relocation, remorse, divorce, overextension). NOTE: this REPLACES the
+                                 // old long-tenure prior, which measured NEGATIVE (0.72-0.90x) — the
+                                 // literature was wrong for our ~10-mo window. Banded in the scorer.
 
       // Signal-synergy (interaction) bonuses — empirically derived from the
       // 2025-08 → 2026-06 snapshot-diff backtest on 675k Dallas real-property
@@ -103,8 +105,12 @@ class MotivationScorer {
       estateAbsenteeSynergy: 6,   // estate+absentee measured 1.87x lift (vs estate 1.60x)
       freeClearElderlySynergy: 8, // free-and-clear + elderly = the "natural downsizer" (no lock-in + life
                                   // stage). Literature-based (RESEARCH.md §A), not yet backtested on our data.
-      longTenureElderlySynergy: 6, // 30+ yr tenure + elderly = high-confidence paid-off downsizer (tenure
-                                  // is a free free-and-clear proxy when no lien feed is loaded).
+      recencyDelinquentSynergy: 12, // recent purchase + delinquent = an OVEREXTENDED owner cracking.
+                                  // MEASURED 2.46x (owner-occ) / 3.73x (all) — RESEARCH §G. The standout:
+                                  // delinquency ALONE is 1.00x, the interaction is the whole signal. No
+                                  // filter tool surfaces "bought recently AND already behind" (a moat).
+      recencySuitSynergy: 8,      // recent purchase + tax-suit = same overextended archetype, escalated.
+                                  // MEASURED 2.16x (RESEARCH §G).
       delinquentSuitSynergy: 4,   // delinquent + suit-pending measured 2.80x (RESEARCH §B), and the trained
                                   // model confirms the interaction (delinq_x_suit OR 1.08). Kept MODEST on
                                   // purpose: the additive delinquency (≤40) + taxSuit (28) weights already
@@ -325,7 +331,7 @@ class MotivationScorer {
     factors.divorce = this.calculateDivorceScore(context);
     factors.freeAndClear = this.calculateFreeAndClearScore(context);
     factors.codeCompliance = this.calculateCodeComplianceScore(context);
-    factors.tenure = this.calculateTenureScore(context);
+    factors.recency = this.calculateRecencyScore(context);
 
     // Life-stage / ownership signals
     factors.absenteeOwner = this.calculateAbsenteeScore(context);
@@ -372,12 +378,18 @@ class MotivationScorer {
       score += this.scoringWeights.freeClearElderlySynergy;
       bonuses.push('free-and-clear + elderly (natural downsizer)');
     }
-    // Long tenure (30+) + elderly ≈ a paid-off downsizer — the free-and-clear
-    // "natural downsizer" play even with no lien feed loaded. Skip if free-and-clear
-    // already fired its synergy above (don't double-count the same proxy).
-    if (!context.isFreeAndClear && isElderly && context.tenureYears != null && context.tenureYears >= 30) {
-      score += this.scoringWeights.longTenureElderlySynergy;
-      bonuses.push('30+ yr tenure + elderly (paid-off downsizer proxy)');
+    // Recency × distress — the standout measured signal (RESEARCH §G). A RECENTLY
+    // bought home (tenure < 2 yr) that's already delinquent / in suit = an
+    // overextended owner cracking (2.46x / 2.16x), vs. ~0.94x for a long-held
+    // delinquent. Delinquency alone is 1.00x — the interaction is the whole signal.
+    const isRecent = context.tenureYears != null && context.tenureYears < 2;
+    if (isRecent && isDelinquent) {
+      score += this.scoringWeights.recencyDelinquentSynergy;
+      bonuses.push('recent purchase + delinquent (≈2.46x measured — overextended owner)');
+    }
+    if (isRecent && context.isTaxSuit) {
+      score += this.scoringWeights.recencySuitSynergy;
+      bonuses.push('recent purchase + tax-suit (≈2.16x measured)');
     }
     if (isDelinquent && context.isTaxSuit) {
       // Escalation interaction: a *filed* tax-foreclosure suit on top of arrears
@@ -498,27 +510,29 @@ class MotivationScorer {
   }
 
   /**
-   * Ownership tenure as a positive prior. Long-held homes turn over more (the
-   * strongest residential-mobility predictor in the literature, RESEARCH.md §A —
-   * weight 7+ yr for Texas). A *prior*, not a trigger, so banded and modest. Tenure
-   * comes from the DCAD appraisal file (appraisal_detail.tenure_years); null until
-   * ingest_appraisal.js loads the free DCAD bulk file.
+   * RECENCY — a recent purchase (short tenure) predicts a near-term resale. MEASURED
+   * on our own data (RESEARCH.md §G): 0-1yr tenure ≈ 2.98x lift even among
+   * owner-occupied individuals (genuine arm's-length resales, not flippers/paperwork) —
+   * an owner forced out fast (relocation, remorse, divorce, overextension). This
+   * REPLACES the old long-tenure prior, which measured negative. Tenure comes from the
+   * DCAD appraisal file (appraisal_detail.tenure_years, current year − deed year);
+   * null until ingest_appraisal.js / load_dcad_tenure.py loads the free DCAD file.
    */
-  calculateTenureScore(context) {
+  calculateRecencyScore(context) {
     const t = context.tenureYears;
-    if (t == null || t < 7) {
-      return { score: 0, factor: 'Tenure under 7 yr or unknown', category: 'ownership' };
+    if (t == null || t >= 3) {
+      return { score: 0, factor: 'Not a recent purchase (≥3 yr or unknown tenure)', category: 'ownership' };
     }
-    // Band the prior: 7-14 yr modest, 15-29 stronger, 30+ full (also a paid-off proxy).
+    // Band by measured lift: bought this year ≈ 3x, 1 yr ≈ 1.5x, 2 yr ≈ 1.2x.
     let frac, band;
-    if (t >= 30) { frac = 1.0; band = '30+ yr (likely paid-off)'; }
-    else if (t >= 15) { frac = 0.75; band = '15-29 yr'; }
-    else { frac = 0.5; band = '7-14 yr'; }
+    if (t <= 0) { frac = 1.0; band = 'bought <1 yr ago (~3x)'; }
+    else if (t === 1) { frac = 0.5; band = '~1 yr ago'; }
+    else { frac = 0.2; band = '~2 yr ago'; }
     return {
-      score: Math.round(this.scoringWeights.tenure * frac),
-      factor: `Long ownership tenure — ${t} yr held (${band})`,
+      score: Math.round(this.scoringWeights.recency * frac),
+      factor: `Recent purchase — ${band}`,
       category: 'ownership',
-      severity: 'low'
+      severity: t <= 0 ? 'high' : 'medium'
     };
   }
 

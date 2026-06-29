@@ -31,7 +31,7 @@ const SellersDashboardScreen = ({ onNavigate }) => {
     divorce: true,
     freeAndClear: true,
     codeCompliance: true,
-    tenure: true
+    recency: true
   });
 
   // Quick-fill suggestions for the area input — real Dallas neighborhoods/ZIPs.
@@ -88,7 +88,7 @@ const SellersDashboardScreen = ({ onNavigate }) => {
     { key: 'elderly', icon: '👵', label: 'Elderly / Downsizer', desc: 'Age 60+ or over-65/disability exemption' },
     { key: 'absentee', icon: '🏚️', label: 'Absentee Owner', desc: 'Mailing address differs from the property' },
     { key: 'emptyNester', icon: '🪺', label: 'Empty Nester', desc: 'Voter file: kids likely moved out' },
-    { key: 'tenure', icon: '⏳', label: 'Long Tenure', desc: 'Owned 7+ yrs — turns over more (ranking prior; needs DCAD file)' },
+    { key: 'recency', icon: '🆕', label: 'Recent Buyer', desc: 'Bought <2 yrs ago — ~3x more likely to resell soon; sharp when also distressed (needs DCAD file)' },
     { key: 'freeAndClear', icon: '🏦', label: 'Free & Clear', desc: 'No mortgage — no rate lock-in (needs lien feed)' }
   ];
 

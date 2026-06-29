@@ -833,7 +833,7 @@ class TaxRollProcessor {
       // `taxSuit` (active tax-foreclosure suit) is the strongest single signal in
       // our snapshot-diff backtest (2.45x lift — see RESEARCH.md §B), so it's on
       // by default and surfaced rather than excluded.
-      const ALL = { delinquent: true, elderly: true, absentee: true, preForeclosure: true, emptyNester: true, estate: true, taxSuit: true, divorce: true, freeAndClear: true, codeCompliance: true, tenure: true };
+      const ALL = { delinquent: true, elderly: true, absentee: true, preForeclosure: true, emptyNester: true, estate: true, taxSuit: true, divorce: true, freeAndClear: true, codeCompliance: true, recency: true };
       let signals = options.signals || ALL;
       if (!Object.values(signals).some(Boolean)) signals = ALL;
 
@@ -918,11 +918,12 @@ class TaxRollProcessor {
       // junk, tall grass) signals a neglected / over-extended owner. Joined from
       // code_violations; empty until ingest_311.js loads a feed.
       const CODECOMPLIANCE = '(cv.account_id IS NOT NULL)';
-      // Tenure is a positive PRIOR, not a hunt filter — long-held homes turn over
-      // more (RESEARCH §A). Graded ranking nudge (0/2/4/6 by band), matching the
-      // scorer's tenure bands. Never a standalone WHERE condition. Joined from
-      // appraisal_detail; 0 until ingest_appraisal.js loads the free DCAD file.
-      const TENURE_RANK = '(CASE WHEN ad.tenure_years >= 30 THEN 6 WHEN ad.tenure_years >= 15 THEN 4 WHEN ad.tenure_years >= 7 THEN 2 ELSE 0 END)';
+      // Recency is a ranking PRIOR, not a hunt filter — a RECENT purchase predicts a
+      // near-term resale (MEASURED 0-1yr ≈ 3x, RESEARCH §G; this replaces the old
+      // long-tenure rank, which was backwards). Graded nudge favouring short tenure,
+      // matching the scorer's recency bands. Never a standalone WHERE condition.
+      // Joined from appraisal_detail; 0 until the free DCAD tenure file is loaded.
+      const RECENCY_RANK = '(CASE WHEN ad.tenure_years = 0 THEN 14 WHEN ad.tenure_years = 1 THEN 7 WHEN ad.tenure_years = 2 THEN 3 ELSE 0 END)';
 
       // Blend (reserve slots for current owners) only when delinquent is hunted
       // alongside a non-delinquent signal — otherwise one ranked query is enough.
@@ -934,7 +935,7 @@ class TaxRollProcessor {
           SELECT ${SELECT} FROM ${FROM}
           WHERE ${baseWhere} AND is_delinquent = 1
           ORDER BY (${PREFORE} * 35) + (${signals.taxSuit ? TAXSUIT : '0'} * 30) + MIN(COALESCE(delinquent_amount, 0) / 1000.0, 40)
-            + (${ELDERLY} * 5) + (${ABSENTEE} * 5) + (${EMPTYNEST} * 5) + (${ESTATE} * 8) + (${DIVORCE} * 8) + (${FREECLEAR} * 6) + (${signals.codeCompliance ? CODECOMPLIANCE : '0'} * 6) + ${signals.tenure ? TENURE_RANK : '0'} DESC,
+            + (${ELDERLY} * 5) + (${ABSENTEE} * 5) + (${EMPTYNEST} * 5) + (${ESTATE} * 8) + (${DIVORCE} * 8) + (${FREECLEAR} * 6) + (${signals.codeCompliance ? CODECOMPLIANCE : '0'} * 6) + ${signals.recency ? RECENCY_RANK : '0'} DESC,
             delinquent_amount DESC, account_id
           LIMIT ?`;
         const delq = await this.db.all(delqSql, [...baseParams, delqTarget]);
@@ -956,7 +957,7 @@ class TaxRollProcessor {
           const nonDelqSql = `
             SELECT ${SELECT} FROM ${FROM}
             WHERE ${baseWhere} AND is_delinquent = 0 AND (${nonDelqConds.join(' OR ')})
-            ORDER BY (${PREFORE} * 35) + (${ELDERLY} * 10) + (${ABSENTEE} * 12) + (${EMPTYNEST} * 12) + (${ESTATE} * 14) + (${DIVORCE} * 16) + (${FREECLEAR} * 10) + (${CODECOMPLIANCE} * 12) + ${signals.tenure ? TENURE_RANK : '0'} DESC, total_value DESC, account_id
+            ORDER BY (${PREFORE} * 35) + (${ELDERLY} * 10) + (${ABSENTEE} * 12) + (${EMPTYNEST} * 12) + (${ESTATE} * 14) + (${DIVORCE} * 16) + (${FREECLEAR} * 10) + (${CODECOMPLIANCE} * 12) + ${signals.recency ? RECENCY_RANK : '0'} DESC, total_value DESC, account_id
             LIMIT ?`;
           nonDelq = await this.db.all(nonDelqSql, [...baseParams, nonDelqTarget]);
         }
@@ -1027,10 +1028,10 @@ class TaxRollProcessor {
         conds.push(CODECOMPLIANCE);
         orderTerms.push(`(${CODECOMPLIANCE} * 12)`);
       }
-      // Tenure is a ranking PRIOR only — it boosts long-held owners but never gates
+      // Recency is a ranking PRIOR only — it boosts recent buyers but never gates
       // which rows return (so it's added to orderTerms, not conds).
-      if (signals.tenure) {
-        orderTerms.push(TENURE_RANK);
+      if (signals.recency) {
+        orderTerms.push(RECENCY_RANK);
       }
       const orderExpr = orderTerms.length ? orderTerms.join(' + ') : 'total_value';
       // conds can be empty if ONLY non-condition signals (tenure) are selected; fall
