@@ -737,6 +737,26 @@ Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 
   75218/75206 land for realtor Lee Lamont's developer (958 parcels in territory →
   top 150 delivered). Outputs gitignored (`backend/land_*.csv`).
 
+- `[#056]` **Land deliverable reworked → owner-grouped, res/com split, formatted
+  .xlsx (client feedback on #055).** Six changes from the Lamont call:
+  (1) **Show P(sell)% + lift-vs-baseline** per owner (baseline 6.3%/yr from the
+  trained model; `SellProbabilityModel.score()` already returned `.lift`, now
+  surfaced). (2) **Dropped absentee from the land ranking** — it's ~universal on
+  vacant land (408/512 residential lots) so it's noise, not signal; the real
+  signals are tax-suit / delinquent / estate / **multi-lot ownership (assemblage)**.
+  (3) **Group by owner, sublist their parcels** — one row per owner with a
+  `Properties` cell listing each lot (full address — parcel # — value — type);
+  surfaces assemblage plays (512 res lots → 350 owners). (4) **Split residential
+  (C11/C1) vs commercial (C12/13/14)** into two separate workbooks. (5) **Output
+  is now a formatted `.xlsx`** (new dep: `exceljs`) — pre-set column widths,
+  wrap only on long-text columns, frozen header, auto-filter — so the buyer never
+  resizes/wraps on open (CSV can't carry formatting). (6) **Full address + parcel
+  number** — strips the DCAD area-code suffix and composes street/city/state/zip;
+  since 957/958 lots have no street number, the Parcel/Account # is flagged as the
+  real locator. Distressed owners ranked first (Priority column). No `--limit` cap
+  in land mode (full inventory delivered; buyer filters in Excel — answers "why
+  150?"). Outputs gitignored (`backend/land_*.xlsx`).
+
 ### Flagged for prior-art / patent review (Handoff Rule 6)
 - New `calculateUrgencyScore()` (0–100): weights balance size, years behind,
   absentee ownership (no homestead exemption), and foreclosure risk. Used as

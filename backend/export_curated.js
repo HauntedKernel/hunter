@@ -130,6 +130,51 @@ const hasFlag = (name) => process.argv.includes(name);
 const csvCell = (v) => { if (v == null) return ''; const s = String(v); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
 const jparse = (s) => { try { const v = JSON.parse(s); return v; } catch { return null; } };
 
+// Land deliverable is a formatted .xlsx (not CSV) so the buyer never has to resize/wrap:
+// column widths are pre-set, long-text columns pre-wrapped, header frozen + auto-filtered.
+const LAND_COLS = [
+  { header: 'Rank', key: 'rank', width: 6 },
+  { header: 'Priority', key: 'priority', width: 12 },
+  { header: 'Owner', key: 'owner_name', width: 30 },
+  { header: 'Type', key: 'owner_type', width: 11 },
+  { header: 'Lots', key: 'lots', width: 6 },
+  { header: 'Total value', key: 'total_value', width: 14, numFmt: '$#,##0' },
+  { header: 'Sell prob %', key: 'sell_prob_pct', width: 11 },
+  { header: 'Lift vs avg', key: 'lift', width: 11 },
+  { header: 'Signals', key: 'signals', width: 30, wrap: true },
+  { header: 'Properties (address — parcel # — value)', key: 'properties', width: 54, wrap: true },
+  { header: 'Framing brief', key: 'framing_brief', width: 50, wrap: true },
+  { header: 'Industries', key: 'industries', width: 18 },
+  { header: 'Other props (countywide)', key: 'other_properties', width: 16 },
+  { header: 'Recommended contact', key: 'recommended_contact', width: 22 },
+  { header: 'Owner phones', key: 'owner_phones', width: 16 },
+  { header: 'Owner emails', key: 'owner_emails', width: 22 },
+  { header: 'Family contact', key: 'family_contact', width: 20 },
+  { header: 'Family phones', key: 'family_phones', width: 16 },
+  { header: 'Business contact', key: 'business_contact', width: 28, wrap: true },
+  { header: 'People behind LLC', key: 'people_behind', width: 28, wrap: true },
+  { header: 'Other businesses', key: 'other_businesses', width: 28, wrap: true },
+  { header: 'Research links', key: 'research_links', width: 44, wrap: true },
+  { header: 'Mailing address', key: 'mailing_address', width: 26 },
+];
+
+async function writeLandWorkbook(records, filePath, sheetName) {
+  const ExcelJS = require('exceljs');
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet(sheetName.slice(0, 31), { views: [{ state: 'frozen', ySplit: 1 }] });
+  ws.columns = LAND_COLS.map(c => ({ header: c.header, key: c.key, width: c.width }));
+  ws.getRow(1).font = { bold: true };
+  ws.getRow(1).alignment = { vertical: 'middle', wrapText: true };
+  LAND_COLS.forEach((c, i) => {
+    const col = ws.getColumn(i + 1);
+    col.alignment = { vertical: 'top', wrapText: !!c.wrap };
+    if (c.numFmt) col.numFmt = c.numFmt;
+  });
+  records.forEach(r => ws.addRow(r));
+  ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: LAND_COLS.length } };
+  await wb.xlsx.writeFile(filePath);
+}
+
 (async () => {
   const zipsArg = arg('--zips');
   if (!zipsArg) { console.error('Required: --zips 75216,75208'); process.exit(1); }
@@ -170,7 +215,8 @@ const jparse = (s) => { try { const v = JSON.parse(s); return v; } catch { retur
   const zipParams = zips.map(z => z.slice(0, 5) + '%');
   const baseCols = `t.account_id, t.owner_name, t.property_address, t.zip_code, t.owner_address,
     t.is_delinquent, t.is_absentee, t.over65_exemption, t.suit_pending, t.bankruptcy_filed,
-    t.delinquent_years, t.total_amount_due, t.total_value, t.category_code`;
+    t.delinquent_years, t.total_amount_due, t.total_value, t.category_code,
+    t.parcel_number, t.city, t.state`;
 
   // Motivated universe: any escalation/intent signal present.
   const motivatedWhere = `(t.suit_pending=1 OR t.is_delinquent=1 OR t.is_absentee=1
@@ -234,17 +280,21 @@ const jparse = (s) => { try { const v = JSON.parse(s); return v; } catch { retur
     const longTenure = (r.tenure_years != null && r.tenure_years >= 30) ? 1 : 0;
     const freeClear = r.free_and_clear === 1 ? 1 : 0;
 
-    let prob = null;
+    let prob = null, lift = null;
     if (model) {
       const sm = model.score({
         delinq: r.is_delinquent, absentee: r.is_absentee, elderly, suit: r.suit_pending, estate,
         dyears: r.delinquent_years || 0, totalAmountDue: r.total_amount_due || 0, totalValue: r.total_value || 0,
       });
       prob = sm ? sm.probability : null;
+      lift = sm ? sm.lift : null;
     }
     // Fallback rank key if no model: weighted signal count.
     const bigPortfolio = (r.portfolio_size || 1) >= 3 && r.portfolio_institutional !== 1;
-    const motivation = (r.suit_pending ? 28 : 0) + (r.is_absentee ? 18 : 0) + (estate ? 16 : 0)
+    // NOTE: absentee is ~universal on vacant land (nobody lives on an empty lot), so it
+    // carries no signal there — drop it from the land motivation score. Distress (suit/
+    // delinquent/estate) and multi-lot ownership (assemblage potential) are what matter.
+    const motivation = (r.suit_pending ? 28 : 0) + (landMode ? 0 : (r.is_absentee ? 18 : 0)) + (estate ? 16 : 0)
       + (r.has_divorce ? 16 : 0) + (r.is_delinquent ? 12 : 0) + (freeClear ? 10 : 0)
       + (longTenure ? 8 : 0) + (elderly ? 6 : 0) + (r.bankruptcy_filed ? 8 : 0)
       + (bigPortfolio ? 8 : 0);
@@ -254,7 +304,7 @@ const jparse = (s) => { try { const v = JSON.parse(s); return v; } catch { retur
     if (r.suit_pending) signals.push('Tax suit pending');
     if (r.is_delinquent) signals.push(`Tax-delinquent${r.delinquent_years ? ` (${r.delinquent_years}y)` : ''}`);
     if (r.bankruptcy_filed) signals.push('Bankruptcy');
-    if (r.is_absentee) signals.push('Absentee owner');
+    if (r.is_absentee && !landMode) signals.push('Absentee owner'); // absentee is noise on vacant land
     if (estate) signals.push('Estate / heirs');
     if (r.has_divorce) signals.push('Divorce');
     if (freeClear) signals.push('Free & clear');
@@ -314,11 +364,23 @@ const jparse = (s) => { try { const v = JSON.parse(s); return v; } catch { retur
     });
 
     const landType = landMode ? (LAND_TYPE[(r.category_code || '').trim()] || 'Vacant land') : '';
+    // Clean "full" address: strip the trailing ", XX" DCAD area code from the situs street,
+    // then compose street + city + state + 5-digit zip. Vacant lots usually have no street #.
+    const zip5 = String(r.zip_code || '').replace(/\D/g, '').slice(0, 5);
+    const street = String(r.property_address || '').replace(/,\s*[A-Z]{2}\s*$/, '').trim();
+    const fullAddress = landMode
+      ? [street || '(no situs street # — vacant lot)', r.city, `${r.state || 'TX'} ${zip5}`.trim()].filter(Boolean).join(', ')
+      : '';
 
     out.push({
       account_id: r.account_id,
+      parcel_number: r.parcel_number || '',
+      category_code: (r.category_code || '').trim(),
       prob, motivation,
+      total_value_num: r.total_value || 0,
+      full_address: fullAddress,
       sell_prob_pct: prob != null ? (prob * 100).toFixed(1) : '',
+      lift_vs_baseline: lift != null ? `${lift.toFixed(1)}x` : '',
       land_type: landType,
       signals: signals.join(' · '),
       framing_brief: brief,
@@ -348,14 +410,82 @@ const jparse = (s) => { try { const v = JSON.parse(s); return v; } catch { retur
     });
   }
 
-  // Land: P(sell) is home-oriented and meaningless for raw lots — rank by motivation, then lot value.
-  // Otherwise rank by calibrated P(sell) when available, else the motivation score.
-  if (landMode) out.sort((a, b) => b.motivation - a.motivation || (Number(b.est_value) || 0) - (Number(a.est_value) || 0));
-  else out.sort((a, b) => (b.prob ?? 0) - (a.prob ?? 0) || b.motivation - a.motivation);
+  // ===== LAND deliverable: group parcels by owner, split residential vs commercial, write .xlsx =====
+  if (landMode) {
+    const norm = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
+    const RES = new Set(['C11', 'C1']);                  // C11/C1 = vacant residential; rest = commercial/other
+    const DISTRESS_RE = /suit pending|Tax-delinquent|Estate|Bankruptcy|Free & clear|Divorce/i;
+
+    const groupByOwner = (parcels) => {
+      const m = new Map();
+      for (const p of parcels) { const k = norm(p.owner_name); if (!m.has(k)) m.set(k, []); m.get(k).push(p); }
+      const recs = [];
+      for (const lots of m.values()) {
+        // Lead parcel (best signal) supplies the owner-level enrichment; lots become the sublist.
+        lots.sort((a, b) => b.motivation - a.motivation || (b.prob ?? 0) - (a.prob ?? 0) || b.total_value_num - a.total_value_num);
+        const lead = lots[0];
+        const totalValue = lots.reduce((s, x) => s + (x.total_value_num || 0), 0);
+        const bestProb = lots.reduce((mx, x) => Math.max(mx, x.prob ?? 0), 0);
+        const bestLift = lots.reduce((mx, x) => Math.max(mx, x.lift_vs_baseline ? parseFloat(x.lift_vs_baseline) : 0), 0);
+        const signals = [...new Set(lots.flatMap(x => String(x.signals || '').split(' · ')).filter(Boolean))];
+        const hasDistress = lots.some(x => DISTRESS_RE.test(x.signals || ''));
+        const properties = lots.map(x =>
+          `${x.full_address}  —  Parcel ${x.parcel_number || x.account_id}  —  ${x.total_value_num ? '$' + Math.round(x.total_value_num).toLocaleString() : 'n/a'} (${x.land_type})`
+        ).join('\n');
+        recs.push({
+          _mot: lead.motivation, _prob: bestProb, _val: totalValue, _distress: hasDistress ? 1 : 0,
+          priority: hasDistress ? 'Distressed' : 'Standard',
+          owner_name: lead.owner_name, owner_type: lead.owner_type, lots: lots.length,
+          total_value: totalValue || null,
+          sell_prob_pct: bestProb ? +(bestProb * 100).toFixed(1) : '',
+          lift: bestLift ? bestLift.toFixed(1) + 'x' : '',
+          signals: signals.join(' · '),
+          properties,
+          framing_brief: lead.framing_brief, industries: lead.industries,
+          other_properties: lead.other_properties, recommended_contact: lead.recommended_contact,
+          owner_phones: lead.owner_phones, owner_emails: lead.owner_emails,
+          family_contact: lead.family_contact, family_phones: lead.family_phones,
+          business_contact: lead.business_contact, people_behind: lead.people_behind,
+          other_businesses: lead.other_businesses, research_links: lead.research_links,
+          mailing_address: lead.mailing_address,
+        });
+      }
+      // Rank: distressed owners first, then signal strength, then assemblage/portfolio value.
+      recs.sort((a, b) => b._distress - a._distress || b._mot - a._mot || b._prob - a._prob || b._val - a._val);
+      recs.forEach((r, i) => { r.rank = i + 1; });
+      return recs;
+    };
+
+    const resParcels = out.filter(p => RES.has(p.category_code));
+    const comParcels = out.filter(p => !RES.has(p.category_code));
+    const resRecs = groupByOwner(resParcels);
+    const comRecs = groupByOwner(comParcels);
+    const base = `land_${label.replace(/[^a-z0-9]+/gi, '_')}_${TODAY}`;
+    const resPath = path.join(__dirname, `${base}_RESIDENTIAL.xlsx`);
+    const comPath = path.join(__dirname, `${base}_COMMERCIAL.xlsx`);
+    await writeLandWorkbook(resRecs, resPath, 'Residential land');
+    await writeLandWorkbook(comRecs, comPath, 'Commercial land');
+
+    const basePct = model && model.baseRate ? (model.baseRate * 100).toFixed(1) : '~6';
+    console.log(`\n${exclusive ? 'EXCLUSIVE ' : ''}LAND lists (owner-grouped, ranked) — territory ${zips.join(', ')}:`);
+    console.log(`  RESIDENTIAL -> ${resPath}`);
+    console.log(`     ${resRecs.length} owners / ${resParcels.length} lots; ${resRecs.filter(r => r._distress).length} distressed owners ranked first`);
+    console.log(`  COMMERCIAL  -> ${comPath}`);
+    console.log(`     ${comRecs.length} owners / ${comParcels.length} lots; ${comRecs.filter(r => r._distress).length} distressed owners ranked first`);
+    console.log(`  P(sell)% + lift shown per owner (baseline ${basePct}%/yr). Model is residential-trained; for land the hard signals are tax-suit / delinquent / estate / multi-lot.`);
+    console.log('  NOTE: vacant lots rarely carry a street # — the Parcel/Account number is the locator (title/DCAD). No lot-size field exists in the roll.');
+    console.log('  COMPLIANCE: any phones are NOT DNC-scrubbed — buyer must scrub before calling.');
+    if (diffDb) await db.exec('DETACH DATABASE old');
+    await db.close();
+    return;
+  }
+
+  // Rank by calibrated P(sell) when available, else the motivation score.
+  out.sort((a, b) => (b.prob ?? 0) - (a.prob ?? 0) || b.motivation - a.motivation);
   const top = out.slice(0, limit);
   top.forEach((o, i) => { o.rank = i + 1; });
 
-  const header = ['rank', ...(landMode ? ['land_type'] : ['sell_prob_pct']), 'signals', 'framing_brief', 'owner_name', 'owner_type', 'industries', 'property_address', 'zip',
+  const header = ['rank', 'sell_prob_pct', 'signals', 'framing_brief', 'owner_name', 'owner_type', 'industries', 'property_address', 'zip',
     'est_value', 'equity_status', 'other_properties', 'portfolio_value', 'cluster_size', 'years_owned', 'years_delinquent', 'amount_due',
     'recommended_contact', 'owner_phones', 'owner_emails', 'family_contact', 'family_phones',
     'business_contact', 'people_behind', 'other_businesses', 'research_links', 'mailing_address', 'account_id'];
@@ -364,9 +494,8 @@ const jparse = (s) => { try { const v = JSON.parse(s); return v; } catch { retur
 
   const withContacts = top.filter(o => o.owner_phones || o.family_phones).length;
   const elderlyFamily = top.filter(o => o.recommended_contact.startsWith('FAMILY')).length;
-  console.log(`\n${exclusive ? 'EXCLUSIVE ' : ''}${landMode ? 'land list' : 'curated list'} -> ${outPath}`);
-  console.log(`  ${top.length} ${landMode ? 'parcels' : 'leads'}${diffDb ? ' (NEW this period)' : ''}, ranked by ${landMode ? 'motivation, then lot value' : (model ? 'P(sell)' : 'motivation score')}`);
-  if (landMode) console.log('  NOTE: tax roll has no lot-size/acreage field — buyer should pull dimensions per parcel from DCAD.');
+  console.log(`\n${exclusive ? 'EXCLUSIVE ' : ''}curated list -> ${outPath}`);
+  console.log(`  ${top.length} leads${diffDb ? ' (NEW this period)' : ''}, ranked by ${model ? 'P(sell)' : 'motivation score'}`);
   console.log(`  ${withContacts} have a phone on file; ${elderlyFamily} elderly leads routed to a family contact`);
   if (!withContacts) console.log('  NOTE: no contacts yet — skip-trace a PropStream pull, map_propstream.js, ingest_contacts.js, then re-run.');
   console.log('  COMPLIANCE: phones are NOT DNC-scrubbed — buyer must scrub before calling.');
