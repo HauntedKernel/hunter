@@ -578,6 +578,66 @@ Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 
   light up the free-and-clear signal + contacts. (Use a targeted working set, not a
   county dump — PropStream licenses *access*, not the data; see RESEARCH.md §E.)
 
+## 2026-06-27 — Curated-list product, free DCAD tenure path, estate-detection fix
+
+- `[#044]` **PropStream mapper tuned to real headers + `--divorce` output
+  (`backend/map_propstream.js`).** After seeing an actual PropStream export, mapped
+  its true columns: open-loan COUNT (`Total Open Loans`) as the cleanest
+  free-and-clear cue (0 loans = free & clear), LTV fallback, exact
+  `Est. Remaining balance of Open Loans` balance column, and owner-2 names. New
+  `--divorce [out.csv]` flag emits a `divorce_events` CSV (for the Divorce list).
+  Validated end-to-end on the real Divorce export: 33 rows, 100% APN match, 18
+  free-and-clear + 33 divorce_events ingested locally. (0 contacts — that export
+  was NOT skip-traced; phone/email columns empty. Skip-trace BEFORE exporting.)
+
+- `[#045]` **Free DCAD tenure ingester (`backend/ingest_appraisal.js`).** `tax_roll.db`
+  is the tax-COLLECTIONS roll — it has no deed date / sale date / year-built. The
+  FREE DCAD bulk appraisal file (dallascad.org/dataproducts.aspx, no export caps)
+  carries all three and joins on `account_id`. Ingester fuzzy-detects columns,
+  normalizes account to padStart-17, computes `tenure_years`, writes
+  `appraisal_detail` (auto-created), and reports the free-and-clear PROXY supply
+  (owned 30+ yrs, and those that are also over-65 = high-confidence paid-off).
+  Tenure = strongest mobility predictor in the literature, and a FREE
+  free-and-clear proxy at full 960k scale. (Precise deed reconstruction stays
+  per-property: Clerk deeds are search-only on publicsearch.us, no free bulk.)
+
+- `[#046]` **Curated-list export — the buyer-ready deliverable
+  (`backend/export_curated.js`).** Buyers asked for a curated list, not a login.
+  Picks a territory (`--zips`), scores every motivated property with the
+  calibrated P(sell) model, dedupes, ranks, and emits ONE clean CSV: rank,
+  sell-prob %, plain-English signals, key facts (value/equity/tenure/amount due),
+  owner + family contacts, recommended-contact, mailing address. `--diff <old.db>`
+  = MONTHLY territory diff (only sellers who NEWLY entered distress vs a prior
+  snapshot) — the recurring deliverable behind a $500/mo EXCLUSIVE territory.
+  ELDERLY → FAMILY: when owner is 65+, surfaces the likely adult-child contact and
+  flags "reach the family, not the senior" (more effective + sidesteps
+  elder-solicitation risk). `ingest_contacts.js` gains an optional `relatives`
+  JSON column (structured kin from BatchData/IDI-style skip-trace) to feed it.
+  Verified on 75216 (3,514 motivated → ranked sheet).
+
+- `[#047]` **Estate-detection fix — was missing 176% of estates
+  (`TaxRollProcessor.js`).** The DCAD roll abbreviates "ESTATE OF" as **"EST OF"**,
+  which the estate regex + SQL filter didn't match. County-wide the app detected
+  3,592 estates when there are **9,930** (+6,338). Added `% EST OF%` (leading
+  space blocks BEST/WEST OF — verified zero false positives; all extras are real
+  "…EST OF &" estates) to the ESTATE SQL filter and `\bEST OF\b` to the `isEstate`
+  regex. Estate is a 1.6x signal — this nearly triples its supply. (Model wasn't
+  retrained on the corrected feature yet; do so when the next feed lands.)
+
+- `[#048]` **Marketing landing page — sells the leads + doubles as a portfolio piece
+  (`src/components/screens/LandingScreen.jsx`).** New front door at `/` (App.jsx
+  routes `home`/`landing` → LandingScreen; the tool moved behind an "Open tool"
+  button). Sections: hero (outcome promise), **live sample** (pulls REAL ranked
+  output from the API for 75216 but MASKS owner names — proves it works without
+  doxxing distressed owners or giving leads away), filtered-list-vs-ranked-
+  probability comparison, "how it works" (the resume layer: 960k-property engine,
+  model validated on 675k sales, stacked signals, DNC-compliant contacts),
+  founder pricing ($200 list / $500 exclusive + first-month guarantee), and a
+  "built solo end-to-end" section (data eng + applied ML + product). Integrity
+  guardrail: NO fabricated contact/close-rate stats — only provable claims
+  (validated-on-675k, 2.45×/3.07× measured lift) + proof-by-demo + risk reversal.
+  Styling added to globals.css (`.lp-*`, responsive). Build green.
+
 ### Flagged for prior-art / patent review (Handoff Rule 6)
 - New `calculateUrgencyScore()` (0–100): weights balance size, years behind,
   absentee ownership (no homestead exemption), and foreclosure risk. Used as

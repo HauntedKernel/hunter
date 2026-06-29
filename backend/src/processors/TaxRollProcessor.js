@@ -852,7 +852,9 @@ class TaxRollProcessor {
       // Estate / inherited — the owner has died and the property is held by an
       // estate or heirs (a top-tier "death" seller signal, per STRATEGY.md).
       // Precise patterns so "REAL ESTATE LLC" business names don't match.
-      const ESTATE = "(owner_name LIKE '%ESTATE OF%' OR owner_name LIKE '%LIFE ESTATE%' OR owner_name LIKE '%HEIRS%' OR owner_name LIKE '% ET AL%')";
+      // Includes the DCAD abbreviation "EST OF" (the dominant form — ~6,300 more
+      // estates than "ESTATE OF" alone). Leading space blocks BEST/WEST OF.
+      const ESTATE = "(owner_name LIKE '%ESTATE OF%' OR owner_name LIKE '% EST OF%' OR owner_name LIKE '%LIFE ESTATE%' OR owner_name LIKE '%HEIRS%' OR owner_name LIKE '% ET AL%')";
       // Active tax-foreclosure suit — strongest single signal (2.45x). A suit
       // implies the account is delinquent, so these rank within the delinquent pool.
       const TAXSUIT = '(suit_pending = 1)';
@@ -993,7 +995,7 @@ class TaxRollProcessor {
     const isEmptyNester = !!record.empty_nester;
     // Estate / inherited — owner deceased, property held by an estate or heirs.
     // Read straight from the owner-name patterns (same as the ESTATE SQL filter).
-    const isEstate = /ESTATE OF|LIFE ESTATE|HEIRS|\bET AL\b/i.test(record.owner_name || '');
+    const isEstate = /ESTATE OF|\bEST OF\b|LIFE ESTATE|HEIRS|\bET AL\b/i.test(record.owner_name || '');
     // Active tax-foreclosure suit — strongest single motivation signal (2.45x).
     const isTaxSuit = !!record.suit_pending;
     // Divorce / family-law filing matched to this owner (joined from divorce_events).

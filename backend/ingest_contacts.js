@@ -11,8 +11,14 @@
  * COMPLIANCE: phones are stored with dnc='unknown' and are NOT callable until
  * DNC-scrubbed (fail-closed). See SkipTraceService + STRATEGY.md §7.
  *
- * CSV columns (header required): account_id,phones,emails,source
+ * CSV columns (header required): account_id,phones,emails,source[,relatives]
  *   phones / emails: semicolon-separated (e.g. "2145550101;2145550102")
+ *   relatives: OPTIONAL JSON array of kin from a skip-trace that returns structured
+ *     relatives — [{ "name": "...", "relationship": "daughter", "age": 47,
+ *     "phones": ["2145550103"], "emails": ["x@y.com"] }]. Powers the elderly ->
+ *     adult-child contact path in export_curated.js (reach the family, not the
+ *     senior). Providers like BatchData / IDI(TLOxp) return structured relatives;
+ *     PropStream's standard export does not cleanly label them.
  *
  * Usage:
  *   node ingest_contacts.js <file.csv>     load/replace contacts from CSV
@@ -61,11 +67,14 @@ const splitList = (s) => String(s || '').split(';').map(x => x.trim()).filter(Bo
       owner_name TEXT,
       phones TEXT,
       emails TEXT,
+      relatives TEXT,
       source TEXT,
       dnc_checked_at TEXT,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
   `);
+  // Migrate older contacts tables that predate the relatives column.
+  try { await db.exec('ALTER TABLE contacts ADD COLUMN relatives TEXT'); } catch { /* already present */ }
 
   const arg = process.argv[2];
   if (arg === '--clear') {
@@ -88,13 +97,25 @@ const splitList = (s) => String(s || '').split(';').map(x => x.trim()).filter(Bo
     // Phones stored with dnc='unknown' — NOT callable until scrubbed (fail-closed).
     const phones = splitList(r.phones).map(p => ({ number: normalizePhone(p), dnc: 'unknown', type: r.phone_type || 'unknown' }));
     const emails = splitList(r.emails);
+    // relatives is optional JSON; normalize phones inside it, fail-soft on bad JSON.
+    let relatives = null;
+    if (r.relatives && r.relatives.trim()) {
+      try {
+        const parsed = JSON.parse(r.relatives);
+        if (Array.isArray(parsed)) relatives = parsed.map(k => ({
+          name: k.name || '', relationship: k.relationship || '', age: k.age ?? null,
+          phones: (k.phones || []).map(normalizePhone).filter(Boolean), emails: k.emails || [],
+        }));
+      } catch { /* ignore malformed relatives cell */ }
+    }
     await db.run(
-      `INSERT INTO contacts (account_id, owner_name, phones, emails, source, dnc_checked_at)
-       VALUES (?, ?, ?, ?, ?, NULL)
+      `INSERT INTO contacts (account_id, owner_name, phones, emails, relatives, source, dnc_checked_at)
+       VALUES (?, ?, ?, ?, ?, ?, NULL)
        ON CONFLICT(account_id) DO UPDATE SET
-         phones = excluded.phones, emails = excluded.emails,
+         phones = excluded.phones, emails = excluded.emails, relatives = excluded.relatives,
          source = excluded.source, dnc_checked_at = NULL, updated_at = CURRENT_TIMESTAMP`,
-      [accountId, owner?.owner_name || r.owner_name || null, JSON.stringify(phones), JSON.stringify(emails), r.source || 'csv']
+      [accountId, owner?.owner_name || r.owner_name || null, JSON.stringify(phones), JSON.stringify(emails),
+       relatives ? JSON.stringify(relatives) : null, r.source || 'csv']
     );
     matched++;
   }

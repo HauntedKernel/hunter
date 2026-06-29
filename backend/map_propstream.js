@@ -71,6 +71,12 @@ function pick(keys, aliases) {
   const flagVal = (f) => { const i = args.indexOf(f); return i !== -1 ? args[i + 1] : null; };
   let liensOut = flagVal('--liens');
   let contactsOut = flagVal('--contacts');
+  // --divorce [out.csv] : also emit a divorce_events CSV (use for the Divorce list).
+  let divorceOut = null;
+  if (args.includes('--divorce')) {
+    const v = flagVal('--divorce');
+    divorceOut = (v && !v.startsWith('--')) ? v : 'propstream_divorce.csv';
+  }
 
   const { keys, rows } = parseCsv(fs.readFileSync(inPath, 'utf8'));
   console.log(`parsed ${rows.length} PropStream rows`);
@@ -82,9 +88,14 @@ function pick(keys, aliases) {
     ownerFull: pick(keys, ['ownername', 'owner1fullname', 'ownerfullname']),
     ownerFirst: pick(keys, ['owner1firstname', 'ownerfirstname', 'firstname']),
     ownerLast: pick(keys, ['owner1lastname', 'ownerlastname', 'lastname']),
-    estValue: pick(keys, ['estimatedvalue', 'estvalue', 'avm', 'estimatedmarketvalue', 'marketvalue']),
-    estEquity: pick(keys, ['estimatedequity', 'estequity', 'equity']),
-    mtgBal: pick(keys, ['openmortgagebalance', 'totalopenlien', 'estimatedopenloansbalance', 'loanbalance', 'totalloanbalance', 'mortgagebalance', 'openloans']),
+    owner2First: pick(keys, ['owner2firstname']),
+    owner2Last: pick(keys, ['owner2lastname']),
+    estValue: pick(keys, ['estvalue', 'estimatedvalue', 'avm', 'estimatedmarketvalue', 'marketvalue']),
+    estEquity: pick(keys, ['estequity', 'estimatedequity']),
+    // Open-loan COUNT is the cleanest free-and-clear cue (0 loans = free & clear).
+    openLoans: pick(keys, ['totalopenloans', 'openloancount', 'numberofopenloans']),
+    ltv: pick(keys, ['estloantovalue', 'loantovalue', 'ltv']),
+    mtgBal: pick(keys, ['estremainingbalanceofopenloans', 'openmortgagebalance', 'remainingbalanceofopenloans', 'loanbalance', 'totalloanbalance', 'mortgagebalance']),
     mtgDate: pick(keys, ['mortgagerecordingdate', 'lastmortgagedate', 'loanrecordingdate']),
     mtgAmt: pick(keys, ['mortgageamount', 'loanamount', 'lastmortgageamount']),
   };
@@ -133,7 +144,10 @@ function pick(keys, aliases) {
   if (!liensOut && hasLiens) liensOut = 'propstream_liens.csv';
   if (!contactsOut && hasContacts) contactsOut = 'propstream_contacts.csv';
 
-  const lienRows = [], contactRows = [];
+  const owner2NameOf = (r) =>
+    [col.owner2First ? r[col.owner2First] : '', col.owner2Last ? r[col.owner2Last] : ''].filter(Boolean).join(' ');
+
+  const lienRows = [], contactRows = [], divorceRows = [];
   const counts = { apn: 0, 'address+owner': 0, unmatched: 0 };
   for (const r of rows) {
     const m = await resolve(r);
@@ -141,15 +155,23 @@ function pick(keys, aliases) {
     counts[m.how]++;
 
     if (liensOut) {
+      const cnt = col.openLoans ? number(r[col.openLoans]) : null;
+      const ltv = col.ltv ? number(r[col.ltv]) : null;
       const bal = col.mtgBal ? number(r[col.mtgBal]) : null;
       const val = col.estValue ? number(r[col.estValue]) : null;
       const eq = col.estEquity ? number(r[col.estEquity]) : null;
       let fac = '';
-      if (bal != null) fac = bal <= 0 ? 1 : 0;
+      if (cnt != null) fac = cnt === 0 ? 1 : 0;          // open-loan count: 0 = free & clear
+      else if (ltv != null) fac = ltv <= 0 ? 1 : 0;      // LTV 0 = free & clear
+      else if (bal != null) fac = bal <= 0 ? 1 : 0;
       else if (allClear) fac = 1;
       else if (eq != null && val) fac = (eq / val >= 0.99) ? 1 : 0;
-      lienRows.push([m.id, m.owner, fac, bal != null ? (bal > 0 ? 1 : 0) : '', bal ?? '', val ?? '', eq ?? '',
+      const openCount = cnt != null ? cnt : (bal != null ? (bal > 0 ? 1 : 0) : '');
+      lienRows.push([m.id, m.owner, fac, openCount, bal ?? '', val ?? '', eq ?? '',
         col.mtgDate ? r[col.mtgDate] : '', col.mtgAmt ? (number(r[col.mtgAmt]) ?? '') : '', 'propstream']);
+    }
+    if (divorceOut) {
+      divorceRows.push([ownerNameOf(r) || m.owner, owner2NameOf(r), '', m.id, '', '', '', 'propstream']);
     }
     if (contactsOut) {
       const phones = [...new Set(phoneKeys.map(k => String(r[k] || '').replace(/\D/g, '')).filter(p => p.length >= 10))];
@@ -170,6 +192,12 @@ function pick(keys, aliases) {
     fs.writeFileSync(contactsOut, ['account_id,phones,emails,source', ...contactRows.map(r => r.map(csvCell).join(','))].join('\n') + '\n');
     console.log(`\ncontacts -> ${contactsOut}  (${contactRows.length} rows with a phone/email)`);
     console.log(`  then: node ingest_contacts.js ${contactsOut}`);
+  }
+  if (divorceOut) {
+    fs.writeFileSync(divorceOut, ['party1_name,party2_name,address,account_id,filed_date,case_number,court,source',
+      ...divorceRows.map(r => r.map(csvCell).join(','))].join('\n') + '\n');
+    console.log(`\ndivorce_events -> ${divorceOut}  (${divorceRows.length} rows)`);
+    console.log(`  then: node ingest_divorce_events.js ${divorceOut}`);
   }
   console.log('\nmatch breakdown:', JSON.stringify(counts));
   if (counts.unmatched) console.log(`  ${counts.unmatched} rows could not be matched to a Dallas account (out-of-county, or APN/address format mismatch).`);
