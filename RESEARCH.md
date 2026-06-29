@@ -262,3 +262,63 @@ hourly 311 feed. All low/no cost and obtainable.
 *Round-2 research in flight:* concrete TX/Dallas data **sources** for each signal
 above + a compliant **skip-trace / outreach** playbook (FCRA/TCPA/DPPA/CAN-SPAM).
 Results will be appended here.
+
+---
+
+## G. Tenure & RECENCY — measured on our data (2026-06-29)
+
+After wiring tenure from the free DCAD 2025 appraisal archive (leakage-safe, as-of-2025
+deed dates) we back-tested it on the 2025-08→2026-06 snapshot diff (675k accounts).
+Two findings overturned the literature. Scripts: `scripts/tenure_recency_*.py`,
+`scripts/backtrain_sell_model.js`.
+
+**1. LONG tenure is NEGATIVE, not positive (literature was wrong for our window).**
+The literature says long-held homes turn over more; on our 10-month Dallas window the
+opposite holds — long-tenure owners are the *stickiest*. Multivariate OR **0.868**
+(alongside raw delinquency's 0.874). → the long-tenure positive prior added in #057/#058
+is unsupported; reverse it.
+
+| tenure (as-of 2025) | lift (all) | lift (owner-occ. individuals) |
+|---|---:|---:|
+| 0–1 yr | **2.96x** | **2.98x** |
+| 1–2 yr | 1.48x | 1.22x |
+| 2–3 yr | 1.22x | 1.06x |
+| 3–5 yr | 1.07x | 1.08x |
+| 5–15 yr | ~0.85x | ~0.95x |
+| 15–30 yr | 0.72x | 0.76x |
+| 30+ yr | 0.90x | 0.96x |
+
+**2. RECENCY is a REAL signal — and survives the noise filters.** Short tenure (esp.
+0–1 yr) predicts a near-term sale even among **owner-occupied individuals** (homestead=1,
+non-entity): 2.98x. It is NOT just flippers (44% of raw <2yr sales were entity owners,
+but the clean subset still shows ~3x) and NOT just paperwork: a name-overlap test on the
+clean 0–1yr "sales" found **69% fully-distinct new owners = genuine arm's-length resales**
+(vs 56% on the long-tenure baseline; 67% on the estate signal). Archetype: owner-occupant
+forced out fast — relocation, buyer's remorse, divorce, overextension.
+
+**3. RECENCY × DISTRESS is the standout (a genuinely new, non-obvious signal).**
+Raw delinquency alone is 1.00x (worthless), but *recent purchase + delinquent* is sharp —
+the interaction is the whole story:
+
+| segment | n | lift |
+|---|---:|---:|
+| delinquent, any tenure (clean) | 5,797 | **1.00x** |
+| delinquent + tenure ≥2yr (clean) | 4,461 | 0.94x |
+| **recent (<2yr) + delinquent** (clean owner-occ) | 246 | **2.46x** |
+| **recent (<2yr) + tax-suit** (clean owner-occ) | 133 | **2.16x** |
+| recent + delinquent (all owners) | 1,277 | **3.73x** |
+| recent + absentee (all owners) | 16,557 | **3.69x** |
+
+Read: a *recently bought* home that's *already behind* = an overextended owner cracking
+(2.46x); a long-held delinquent home = someone who's been behind for years and isn't
+moving (0.94x). No filter tool surfaces "bought recently AND now distressed" — this is a
+moat-type signal, especially for the **residential/houses** product.
+
+**Product implications (TODO — not yet wired):**
+- Reverse the long-tenure prior (#057/#058) — it's backwards.
+- Add a **recency** signal (banded: 0–1yr strong, 1–3yr modest) for houses.
+- Add **recency × delinquent** and **recency × suit** synergies (the high-intent
+  "overextended recent buyer"). Small populations but high intent — fine for an agent
+  farming a few neighborhoods.
+- Caveat: recent buyers sell FAST, so timing/recency of the tax-roll snapshot matters;
+  target proactively (recent-buyer farm + the distress overlay).
