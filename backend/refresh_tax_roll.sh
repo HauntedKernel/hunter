@@ -25,6 +25,9 @@ MIN_ZIP_BYTES=104857600                        # 100MB floor (zip is ~266MB; unz
 MIN_ROWS=700000                                # rebuilt roll must have >= this many rows
 
 log(){ echo "[$(date)] $*" >> "$LOG"; }
+# Single-instance lock — never let two refreshes run at once (they'd share $WORK).
+exec 9>"$HOME/hunter/.refresh_taxroll.lock"
+if ! flock -n 9; then log "ABORT: another tax-roll refresh is already running"; exit 0; fi
 trap 'rm -rf "$WORK"' EXIT                      # always clean the big temp files
 log "===== tax-roll refresh ${MODE} ====="
 rm -rf "$WORK"; mkdir -p "$WORK" || { log "FATAL: mkdir $WORK"; exit 1; }
