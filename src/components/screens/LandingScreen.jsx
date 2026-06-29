@@ -77,9 +77,9 @@ export default function LandingScreen({ onNavigate }) {
             <span className="lp-accent">ranked by who'll actually sell.</span>
           </h1>
           <p className="lp-sub">
-            Not another filtered list of everyone who's tax-delinquent. A calibrated
-            sell-probability model scores <strong>960,000+ Dallas properties</strong> and hands you a
-            short, ranked, contact-ready list — <strong>exclusive to your territory.</strong>
+            Not another massive, unsorted export to dig through. A calibrated model weighs every
+            property in your area and hands you a short, <strong>ranked, contact-ready shortlist</strong> —
+            with the reason each one made the cut, <strong>exclusive to your territory.</strong>
           </p>
           <div className="lp-cta-row">
             <button className="btn btn-primary lp-cta" onClick={scrollTo('offer')}>Claim your territory</button>
@@ -140,7 +140,7 @@ export default function LandingScreen({ onNavigate }) {
                 )
               })}
               <div className="lp-sample-foot">
-                Ranked by calibrated probability — so you work the top few, not all 1,700.
+                Ranked by calibrated probability — so you work the top few, not an endless list.
                 <button className="btn-link" onClick={() => onNavigate && onNavigate('sellers_dashboard')}>Open the live tool →</button>
               </div>
             </div>
@@ -158,21 +158,21 @@ export default function LandingScreen({ onNavigate }) {
             <div className="lp-col lp-col-them">
               <div className="lp-col-tag">Filtered list (PropStream &amp; co.)</div>
               <ul>
-                <li>All 1,700 tax-delinquent — you sort them</li>
+                <li>A massive, unsorted list of properties — you dig through it</li>
                 <li>Sold to everyone (race to the bottom)</li>
                 <li>Raw rows; you figure out who matters</li>
-                <li>Solicit whoever's on the list</li>
-                <li>A login and homework</li>
+                <li>Point-and-shoot at whoever's on the list</li>
+                <li>A login and a pile of homework</li>
               </ul>
             </div>
             <div className="lp-col lp-col-us">
               <div className="lp-col-tag lp-col-tag-us">Hunter</div>
               <ul>
-                <li><strong>Ranked probability</strong> — work the top 20, skip 1,680</li>
+                <li>A <strong>focused, ranked, explained</strong> shortlist</li>
                 <li><strong>Exclusive</strong> to your territory</li>
-                <li>Curated, deduped, with the <strong>"why"</strong></li>
+                <li>Every lead comes with <strong>the reason it ranks</strong></li>
                 <li>For seniors, routed to the <strong>family decision-maker</strong></li>
-                <li>A done-for-you sheet, handed to you</li>
+                <li>Done-for-you and handed to you</li>
               </ul>
             </div>
           </div>
@@ -183,24 +183,28 @@ export default function LandingScreen({ onNavigate }) {
       <section className="lp-section">
         <div className="container">
           <div className="lp-section-head">
-            <h2 className="lp-h2">How it works</h2>
-            <p className="lp-section-sub">Public records in, a calibrated probability out. The rigor is the product.</p>
+            <h2 className="lp-h2">The method, not a hunch</h2>
+            <p className="lp-section-sub">
+              Most lists are one filter and a hope. Hunter's score is grounded in decades of
+              published research on why and when people move — then validated against real local
+              outcomes, so the ranking reflects what actually happens, not a gut feel.
+            </p>
           </div>
           <div className="lp-grid">
             <div className="lp-card">
               <div className="lp-card-ico">🗂️</div>
-              <h3>960k-property data engine</h3>
-              <p>The full Dallas County tax roll, refreshed weekly, plus an OCR'd foreclosure feed and free DCAD ownership-tenure data — joined into one searchable base.</p>
+              <h3>County-scale data engine</h3>
+              <p>The full county property record, refreshed weekly and fused with foreclosure filings, ownership history, and other public-record sources into one continuously-updated base.</p>
+            </div>
+            <div className="lp-card">
+              <div className="lp-card-ico">📚</div>
+              <h3>Grounded in the research</h3>
+              <p>Built on the academic literature on residential mobility and home turnover — the well-studied life-event, financial, and ownership factors that precede a sale — rather than a single arbitrary filter.</p>
             </div>
             <div className="lp-card">
               <div className="lp-card-ico">📊</div>
-              <h3>Calibrated sell-probability</h3>
-              <p>A model trained on <strong>675,000 real ownership changes</strong> — validated, not vibes. Tax-suit sellers turn over at <strong>2.45×</strong> the base rate; absentee + senior at <strong>3.07×</strong>.</p>
-            </div>
-            <div className="lp-card">
-              <div className="lp-card-ico">🧩</div>
-              <h3>Stacked signals</h3>
-              <p>Tax suits, absentee owners, estates/heirs, divorce, free-and-clear equity, long tenure — fused into one score with the interaction effects that actually move likelihood-to-sell.</p>
+              <h3>Trained &amp; validated</h3>
+              <p>The model is trained and back-tested against hundreds of thousands of real ownership changes, and checked for <strong>calibration</strong> — so a stated likelihood means what it says, not a vanity number.</p>
             </div>
             <div className="lp-card">
               <div className="lp-card-ico">📞</div>
@@ -248,25 +252,6 @@ export default function LandingScreen({ onNavigate }) {
               Claim a territory
             </a>
             <span className="lp-faint">No card to start. Reply and tell me your farm area.</span>
-          </div>
-        </div>
-      </section>
-
-      {/* BUILT BY (resume punch) */}
-      <section className="lp-section">
-        <div className="container lp-about">
-          <h2 className="lp-h2">Built solo, end to end</h2>
-          <p className="lp-about-p">
-            Hunter is a one-person build: a public-records data pipeline over 960k properties, a
-            trained-and-validated predictive model (logistic sell-probability, calibrated against
-            675k real sales), a React product surface, and full production deployment
-            (Cloudflare Pages + tunnel → ARM server, process-managed, weekly auto-refresh).
-            Data engineering, applied ML, and product — shipped live at hunter.living.
-          </p>
-          <div className="lp-stack">
-            {['Node / Express', 'SQLite · 960k rows', 'Logistic model (no deps)', 'React + Vite', 'Cloudflare Pages', 'OCR foreclosure feed'].map(t => (
-              <span className="lp-tag" key={t}>{t}</span>
-            ))}
           </div>
         </div>
       </section>
