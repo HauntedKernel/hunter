@@ -80,6 +80,8 @@ backend/liens_derived.csv
 backend/deeds_*.csv
 backend/contacts_*.csv
 backend/curated_*.csv
+backend/officer_worklist*.csv
+backend/wl_*.csv
 !backend/*.sample.csv
 
 # Raw PropStream / vendor exports (PII + licensed) — never commit.

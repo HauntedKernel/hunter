@@ -680,6 +680,18 @@ Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 
   `business_contact` now lists agent + all officers + phone. Verified: RJC CUSTOM
   BUILDERS LLC → the two Guel individuals + their 4 other businesses + industries.
 
+- `[#052]` **Forward officer-lookup worklist — the money-tight LLC-break path
+  (`backend/officer_worklist.js`).** Instead of the $1,350 SOS bulk file, generate
+  the short list of business entities that actually appear on a curated list (or a
+  territory) → look up only those (FREE current officers at the TX Comptroller PIR,
+  or $1/SOSDirect) → paste into the emitted template → `ingest_business_affiliations.js`.
+  Pulls in cluster siblings (other businesses at the same mailing address) so one
+  lookup session covers the whole operator; ranks by parcel count. Output columns
+  match the ingester exactly (+ ignored note_parcels/note_cluster helper cols).
+  Modes: `--from <curated.csv>` (recommended) or `--zips`. Round-trip verified:
+  filled template → ingest → officers land in the right column. Worklist outputs
+  gitignored (hold officer data once filled).
+
 ### Flagged for prior-art / patent review (Handoff Rule 6)
 - New `calculateUrgencyScore()` (0–100): weights balance size, years behind,
   absentee ownership (no homestead exemption), and foreclosure risk. Used as
