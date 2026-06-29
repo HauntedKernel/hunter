@@ -650,6 +650,21 @@ Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 
   chip (tired-landlord / investor cue), and a small motivation bump. Zero data
   cost — pure leverage on the existing DB. Re-run after a tax-roll refresh.
 
+- `[#050]` **Business-affiliations enrichment — the "human behind the LLC"
+  (`backend/ingest_business_affiliations.js` + `export_curated.js`).** Three parts:
+  (1) FREE owner-type classification from owner_name (Individual / LLC / Corp /
+  LP·Ltd / Trust / Business / Estate) → `owner_type` column + a "LLC-owned" signal
+  chip (investor cue). (2) FREE likely-principal heuristic: if exactly one
+  individual shares a business's mailing address (via owner_portfolio), surface
+  them as "possible principal (shares mailing addr)" — excludes other businesses,
+  estates, trusts. (3) Ready-for-feed ingester: loads a TX business registry CSV
+  (Comptroller Open Data / SOSDirect bulk / OpenCorporates — provider-agnostic
+  fuzzy headers) → `business_affiliations` table, matched entity-name→owner_name
+  with entity-suffix-stripped normalization; adds registered agent / officers /
+  business phone → `business_contact` column. 19,752 distinct business owner-names
+  in the roll. Validated end-to-end (sample registry matched, all columns flow).
+  `business_affiliations.sample.csv` shows the input. CHANGELOG #050.
+
 ### Flagged for prior-art / patent review (Handoff Rule 6)
 - New `calculateUrgencyScore()` (0–100): weights balance size, years behind,
   absentee ownership (no homestead exemption), and foreclosure risk. Used as

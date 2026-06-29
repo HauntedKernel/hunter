@@ -39,6 +39,18 @@ const { open } = require('sqlite');
 // Tax roll abbreviates "ESTATE OF" as "EST OF" — \b before EST avoids BEST/WEST OF.
 const ESTATE_RE = /ESTATE OF|\bEST OF\b|LIFE ESTATE|HEIRS|\bET AL\b/i;
 const CHILD_RE = /child|son|daughter|jr|junior/i;
+// An owner_name that looks like an operating business / entity (not a person).
+const BUSINESS_RE = /\b(LLC|L L C|INC|INCORPORATED|CORP|CORPORATION|COMPANY|\bCO\b|LP|LLP|LLLP|LTD|PLLC|PC|PROPERT(?:Y|IES)|HOMES?|INVESTMENTS?|INVESTORS?|REALTY|REAL ESTATE|CAPITAL|HOLDINGS?|GROUP|ENTERPRISES?|VENTURES?|PARTNERS?|MANAGEMENT|ASSOCIATES?|FUND|ASSETS?|EQUITY|RENTALS?|DEVELOPMENT|BANK|CHURCH|MINISTR(?:Y|IES)|ASSN|ASSOCIATION|FOUNDATION|LEASING|HOMEBUYERS?)\b/i;
+function ownerType(name) {
+  const n = String(name || '').toUpperCase();
+  if (ESTATE_RE.test(n)) return 'Estate';
+  if (/\b(LLC|L L C|PLLC)\b/.test(n)) return 'LLC';
+  if (/\b(INC|INCORPORATED|CORP|CORPORATION)\b/.test(n)) return 'Corp';
+  if (/\b(LP|LLP|LLLP|LTD)\b/.test(n)) return 'LP/Ltd';
+  if (/\bTRUST\b/.test(n)) return 'Trust';
+  if (BUSINESS_RE.test(n)) return 'Business';
+  return 'Individual';
+}
 const NOW_YEAR = new Date().getFullYear();
 const TODAY = new Date().toISOString().slice(0, 10);
 
@@ -76,7 +88,8 @@ const jparse = (s) => { try { const v = JSON.parse(s); return v; } catch { retur
   if (has('liens')) { joins.push('LEFT JOIN (SELECT account_id, free_and_clear, equity_pct FROM liens) l ON l.account_id=t.account_id'); cols.push('l.free_and_clear AS free_and_clear', 'l.equity_pct AS equity_pct'); }
   if (has('divorce_events')) { joins.push('LEFT JOIN (SELECT DISTINCT account_id FROM divorce_events) dv ON dv.account_id=t.account_id'); cols.push('dv.account_id AS has_divorce'); }
   if (has('appraisal_detail')) { joins.push('LEFT JOIN appraisal_detail ap ON ap.account_id=t.account_id'); cols.push('ap.tenure_years AS tenure_years', 'ap.year_built AS year_built'); }
-  if (has('owner_portfolio')) { joins.push('LEFT JOIN owner_portfolio op ON op.account_id=t.account_id'); cols.push('op.portfolio_size AS portfolio_size', 'op.portfolio_value AS portfolio_value', 'op.is_institutional AS portfolio_institutional'); }
+  if (has('owner_portfolio')) { joins.push('LEFT JOIN owner_portfolio op ON op.account_id=t.account_id'); cols.push('op.portfolio_size AS portfolio_size', 'op.portfolio_value AS portfolio_value', 'op.is_institutional AS portfolio_institutional', 'op.portfolio_key AS portfolio_key'); }
+  if (has('business_affiliations')) { joins.push('LEFT JOIN business_affiliations ba ON ba.account_id=t.account_id'); cols.push('ba.registered_agent AS ba_agent', 'ba.officers AS ba_officers', 'ba.business_phone AS ba_phone', 'ba.entity_type AS ba_type', 'ba.status AS ba_status'); }
   if (has('contacts')) {
     joins.push('LEFT JOIN contacts c ON c.account_id=t.account_id');
     cols.push('c.phones AS c_phones', 'c.emails AS c_emails',
@@ -126,6 +139,22 @@ const jparse = (s) => { try { const v = JSON.parse(s); return v; } catch { retur
   let model = null;
   try { const M = require('./src/scoring/SellProbabilityModel'); model = new M(path.join(__dirname, 'src', 'scoring', 'sell_model.json')); if (!model.available) model = null; } catch { model = null; }
 
+  // Free "human behind the LLC": if exactly one INDIVIDUAL shares a business's
+  // mailing address, they're the likely principal. Ambiguous (0 or >1) -> skip.
+  const principalCache = new Map();
+  async function likelyPrincipal(key) {
+    if (!key || !has('owner_portfolio')) return null;
+    if (principalCache.has(key)) return principalCache.get(key);
+    const mates = await db.all(
+      `SELECT DISTINCT t.owner_name FROM owner_portfolio op JOIN tax_roll t ON t.account_id=op.account_id
+       WHERE op.portfolio_key = ? LIMIT 60`, [key]);
+    const people = [...new Set(mates.map(m => m.owner_name)
+      .filter(n => n && !BUSINESS_RE.test(n) && !ESTATE_RE.test(n) && !/\bTRUST\b/i.test(n)))];
+    const val = people.length === 1 ? people[0] : null;
+    principalCache.set(key, val);
+    return val;
+  }
+
   const out = [];
   for (const r of rows) {
     if (newlyDistressed && !newlyDistressed(r)) continue;
@@ -164,6 +193,17 @@ const jparse = (s) => { try { const v = JSON.parse(s); return v; } catch { retur
     const portfolioSize = r.portfolio_size || 1;
     const isInstitutional = r.portfolio_institutional === 1;
     if (portfolioSize >= 3 && !isInstitutional) signals.push(`Owns ${portfolioSize} properties`);
+    // Business affiliation: who really owns/decides on a business-held parcel.
+    const oType = ownerType(r.owner_name);
+    const isBiz = oType !== 'Individual' && oType !== 'Estate';
+    if (isBiz) signals.push(`${oType}-owned`);
+    let businessContact = r.ba_agent ? `${r.ba_agent}${r.ba_phone ? ` · ${r.ba_phone}` : ''}` : '';
+    if (!businessContact && r.ba_officers) businessContact = r.ba_officers;
+    let likelyPrincipalName = '';
+    if (isBiz && !businessContact) {
+      const p = await likelyPrincipal(r.portfolio_key);
+      if (p) likelyPrincipalName = `${p} (shares mailing addr)`;
+    }
 
     // Contacts: owner phones/emails + family (for elderly).
     const ownerPhones = (jparse(r.c_phones) || []).map(p => (p && p.number) || p).filter(Boolean);
@@ -185,6 +225,7 @@ const jparse = (s) => { try { const v = JSON.parse(s); return v; } catch { retur
       sell_prob_pct: prob != null ? (prob * 100).toFixed(1) : '',
       signals: signals.join(' · '),
       owner_name: r.owner_name,
+      owner_type: oType,
       property_address: r.property_address,
       zip: String(r.zip_code).slice(0, 5),
       est_value: r.total_value ? Math.round(r.total_value) : '',
@@ -199,6 +240,8 @@ const jparse = (s) => { try { const v = JSON.parse(s); return v; } catch { retur
       owner_emails: (Array.isArray(ownerEmails) ? ownerEmails : []).join(' / '),
       family_contact: child ? `${child.name || ''}${child.relationship ? ` (${child.relationship})` : ''}` : '',
       family_phones: familyPhones.join(' / '),
+      business_contact: businessContact,
+      likely_principal: likelyPrincipalName,
       mailing_address: r.owner_address || '',
     });
   }
@@ -208,10 +251,10 @@ const jparse = (s) => { try { const v = JSON.parse(s); return v; } catch { retur
   const top = out.slice(0, limit);
   top.forEach((o, i) => { o.rank = i + 1; });
 
-  const header = ['rank', 'sell_prob_pct', 'signals', 'owner_name', 'property_address', 'zip',
+  const header = ['rank', 'sell_prob_pct', 'signals', 'owner_name', 'owner_type', 'property_address', 'zip',
     'est_value', 'equity_status', 'other_properties', 'portfolio_value', 'years_owned', 'years_delinquent', 'amount_due',
     'recommended_contact', 'owner_phones', 'owner_emails', 'family_contact', 'family_phones',
-    'mailing_address', 'account_id'];
+    'business_contact', 'likely_principal', 'mailing_address', 'account_id'];
   const body = top.map(o => header.map(h => csvCell(o[h] ?? '')).join(','));
   fs.writeFileSync(outPath, [header.join(','), ...body].join('\n') + '\n');
 
