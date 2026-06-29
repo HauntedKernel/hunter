@@ -24,6 +24,10 @@
  *   node ingest_appraisal.js <dcad_file.csv> [more.csv ...]
  *   # e.g. node ingest_appraisal.js "imports/account_info.csv" "imports/res_detail.csv"
  *
+ *   # Load a POINT-IN-TIME archive (e.g. the 2025 DCAD annual file) into a SEPARATE
+ *   # db so it doesn't overwrite current tenure — used by backtrain_sell_model.js:
+ *   #   APPRAISAL_DB=src/data/appraisal_2025.db node ingest_appraisal.js dcad_2025.csv
+ *
  * Writes table appraisal_detail(account_id PK, deed_transfer_date, deed_year,
  * tenure_years, year_built, updated_at) and reports the join rate vs tax_roll.
  */
@@ -89,7 +93,11 @@ function yearOf(v) {
   const inputs = process.argv.slice(2).filter(a => !a.startsWith('--'));
   if (!inputs.length) { console.error('Provide one or more DCAD appraisal CSV paths'); process.exit(1); }
 
-  const dbPath = path.join(__dirname, 'src', 'data', 'tax_roll.db');
+  // Default target is the live tax_roll.db; APPRAISAL_DB redirects to a separate
+  // file for point-in-time archives (so a 2025 load doesn't clobber current tenure).
+  const dbPath = process.env.APPRAISAL_DB
+    ? path.resolve(process.env.APPRAISAL_DB)
+    : path.join(__dirname, 'src', 'data', 'tax_roll.db');
   const db = await open({ filename: dbPath, driver: sqlite3.Database });
   await db.exec(`CREATE TABLE IF NOT EXISTS appraisal_detail (
     account_id TEXT PRIMARY KEY,
@@ -152,6 +160,16 @@ function yearOf(v) {
 
   // Report join rate + a tenure histogram so we can see the free-and-clear proxy supply.
   const total = (await db.get('SELECT COUNT(*) n FROM appraisal_detail')).n;
+  // The join-rate report needs tax_roll; a point-in-time archive db (APPRAISAL_DB)
+  // has none, so skip it there and just report the row + tenure counts.
+  const hasTaxRoll = !!(await db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='tax_roll'"));
+  if (!hasTaxRoll) {
+    const longTenure = (await db.get('SELECT COUNT(*) n FROM appraisal_detail WHERE tenure_years >= 30')).n;
+    console.log(`\nappraisal_detail: ${written} rows written, ${total} total (standalone archive db — no tax_roll to join)`);
+    console.log(`${longTenure.toLocaleString()} parcels owned 30+ yrs`);
+    await db.close();
+    return;
+  }
   const joined = (await db.get(
     'SELECT COUNT(*) n FROM appraisal_detail a JOIN tax_roll t ON t.account_id = a.account_id')).n;
   const longTenure = (await db.get(

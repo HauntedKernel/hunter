@@ -2,6 +2,27 @@
 
 Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 5).
 
+## 2026-06-29 — Back-training script (tenure + 311, leakage-safe)
+
+- `[#060]` **`scripts/backtrain_sell_model.js` — back-train the sell model with the
+  free point-in-time features (SIGNAL_GAPS §7).** Extends `train_sell_model.js` on the
+  same 2025-08-25 → 2026-06-22 snapshot-diff spine, adding two leakage-safe features:
+  - **tenure** as-of-2025 from a SEPARATE 2025 DCAD appraisal archive
+    (`tenure = 2025 − deed_year`); using today's appraisal file would leak (sold
+    parcels show the new deed), so it reads a dedicated archive db.
+  - **code_open** = a 311 request open *on the as-of date* (`opened <= asof AND
+    (closed IS NULL OR closed > asof)`) — a pure as-of filter on the records' own dates.
+  Reports a **univariate lift table** for the new features (measured lift we've never
+  had) plus the full multivariate model (AUC + odds ratios). **Graceful:** runs as a
+  dry-run with the feature all-zero if an archive/feed is absent, and prints the exact
+  free-data load commands. **Safe:** writes to `sell_model_backtrained.json` (gitignored),
+  never the live model; prints the 3 steps to promote it once it beats AUC 0.617.
+  - Supporting change: `ingest_appraisal.js` now honors `APPRAISAL_DB=` to load a
+    point-in-time archive into a separate db (skips the tax_roll join-rate report there).
+  - Validated against synthetic snapshots: as-of tenure join + 311 open-as-of filter
+    both reproduce the planted lift; model trains; zero-variance features get OR=1;
+    dry-run path detects absent archives and emits load commands.
+
 ## 2026-06-29 — Delinquency recalibration + back-training plan
 
 - `[#059]` **Raw tax-delinquency down-weighted 40 → 22 (model reconciliation).**

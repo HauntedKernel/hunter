@@ -65,6 +65,9 @@ backend/debug_html/
 *.db-journal
 *.zip
 flat404*
+# Experimental back-trained model output (depends on archives not in the repo;
+# promote by copying over src/scoring/sell_model.json — see backtrain_sell_model.js).
+backend/src/scoring/sell_model_backtrained.json
 
 # Scratch / junk
 nul
