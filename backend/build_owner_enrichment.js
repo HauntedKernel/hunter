@@ -106,6 +106,19 @@ const run = (s, p = []) => new Promise((res, rej) => db.run(s, p, e => e ? rej(e
       console.log(`     ${(r.owner_name || '').slice(0, 34).padEnd(34)} ${r.owner_type.padEnd(11)} r=${r.name_rarity}${c}`);
     }
   }
+  // Re-apply Comptroller-resolved contacts (entity_registry, resolve_entities.js) so a
+  // SCOPE=all rebuild doesn't wipe the 'registry' tier upgrades. Idempotent.
+  const hasReg = (await all("SELECT name FROM sqlite_master WHERE type='table' AND name='entity_registry'")).length;
+  if (hasReg) {
+    await run(`UPDATE ${TABLE} SET
+        embedded_name = (SELECT contact_name FROM entity_registry e WHERE e.query_name = ${TABLE}.owner_name),
+        embedded_role = (SELECT contact_role FROM entity_registry e WHERE e.query_name = ${TABLE}.owner_name),
+        conf_tier='registry', conf_score=92, reason='resolved via TX Comptroller'
+      WHERE owner_name IN (SELECT query_name FROM entity_registry
+        WHERE contact_name IS NOT NULL AND ambiguous=0 AND match_confidence>=70)`);
+    const n = (await all(`SELECT COUNT(*) c FROM ${TABLE} WHERE conf_tier='registry'`))[0].c;
+    console.log(`re-applied ${n} Comptroller-resolved contacts (tier 'registry')`);
+  }
   await new Promise(res => db.close(res));
   console.log(`\ndone. table: ${TABLE}`);
 })().catch(e => { console.error('FAILED:', e.message); process.exit(1); });

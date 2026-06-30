@@ -15,6 +15,7 @@
 const path = require('path');
 const sqlite3 = require('sqlite3');
 const cpa = require('./lib/comptroller');
+const { classifyOwner } = require('./lib/entity_resolution');
 
 const args = Object.fromEntries(process.argv.slice(2).map(a => {
   const m = a.match(/^--([^=]+)=(.*)$/); return m ? [m[1], m[2]] : [a.replace(/^--/, ''), true];
@@ -68,36 +69,41 @@ const WRITEBACK = !args['no-writeback'];
 
   await run(`CREATE TABLE IF NOT EXISTS entity_registry (
     owner_key TEXT PRIMARY KEY, query_name TEXT, matched_name TEXT, taxpayer_id TEXT, status TEXT,
-    registered_agent TEXT, agent_is_person INTEGER, officers_json TEXT, match_confidence INTEGER,
-    ambiguous INTEGER, resolved_at DATETIME DEFAULT CURRENT_TIMESTAMP, source TEXT)`);
+    registered_agent TEXT, agent_is_person INTEGER, officers_json TEXT, contact_name TEXT, contact_role TEXT,
+    match_confidence INTEGER, ambiguous INTEGER, resolved_at DATETIME DEFAULT CURRENT_TIMESTAMP, source TEXT)`);
 
   // Distinctive entity owners not yet resolved (one row per distinct owner name).
+  // Default to DELINQUENT entity leads (the actual prospects, ~18.7k); ALL_ENTITIES=1 widens it.
+  const delqFilter = process.env.ALL_ENTITIES === '1' ? '' : 'AND t.is_delinquent = 1';
   const targets = await all(`
     SELECT oe.owner_name, MIN(t.owner_address) AS owner_address, COUNT(*) AS parcels
     FROM owner_enrichment oe JOIN tax_roll t ON t.account_id = oe.account_id
-    WHERE oe.owner_type='entity' AND oe.conf_tier IN ('high','direct')
+    WHERE oe.owner_type='entity' AND oe.conf_tier IN ('high','direct') ${delqFilter}
       AND oe.owner_name NOT IN (SELECT query_name FROM entity_registry)
     GROUP BY oe.owner_name ORDER BY parcels DESC LIMIT ?`, [LIMIT]);
-  console.log(`resolving ${targets.length} distinctive entity owners (rate ${RATE_MS}ms)…`);
+  console.log(`resolving ${targets.length} distinctive entity owners (${delqFilter ? 'delinquent' : 'all'}, rate ${RATE_MS}ms)…`);
 
   let resolved = 0, withContact = 0, ambiguous = 0, errors = 0;
   for (let i = 0; i < targets.length; i++) {
     const { owner_name, owner_address } = targets[i];
     try {
-      const resolved = await cpa.resolveEntity(owner_name, owner_address);
-      if (args.debug && i === 0) console.log('DEBUG first resolve:', JSON.stringify(resolved, null, 2));
-      const m = resolved.match;
+      const resolution = await cpa.resolveEntity(owner_name, owner_address);
+      if (args.debug && i === 0) console.log('DEBUG first resolve:', JSON.stringify(resolution, null, 2));
+      const m = resolution.match;
       const rec = m?.record;
       const agent = rec?.registeredAgent;
-      const officerName = rec?.officers?.[0]?.name;
-      const contactName = (agent?.isLikelyPrincipal ? agent.name : null) || officerName || null;
-      const contactRole = (agent?.isLikelyPrincipal ? 'REG AGENT' : null) || (officerName ? (rec.officers[0].title || 'OFFICER') : null);
+      // Prefer a PERSON as the contact: registered agent if it's a person (often the owner),
+      // else the first officer who is a person, else fall back to whatever's there (agent
+      // service / holding-company officer — recorded but less useful).
+      const personOfficer = (rec?.officers || []).find(o => classifyOwner(o.name) === 'person');
+      const contactName = (agent?.isLikelyPrincipal ? agent.name : null) || personOfficer?.name || rec?.officers?.[0]?.name || null;
+      const contactRole = (agent?.isLikelyPrincipal ? 'REG AGENT' : null) || (personOfficer ? (personOfficer.title || 'OFFICER') : (rec?.officers?.[0]?.title || null));
       await run(`INSERT OR REPLACE INTO entity_registry
-        (owner_key, query_name, matched_name, taxpayer_id, status, registered_agent, agent_is_person, officers_json, match_confidence, ambiguous, source)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+        (owner_key, query_name, matched_name, taxpayer_id, status, registered_agent, agent_is_person, officers_json, contact_name, contact_role, match_confidence, ambiguous, source)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [owner_name, owner_name, rec?.entityName || null, rec?.taxpayerId || null, rec?.status || null,
          agent?.name || null, agent?.isLikelyPrincipal ? 1 : 0, JSON.stringify(rec?.officers || []),
-         m?.matchConfidence || 0, m?.ambiguous ? 1 : 0, 'tx_comptroller']);
+         contactName, contactRole, m?.matchConfidence || 0, m?.ambiguous ? 1 : 0, 'tx_comptroller']);
       resolved++;
       if (m?.ambiguous) ambiguous++;
       // Upgrade owner_enrichment with the resolved contact (confident, non-ambiguous only).

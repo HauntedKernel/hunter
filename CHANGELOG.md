@@ -2,6 +2,26 @@
 
 Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 5).
 
+## 2026-06-30 — Comptroller resolver LIVE (key active, entities → real people)
+
+- `[#079]` **Key activated; resolver working against the real API.** Verified end-to-end:
+  `franchise-tax-list?name=` search → `franchise-tax/{id}` detail → `officerInfo[]`. Refinements
+  from live testing:
+  - **Person-first contact selection** — prefer a registered agent who is a person (often the
+    owner), else the first officer who is a person, over agent-services (CSC/Cogency/law firms)
+    and holding-company officers. Persist `contact_name`/`contact_role` in `entity_registry`.
+  - **Sole-exact-match credit** — a distinctive name with exactly one registry hit clears the
+    detail-fetch threshold (the list endpoint omits status/zip). Tightened active-status detection
+    ("FRANCHISE TAX INVOLUNTARILY ENDED" ≠ active).
+  - **Delinquent-scoped by default** (the ~18.7k actual leads; `ALL_ENTITIES=1` widens). Writeback
+    upgrades `owner_enrichment` → tier `registry`; `build_owner_enrichment.js` re-applies from
+    `entity_registry` after a rebuild so refreshes don't wipe it.
+  - **Live-verified:** `PASAY INC → DIRECTOR: ANGELA G PHILLIPS [registry/85]` in the API contact
+    block; sample resolutions: Merritt Townhomes→Sanjeev Jain, GT555 Realty→Guy Cohen,
+    PPRE Properties→Justin Moore. ~22% of delinquent entities resolve to a contact.
+  - Self-service key: `https://data-secure.comptroller.texas.gov/main/my-profile?section=developer`
+    → eSystems login → Developer → **Tax Accounts** API (not SIFT).
+
 ## 2026-06-30 — Tier-1: Texas Comptroller entity resolver (gated on free key)
 
 - `[#077]` **Resolve distinctive ENTITY owners to their registered people** — the structured

@@ -119,10 +119,15 @@ function pickBestMatch(ourName, ourAddr, candidates) {
       const jac = overlap / union;
       s += Math.round(jac * 45); if (jac >= 0.5) why.push('name overlap');
     }
-    const active = /ACTIVE|RIGHT TO TRANSACT|FRANCHISE/i.test(String(c.status || '')) && !/NOT ACTIVE|FORFEIT|INACTIVE/i.test(String(c.status || ''));
+    const st = String(c.status || '').toUpperCase();   // e.g. "ACTIVE" vs "FRANCHISE TAX INVOLUNTARILY ENDED"
+    const active = st.includes('ACTIVE') && !st.includes('NOT ACTIVE') && !st.includes('INACTIVE') && !st.includes('ENDED') && !st.includes('FORFEIT');
     if (active) { s += 15; why.push('active'); }
     const cZip = (String(c.mailingAddress || c.registeredAgent?.address || '').match(/\b(7\d{4})\b/) || [])[1];
     if (ourZip && cZip && ourZip === cZip) { s += 25; why.push('zip match'); }
+    // A distinctive name with exactly ONE hit in the registry is the entity — no
+    // collision to disambiguate (the list endpoint omits status/zip, so credit this
+    // so a sole exact match clears the detail-fetch threshold).
+    if (cn === target && candidates.length === 1) { s += 25; why.push('sole exact match'); }
     return { record: c, score: s, why };
   }).sort((a, b) => b.score - a.score);
 
