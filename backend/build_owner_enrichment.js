@@ -18,6 +18,9 @@ const er = require('./lib/entity_resolution');
 
 const DB = process.env.HUNTER_DB || path.join(__dirname, 'src', 'data', 'tax_roll.db');
 const SCOPE = process.env.SCOPE || 'delinquent';
+// Build into TABLE (default owner_enrichment). Use a staging name + atomic rename to
+// rebuild against a LIVE db without dropping the table out from under the running API.
+const TABLE = process.env.TABLE || 'owner_enrichment';
 const db = new sqlite3.Database(DB);
 const all = (s, p = []) => new Promise((res, rej) => db.all(s, p, (e, r) => e ? rej(e) : res(r)));
 const run = (s, p = []) => new Promise((res, rej) => db.run(s, p, e => e ? rej(e) : res()));
@@ -47,8 +50,8 @@ const run = (s, p = []) => new Promise((res, rej) => db.run(s, p, e => e ? rej(e
     'NITILO CORP', 'DALLAS PROPERTIES LLC', 'JOSE DE JESUS PINTOR'].forEach(probe);
 
   // ---- Pass 2: enrich + write ----
-  await run('DROP TABLE IF EXISTS owner_enrichment');
-  await run(`CREATE TABLE owner_enrichment (
+  await run(`DROP TABLE IF EXISTS ${TABLE}`);
+  await run(`CREATE TABLE ${TABLE} (
     account_id TEXT PRIMARY KEY, owner_name TEXT, owner_type TEXT, name_rarity REAL,
     embedded_name TEXT, embedded_role TEXT, conf_tier TEXT, conf_score INTEGER, reason TEXT
   )`);
@@ -60,7 +63,7 @@ const run = (s, p = []) => new Promise((res, rej) => db.run(s, p, e => e ? rej(e
   const tierCount = {}, typeCount = {};
   let embedded = 0;
   await run('BEGIN');
-  const stmt = db.prepare(`INSERT OR REPLACE INTO owner_enrichment
+  const stmt = db.prepare(`INSERT OR REPLACE INTO ${TABLE}
     (account_id, owner_name, owner_type, name_rarity, embedded_name, embedded_role, conf_tier, conf_score, reason)
     VALUES (?,?,?,?,?,?,?,?,?)`);
   for (const r of leads) {
@@ -95,7 +98,7 @@ const run = (s, p = []) => new Promise((res, rej) => db.run(s, p, e => e ? rej(e
   console.log('\nsample leads by tier:');
   for (const t of order) {
     const rows = await all(`SELECT owner_name, owner_type, name_rarity, embedded_name, embedded_role
-      FROM owner_enrichment WHERE conf_tier=? LIMIT 4`, [t]);
+      FROM ${TABLE} WHERE conf_tier=? LIMIT 4`, [t]);
     if (!rows.length) continue;
     console.log(`  [${t}]`);
     for (const r of rows) {
@@ -104,5 +107,5 @@ const run = (s, p = []) => new Promise((res, rej) => db.run(s, p, e => e ? rej(e
     }
   }
   await new Promise(res => db.close(res));
-  console.log('\ndone. table: owner_enrichment');
+  console.log(`\ndone. table: ${TABLE}`);
 })().catch(e => { console.error('FAILED:', e.message); process.exit(1); });
