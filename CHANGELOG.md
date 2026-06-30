@@ -2,6 +2,28 @@
 
 Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 5).
 
+## 2026-06-29 — Foreclosure feed rewired through the crosswalk (LIVE)
+
+- `[#068]`–`[#069]` **Foreclosure notices now match through the situs crosswalk; 25% → 70%.**
+  The county foreclosure postings carry an OCR'd street address but no DCAD account id,
+  so the old ingester relied on a fuzzy street-token + owner-name match (precise only
+  when a grantor name was present). Rewired `ingest_legal_events.js` to resolve the
+  address through `situs_xref` FIRST (exact parcel), falling back to owner-aware matching
+  only when the crosswalk misses. Shared the key logic in `lib/situs.js`
+  (`situsKeyFromAddress`) so 311 and foreclosures normalize addresses identically — it
+  handles both the comma-delimited 311 form and the comma-less, sometimes ZIP-less OCR
+  foreclosure form (requires a leading house number + Dallas-area ZIP, else returns null).
+  - **Result on real data:** 17/24 notices matched (70%, up from 6/24 = 25%), of which
+    **16 are precise crosswalk matches** to an exact parcel (vs the prior fuzzy street+owner).
+    The 7 unmatched are OCR-corrupted or Lot/Block legal descriptions with no usable ZIP —
+    they correctly fall through rather than mis-match an arbitrary house on the street.
+  - **Deployed live:** re-ingested into the live DB and restarted the API. Verified a
+    crosswalk-matched parcel (Fair Oaks Dr, 75060) surfaces through `api.hunter.living`
+    with the `preForeclosure` signal firing (score 35).
+  - `[#068]` The crosswalk also rebuilds monthly in `refresh_tax_roll.sh` step 6b from the
+    same DCAD download as tenure (non-fatal), so future foreclosure scrapes match through a
+    fresh crosswalk automatically. `ingest_legal_events.js` honors `HUNTER_DB` for testing.
+
 ## 2026-06-29 — Situs address crosswalk → precise 311 matching (LIVE)
 
 - `[#066]`–`[#067]` **Situs crosswalk built + deployed; 311 now matches at 77% precision.**
