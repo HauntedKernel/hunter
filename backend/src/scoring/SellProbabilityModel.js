@@ -18,11 +18,13 @@ const LABELS = {
   elderly: 'Elderly owner (over-65)',
   suit: 'Tax-foreclosure suit pending',
   estate: 'Estate / inherited',
+  recent: 'Recent buyer (≤2 yr)',
   dyears: 'Years delinquent',
   logdue: 'Amount owed',
   logval: 'Property value',
   absentee_x_elderly: 'Absentee + elderly',
-  delinq_x_suit: 'Delinquent + suit'
+  delinq_x_suit: 'Delinquent + suit',
+  recent_x_delinq: 'Recent buyer + delinquent'
 };
 
 class SellProbabilityModel {
@@ -55,14 +57,15 @@ class SellProbabilityModel {
     if (!this.available) return null;
     const b = (v) => (v ? 1 : 0);
     const delinq = b(f.delinq), absentee = b(f.absentee), elderly = b(f.elderly),
-      suit = b(f.suit), estate = b(f.estate);
+      suit = b(f.suit), estate = b(f.estate), recent = b(f.recent);
     const raw = {
-      delinq, absentee, elderly, suit, estate,
+      delinq, absentee, elderly, suit, estate, recent,
       dyears: f.dyears || 0,
       logdue: Math.log((f.totalAmountDue || 0) + 1),
       logval: Math.log((f.totalValue || 0) + 1),
       absentee_x_elderly: absentee * elderly,
-      delinq_x_suit: delinq * suit
+      delinq_x_suit: delinq * suit,
+      recent_x_delinq: recent * delinq
     };
 
     let logit = this.bias;

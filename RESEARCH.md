@@ -322,3 +322,36 @@ moat-type signal, especially for the **residential/houses** product.
   farming a few neighborhoods.
 - Caveat: recent buyers sell FAST, so timing/recency of the tax-roll snapshot matters;
   target proactively (recent-buyer farm + the distress overlay).
+
+### G.1 Back-trained into the calibrated sell-model (2026-06-29)
+
+Recency + 311 were folded into `sell_model.json` itself (not just the heuristic score),
+so the calibrated probability stops underselling recent-buyer leads. Script:
+`scripts/backtrain_recency_code.js` (leakage-safe: `recent` from the 2025 DCAD archive,
+`code_open` reconstructed open-as-of-2025-08-25 from historical 311's own dates).
+
+**⚠️ Leak caught — the as-of YEAR is contaminated.** The "2025" DCAD archive captures
+deeds recorded at/after the 2025-08-25 snapshot, so `deed_year = 2025` partly encodes the
+*label* transfer. Univariate sold-rate by deed cohort made it obvious:
+
+| deed cohort | n | lift | |
+|---|---:|---:|---|
+| deed_year = 2024 (pre-snapshot) | 31,519 | **1.48x** | clean |
+| deed_year = 2025 (as-of year) | 18,545 | **2.96x** | LEAK — excluded |
+
+The earlier exploratory "recency ≈ 3x" was inflated by this. The honest, leak-free signal
+is **`recent` (bought 2023–24) = 1.36x univariate, multivariate OR 1.20** — modest but
+*independent* (survives controlling for absentee/delinquency). Fix: `recent` excludes the
+as-of year (`deed_year ≤ ASOF_YEAR-1`).
+
+**Code-compliance (311) is NOT an independent sell predictor.** With deep history (33k
+records back to 2020, 291 matched parcels open on the snapshot date), `code_open` univariate
+is 2.18x — but multivariate **OR = 1.00**: the apparent lift is entirely absorbed by
+absentee/delinquency (code-violation homes are already distressed). → dropped from the model;
+the heuristic `codeCompliance` weight (12) stays as a "neglect" score signal only.
+
+**Promoted model:** features add `recent` + `recent_x_delinq`, drop nothing. Held-out
+**AUC 0.617 → 0.619** (marginal — absentee dominates), but recent-buyer leads now get a
+deserved probability bump and a named "Recent buyer (≤2 yr)" driver. Live-verified: a
+recent+delinquent absentee lead went 18.8%/2.99x → 21.8%/3.47x. Live `recent` = `tenure ≤ 2yr`
+(no leak when scoring forward from today). Old model kept at `sell_model.json.bak-prerecency`.

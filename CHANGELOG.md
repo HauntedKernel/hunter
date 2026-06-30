@@ -2,6 +2,31 @@
 
 Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 5).
 
+## 2026-06-29 — Back-trained recency + 311 into the sell-model (LIVE)
+
+- `[#071]` **Recency folded into the calibrated `sell_model.json`; 311 measured out.**
+  The live sell-probability model was blind to recency/pre-foreclosure/code-compliance, so
+  its lift *undersold* recent-buyer leads (the score-vs-lift divergence). Back-trained the
+  two free, point-in-time-reconstructable signals into the model itself.
+  `scripts/backtrain_recency_code.js` + `fetch_311.js` (added `update_date` close-date proxy
+  so historical 311 can be reconstructed open-as-of a past date; 33k records back to 2020).
+  - **Leak caught & excluded.** The "2025" DCAD archive captures deeds at/after the
+    2025-08-25 snapshot, so `deed_year=2025` leaks the label (univariate 2.96x vs a clean
+    `deed_year=2024` 1.48x). `recent` now excludes the as-of year → honest **OR 1.20**
+    (univariate 1.36x), independent of absentee/delinquency. RESEARCH §G.1.
+  - **Code-compliance dropped — measured, not predictive.** Even with deep history (291
+    parcels open on the snapshot date), `code_open` multivariate **OR = 1.00**; its 2.18x
+    univariate is fully absorbed by absentee/delinquency. The heuristic `codeCompliance`
+    score weight (12) stays; the model gains nothing, so it's not a model feature.
+  - **Model:** features add `recent` + `recent_x_delinq`. Held-out **AUC 0.617 → 0.619**
+    (marginal — absentee OR ~2.04 dominates), but recent-buyer leads now get a deserved
+    probability bump + a named "Recent buyer (≤2 yr)" driver. Wired `recent` into
+    `SellProbabilityModel.score()` + `MotivationScorer` (live `recent` = tenure ≤ 2yr; no
+    leak scoring forward). **Live-verified:** a recent+delinquent absentee lead went
+    18.8%/2.99x → 21.8%/3.47x. Old model saved at `sell_model.json.bak-prerecency`.
+  - Live `code_violations` left untouched (historical 311 was ingested into an isolated
+    `/tmp/hist311.db` for back-training only).
+
 ## 2026-06-29 — Foreclosure feed rewired through the crosswalk (LIVE)
 
 - `[#068]`–`[#069]` **Foreclosure notices now match through the situs crosswalk; 25% → 70%.**

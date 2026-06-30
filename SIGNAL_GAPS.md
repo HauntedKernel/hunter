@@ -218,6 +218,10 @@ noise). The data genuinely exists; it's a download + join job on the box.
 - ✅ Frontend: codeCompliance + tenure toggles; elderly age band 65→60 (CHANGELOG #058).
 - ✅ Delinquency down-weight 40→22 applied + before/after verified (CHANGELOG #059).
 - ✅ §5 cost numbers researched; §7 back-training path corrected & planned.
-- ⏭️ Follow-ups: ingest the free DCAD appraisal file + historical 311 on the box,
-  **back-train the model with tenure + 311** (§7), bump absentee weight from the new
-  ORs, build the DCAD situs-address crosswalk to sharpen 311/foreclosure matching.
+- ✅ Situs crosswalk built → 311 (77%) + foreclosures (70%) match precisely (CHANGELOG #066–#070).
+- ✅ **Back-trained the sell-model with recency + 311** (RESEARCH §G.1, CHANGELOG #071):
+  `recent` added (leak-clean OR 1.20, AUC 0.617→0.619); **code_open measured NOT predictive
+  (OR 1.00) → dropped**, heuristic weight kept. Recent-buyer leads now get a calibrated
+  probability bump + named driver. Caught & excluded a deed-year leak (as-of year contaminated).
+- ⏭️ Follow-ups: bump absentee weight from the new ORs (absentee OR ~2.04 dominates);
+  re-train the model after the next snapshot widens the window (more sold examples).

@@ -104,6 +104,10 @@ function csvCell(v) {
         status: pick(keys, ['status', 'srstatus', 'casestatus', 'requeststatus']),
         opened: pick(keys, ['createddate', 'opendate', 'srcreatedate', 'datetimeopened', 'startdate', 'reporteddate']),
         closed: pick(keys, ['closeddate', 'datetimeclosed', 'resolutiondate', 'completeddate', 'enddate']),
+        // This dataset has no close-date field; for CLOSED cases the last-activity
+        // (update_date) is the standard close proxy, needed to reconstruct what was
+        // open on a past as-of date for back-training.
+        updated: pick(keys, ['updatedate', 'updateddate', 'lastupdatedate', 'lastupdate', 'modifieddate']),
         address: pick(keys, ['streetaddress', 'incidentaddress', 'address', 'location', 'serviceaddress', 'fulladdress']),
       };
       console.log('detected columns:', JSON.stringify(col));
@@ -119,13 +123,19 @@ function csvCell(v) {
       if (!KEEP_CLOSED && CLOSED_HINTS.some(h => status.toUpperCase().includes(h))) continue; // live feed: open only
       const opened = (col.opened ? r[col.opened] : '') || '';
       if (opened && opened.slice(0, 10) < cutoff) continue;                   // recency window
+      // Close date: prefer a real closed field; else, for closed-status cases, fall
+      // back to update_date (last activity ≈ close). Currently-open cases stay blank
+      // (open from opened_date through now), so the as-of filter treats them correctly.
+      const isClosed = CLOSED_HINTS.some(h => status.toUpperCase().includes(h));
+      let closed = (col.closed ? r[col.closed] : '') || '';
+      if (!closed && isClosed && col.updated && r[col.updated]) closed = r[col.updated];
       outRows.push({
         request_type: type || dept || 'Code Compliance',
         account_id: '',
         address: col.address ? r[col.address] : '',
         status,
         opened_date: opened ? opened.slice(0, 10) : '',
-        closed_date: (col.closed ? r[col.closed] : '') ? String(r[col.closed]).slice(0, 10) : '',
+        closed_date: closed ? String(closed).slice(0, 10) : '',
         source: 'dallas_311',
       });
       kept++;

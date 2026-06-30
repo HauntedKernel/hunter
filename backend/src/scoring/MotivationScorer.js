@@ -1019,6 +1019,9 @@ class MotivationScorer {
       elderly: scoringContext.isElderly,
       suit: scoringContext.isTaxSuit,
       estate: scoringContext.isEstate,
+      // Back-trained recency feature: bought within ~2 years (leakage-clean OR≈1.20,
+      // RESEARCH §G). Maps the trained "recent" band to live tenure.
+      recent: scoringContext.tenureYears != null && scoringContext.tenureYears <= 2,
       dyears: scoringContext.yearsDelinquent,
       totalAmountDue: scoringContext.totalAmountDue,
       totalValue: scoringContext.currentValue
