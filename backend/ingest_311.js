@@ -68,8 +68,36 @@ function streetToken(addr) {
     .sort((a, b) => b.length - a.length)[0] || '';
 }
 
+// --- SITUS CROSSWALK key (precise account matching). MUST mirror build_situs_xref.py
+// situs_key() exactly, or keys won't line up. key = house|zip5|street-core. ---
+const DIR = new Set(['N', 'S', 'E', 'W', 'NE', 'NW', 'SE', 'SW', 'NORTH', 'SOUTH', 'EAST', 'WEST']);
+const SUF = new Set(['ST', 'STREET', 'AVE', 'AV', 'AVENUE', 'DR', 'DRIVE', 'LN', 'LANE', 'RD', 'ROAD',
+  'BLVD', 'BL', 'CT', 'COURT', 'PL', 'PLACE', 'WAY', 'CIR', 'CIRCLE', 'TER', 'TERR', 'TERRACE',
+  'TRL', 'TRAIL', 'PKWY', 'PARKWAY', 'CV', 'COVE', 'PT', 'POINT', 'HWY', 'HIGHWAY', 'LOOP',
+  'PASS', 'PATH', 'RUN', 'ROW', 'XING', 'CROSSING', 'SQ', 'PLZ', 'PLAZA', 'EXPY', 'EXPWY', 'FWY']);
+function streetCore(name) {
+  let toks = String(name || '').toUpperCase().replace(/[^A-Z0-9 ]/g, ' ').split(/\s+/).filter(Boolean);
+  if (toks.length && DIR.has(toks[0])) toks = toks.slice(1);
+  if (toks.length && SUF.has(toks[toks.length - 1])) toks = toks.slice(0, -1);
+  return toks.join(' ');
+}
+// Parse a full 311 address ("9030 MARKVILLE DR, DALLAS, TX, 75243") into the situs key.
+function situsKeyFrom311(addr) {
+  const s = String(addr || '');
+  const first = s.split(',')[0] || '';                 // "9030 MARKVILLE DR"
+  const hm = first.match(/^\s*0*(\d+)\s+(.*)$/);        // house (strip leading zeros) + street
+  if (!hm) return null;
+  const house = hm[1];
+  const zs = s.match(/\d{5}/g);                         // ZIP = last 5-digit group (not the house num)
+  const zip = zs ? zs[zs.length - 1] : '';
+  const core = streetCore(hm[2]);
+  return (house && zip && core) ? `${house}|${zip}|${core}` : null;
+}
+
 (async () => {
-  const dbPath = path.join(__dirname, 'src', 'data', 'tax_roll.db');
+  const dbPath = process.env.HUNTER_DB
+    ? path.resolve(process.env.HUNTER_DB)
+    : path.join(__dirname, 'src', 'data', 'tax_roll.db');
   const db = await open({ filename: dbPath, driver: sqlite3.Database });
 
   await db.exec(`
@@ -102,7 +130,12 @@ function streetToken(addr) {
   console.log(`parsed ${rows.length} rows from ${path.basename(arg)}`);
 
   const loose = process.env.ALLOW_LOOSE_MATCH === '1';
-  let byAccount = 0, byAddress = 0, unmatched = 0;
+  // The situs crosswalk (build_situs_xref.py) is the PRECISE matcher: it resolves a
+  // 311 street address to a parcel via DCAD house numbers. Present = use it; absent =
+  // fall back to the loose street+ZIP path (gated). Honestly report which was used.
+  const hasXref = !!(await db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='situs_xref'"));
+  if (!hasXref) console.log('NOTE: situs_xref not found — run build_situs_xref.py for precise matching (falling back to loose).');
+  let byAccount = 0, byXref = 0, byAddress = 0, unmatched = 0;
   await db.exec('BEGIN');
   for (const r of rows) {
     let accountId = (r.account_id || '').trim();
@@ -113,10 +146,17 @@ function streetToken(addr) {
       if (hit) { method = 'account_id'; byAccount++; }
       else accountId = ''; // bad id, fall through to address
     }
+    // PRECISE: resolve the full street address to a parcel via the situs crosswalk.
+    if (!accountId && r.address && hasXref) {
+      const key = situsKeyFrom311(r.address);
+      if (key) {
+        const hit = await db.get('SELECT account_id FROM situs_xref WHERE addr_key = ?', [key]);
+        if (hit) { accountId = hit.account_id; method = 'situs_xref'; byXref++; }
+      }
+    }
+    // LOOSE fallback (only if no crosswalk hit and explicitly opted in): street+ZIP
+    // lands on an ARBITRARY house on the street, so it's off unless ALLOW_LOOSE_MATCH=1.
     if (!accountId && r.address && loose) {
-      // 311 has no owner name to disambiguate and the tax roll lacks house numbers,
-      // so this street+ZIP match lands on an ARBITRARY house on the street. Off by
-      // default; ALLOW_LOOSE_MATCH=1 accepts the false-positive risk.
       const tok = streetToken(r.address);
       const zip = (r.address.match(/\b(\d{5})\b/) || [])[1];
       if (tok) {
@@ -125,9 +165,9 @@ function streetToken(addr) {
           zip ? [`%${tok}%`, `${zip}%`] : [`%${tok}%`]
         );
         if (hit) { accountId = hit.account_id; method = 'address'; byAddress++; }
-        else unmatched++;
-      } else unmatched++;
-    } else if (!accountId) unmatched++;
+      }
+    }
+    if (!accountId) unmatched++;
 
     await db.run(
       `INSERT INTO code_violations (account_id, request_type, address, status, opened_date, closed_date, source, match_method)
@@ -139,7 +179,7 @@ function streetToken(addr) {
   }
   await db.exec('COMMIT');
 
-  console.log(`ingested: ${byAccount} by account_id, ${byAddress} by address-only${loose ? '' : ' (loose matching OFF — set ALLOW_LOOSE_MATCH=1 to enable)'}, ${unmatched} unmatched`);
+  console.log(`ingested: ${byAccount} by account_id, ${byXref} by situs crosswalk (precise), ${byAddress} by loose address${loose || hasXref ? '' : ' (loose OFF — set ALLOW_LOOSE_MATCH=1)'}, ${unmatched} unmatched`);
   const total = await db.get('SELECT COUNT(*) c FROM code_violations');
   const matched = await db.get('SELECT COUNT(*) c FROM code_violations WHERE account_id IS NOT NULL');
   console.log(`code_violations total rows: ${total.c} (${matched.c} matched to a tax-roll account)`);
