@@ -23,6 +23,7 @@ const path = require('path');
 const fs = require('fs').promises;
 const sqlite3 = require('sqlite3');
 const { open } = require('sqlite');
+const { situsKeyFromAddress } = require('./lib/situs');
 
 function parseCsv(text) {
   const rows = [];
@@ -59,7 +60,9 @@ function streetToken(addr) {
 }
 
 (async () => {
-  const dbPath = path.join(__dirname, 'src', 'data', 'tax_roll.db');
+  const dbPath = process.env.HUNTER_DB
+    ? path.resolve(process.env.HUNTER_DB)
+    : path.join(__dirname, 'src', 'data', 'tax_roll.db');
   const db = await open({ filename: dbPath, driver: sqlite3.Database });
 
   await db.exec(`
@@ -97,7 +100,12 @@ function streetToken(addr) {
   const nameTokens = (name) => ([...new Set((String(name || '').toUpperCase().match(/[A-Z]{4,}/g) || []))])
     .filter(t => !NAME_STOP.has(t));
 
-  let byAccount = 0, byAddress = 0, byAddressOwner = 0, unmatched = 0;
+  // The situs crosswalk (build_situs_xref.py) resolves a clean address line to a parcel
+  // via DCAD house numbers — the precise path. Present = use it first; absent = rely on
+  // the owner-aware path below.
+  const hasXref = !!(await db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='situs_xref'"));
+  if (!hasXref) console.log('NOTE: situs_xref not found — run build_situs_xref.py for precise address matching.');
+  let byAccount = 0, byXref = 0, byAddress = 0, byAddressOwner = 0, unmatched = 0;
   await db.exec('BEGIN');
   for (const r of rows) {
     let accountId = (r.account_id || '').trim();
@@ -107,6 +115,15 @@ function streetToken(addr) {
       const hit = await db.get('SELECT account_id FROM tax_roll WHERE account_id = ?', [accountId]);
       if (hit) { method = 'account_id'; byAccount++; }
       else accountId = ''; // bad id, fall through to address
+    }
+    // PRECISE: full address line -> parcel via the situs crosswalk (best when the notice
+    // carries a real house number + Dallas ZIP; Lot/Block legal descriptions return null).
+    if (!accountId && r.address && hasXref) {
+      const key = situsKeyFromAddress(r.address);
+      if (key) {
+        const hit = await db.get('SELECT account_id FROM situs_xref WHERE addr_key = ?', [key]);
+        if (hit) { accountId = hit.account_id; method = 'situs_xref'; byXref++; }
+      }
     }
     if (!accountId && r.address) {
       const tok = streetToken(r.address);
@@ -148,7 +165,7 @@ function streetToken(addr) {
   }
   await db.exec('COMMIT');
 
-  console.log(`ingested: ${byAccount} by account_id, ${byAddressOwner} by address+owner, ${byAddress} by address-only, ${unmatched} unmatched`);
+  console.log(`ingested: ${byAccount} by account_id, ${byXref} by situs crosswalk (precise), ${byAddressOwner} by address+owner, ${byAddress} by address-only, ${unmatched} unmatched`);
   const total = await db.get('SELECT COUNT(*) c FROM legal_events');
   console.log(`legal_events total rows: ${total.c}`);
   await db.close();
