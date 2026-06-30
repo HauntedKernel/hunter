@@ -524,6 +524,10 @@ function formatAnalysisResponse(analysis) {
       ownershipDuration: cadData.ownership?.ownershipDuration || analysis.ownership?.ownershipDuration,
       decisionComplexity: cadData.ownership?.decisionComplexity || analysis.ownership?.decisionComplexity || 'low'
     },
+    // Owner-enrichment / OSINT backbone: how reliably we can resolve a real contact for
+    // free (tier/confidence/ownerType/nameRarity) + any principal already in the mailing
+    // address (name/role). Null until owner_enrichment is built. See lib/entity_resolution.js.
+    contact: analysis.contact || null,
     taxation: {
       totalValue: analysis.taxation?.totalValue,
       assessedValue: analysis.taxation?.assessedValue,

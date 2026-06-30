@@ -238,6 +238,25 @@ class TaxRollProcessor {
         );
       `);
 
+      // Owner enrichment (OSINT backbone, build_owner_enrichment.js) — per-account owner
+      // type, name-rarity, any contact already embedded in the mailing address, and a
+      // confidence tier (how reliably we can resolve a contact for free vs needing
+      // skip-trace). Created here so discovery's LEFT JOIN always resolves even before
+      // the enrichment is built. See lib/entity_resolution.js.
+      await this.db.exec(`
+        CREATE TABLE IF NOT EXISTS owner_enrichment (
+          account_id TEXT PRIMARY KEY,
+          owner_name TEXT,
+          owner_type TEXT,
+          name_rarity REAL,
+          embedded_name TEXT,
+          embedded_role TEXT,
+          conf_tier TEXT,
+          conf_score INTEGER,
+          reason TEXT
+        );
+      `);
+
       this.logger.info('Database initialized successfully');
       
     } catch (error) {
@@ -882,14 +901,21 @@ class TaxRollProcessor {
           LEFT JOIN (
             SELECT account_id, request_type FROM code_violations
             WHERE account_id IS NOT NULL GROUP BY account_id
-          ) cv ON cv.account_id = t.account_id`;
+          ) cv ON cv.account_id = t.account_id
+          LEFT JOIN (
+            SELECT account_id, owner_type, name_rarity, embedded_name, embedded_role,
+                   conf_tier, conf_score, reason FROM owner_enrichment
+          ) oe ON oe.account_id = t.account_id`;
       const SELECT = `t.*, le.event_type AS legal_event_type, le.sale_date AS legal_sale_date,
             (le.account_id IS NOT NULL) AS has_preforeclosure,
             vd.owner_age AS owner_age, vd.empty_nester AS empty_nester,
             (de.account_id IS NOT NULL) AS has_divorce, de.filed_date AS divorce_filed_date,
             lq.free_and_clear AS free_and_clear, lq.equity_pct AS equity_pct,
             ad.tenure_years AS tenure_years, ad.deed_year AS deed_year, ad.year_built AS year_built,
-            (cv.account_id IS NOT NULL) AS has_code_violation, cv.request_type AS code_request_type`;
+            (cv.account_id IS NOT NULL) AS has_code_violation, cv.request_type AS code_request_type,
+            oe.owner_type AS owner_type, oe.name_rarity AS name_rarity,
+            oe.embedded_name AS contact_name, oe.embedded_role AS contact_role,
+            oe.conf_tier AS contact_tier, oe.conf_score AS contact_confidence, oe.reason AS contact_reason`;
 
       // Elderly fires on the tax exemption OR an age-data age >= 60. The county
       // grants the over-65 exemption at a hard 65, but where we have ACTUAL age
@@ -1151,6 +1177,18 @@ class TaxRollProcessor {
                        record.delinquent_amount > 15000 ? 'HIGH' :
                        record.delinquent_amount > 5000 ? 'MEDIUM' : 'LOW',
       motivationScore: motivationScore,
+      // Owner-enrichment / OSINT backbone (owner_enrichment, lib/entity_resolution.js):
+      // how reliably we can resolve a real contact for FREE (vs needing skip-trace), plus
+      // any principal already embedded in the mailing address. Null until enrichment built.
+      contact: record.contact_tier ? {
+        tier: record.contact_tier,                                              // direct|high|medium|low|skip
+        confidence: record.contact_confidence != null ? record.contact_confidence : null, // 0-100
+        ownerType: record.owner_type || null,                                   // entity|person|trust|institution
+        nameRarity: record.name_rarity != null ? record.name_rarity : null,     // 0-1 (distinctiveness)
+        name: record.contact_name || null,                                      // principal from mailing addr (Tier-0)
+        role: record.contact_role || null,                                      // PRES|OWNER|ATTN|C/O|...
+        reason: record.contact_reason || null,
+      } : null,
       source: 'dallas_county_tax_roll',
       taxYear: record.tax_year,
       lastUpdated: record.updated_at

@@ -2,6 +2,21 @@
 
 Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 5).
 
+## 2026-06-30 — Surfaced owner enrichment in the lead API (LIVE)
+
+- `[#075]` **Every lead now returns a `contact` block** — the OSINT backbone (#074) wired
+  through the query → service → API. `TaxRollProcessor` LEFT JOINs `owner_enrichment`
+  (subquery excludes its `owner_name` to avoid an ambiguous-column error) and the response
+  carries `contact: { tier, confidence, ownerType, nameRarity, name, role, reason }`.
+  Threaded through `buildLeadFromTaxRecord` + `formatAnalysisResponse`. Table is created in
+  `TaxRollProcessor` init so the JOIN always resolves.
+  - **Live-verified:** a delinquent+absentee search in 75217 returns 10 leads with a free
+    extracted principal (John Goss–Pres, Eunice Okafor–owner, Maribel Avila–director) plus
+    High/Medium/Low tiers on the rest. Non-delinquent leads return `contact: null` (enrichment
+    is delinquent-scoped until the refresh rebuilds it SCOPE=all).
+  - **Self-maintaining:** `refresh_tax_roll.sh` step 6c rebuilds `owner_enrichment` on the
+    copy each cycle (SCOPE=all, no live contention, non-fatal).
+
 ## 2026-06-30 — OSINT enrichment backbone (entity resolution + confidence tiers)
 
 - `[#074]` **Free, in-house owner-enrichment backbone** — identify a contact for a lead

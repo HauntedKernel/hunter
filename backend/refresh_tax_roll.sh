@@ -107,6 +107,16 @@ if [ $(( $(date +%s) - $(cat "$TENURE_STAMP" 2>/dev/null || echo 0) )) -ge 21600
   fi
 fi
 
+# 6c. Rebuild owner enrichment (OSINT backbone — entity resolution + confidence tiers,
+#     lib/entity_resolution.js). Runs on the COPY (no live-API contention) with SCOPE=all
+#     so every lead gets a contact tier, not just delinquents. Non-fatal — enrichment only.
+log "rebuilding owner enrichment (entity resolution)..."
+if HUNTER_DB="$WORK/rebuild.db" SCOPE=all nice -n 15 node build_owner_enrichment.js >> "$LOG" 2>&1; then
+  log "owner enrichment rebuilt"
+else
+  log "WARN: owner enrichment rebuild failed (continuing)"
+fi
+
 if [ "$MODE" = "--dry-run" ]; then
   log "DRY-RUN OK: rebuilt+validated ${ROWS} rows in copy; live DB NOT swapped."
   exit 0

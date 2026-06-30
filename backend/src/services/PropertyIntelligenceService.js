@@ -324,6 +324,9 @@ class PropertyIntelligenceService {
         ownerName: dp.ownerName,
         ownerAddress: dp.ownerAddress
       },
+      // Owner-enrichment / OSINT backbone — free contact-resolvability tier + any
+      // principal embedded in the mailing address (TaxRollProcessor.formatPropertyResult).
+      contact: dp.contact || null,
       taxation: {
         totalValue: currentValue,
         taxAmount: dp.taxAmount,
