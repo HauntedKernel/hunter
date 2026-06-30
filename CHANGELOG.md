@@ -20,8 +20,18 @@ Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 
     surfaces it automatically (no API change). Registered agents that are themselves a service
     (CT Corporation, etc.) are flagged not-a-principal.
   - Targets the high/direct entity slice (distinctive names) only; polite rate limit (800ms).
-  - ⏳ NEXT (needs key): run `--limit=20 --debug` once to confirm the API's exact field names
-    and tighten `extractRecord()`; then optionally surface the full officer list + status.
+  - ⏳ NEXT (needs key): run `--limit=20 --debug` once to confirm, then batch.
+
+- `[#078]` **Corrected the resolver against the official OpenAPI spec** (extracted from the
+  docs site). The key is actually **self-service** — register at
+  `https://data-secure.comptroller.texas.gov/main/my-profile?section=developer` (the doc page
+  is just docs, no signup; that's the confusion). Fixed endpoints + field names to the verified
+  schema: search `GET /franchise-tax-list?name=`, detail `GET /franchise-tax/{id}` →
+  `FranchiseAccountWithOfficers` (`name`, `rightToTransactTX`, `registeredAgentName`,
+  `registeredOfficeAddress*`, `mailingAddress*`, `officerInfo[]` with `AGNT_NM`/`AGNT_TITL_TX`).
+  Two-step flow: search → pick best → fetch `/{id}` detail for officers on confident matches.
+  Note: the free Socrata dataset `9cir-efmm` was evaluated and rejected — it lacks agent/officer
+  data (entity/status/address only).
 
 ## 2026-06-30 — Surfaced owner enrichment in the lead API (LIVE)
 

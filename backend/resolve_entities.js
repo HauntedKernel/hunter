@@ -57,8 +57,9 @@ const WRITEBACK = !args['no-writeback'];
 (async () => {
   if (!cpa.available()) {
     console.log('TX_CPA_API_KEY not set — Comptroller resolver is OFF (no-op).');
-    console.log('Get a FREE key: https://api-doc.comptroller.texas.gov/public-data/  → then:');
-    console.log('  export TX_CPA_API_KEY=<key> && node resolve_entities.js --limit=50 --debug');
+    console.log('Get a FREE key (self-service): register at');
+    console.log('  https://data-secure.comptroller.texas.gov/main/my-profile?section=developer');
+    console.log('then:  export TX_CPA_API_KEY=<key> && node resolve_entities.js --limit=50 --debug');
     process.exit(0);
   }
   const db = new sqlite3.Database(DB);
@@ -83,9 +84,9 @@ const WRITEBACK = !args['no-writeback'];
   for (let i = 0; i < targets.length; i++) {
     const { owner_name, owner_address } = targets[i];
     try {
-      const cands = await cpa.searchByName(owner_name);
-      if (args.debug && i === 0) console.log('DEBUG first raw extract:', JSON.stringify(cands.slice(0, 2), null, 2));
-      const m = cpa.pickBestMatch(owner_name, owner_address, cands);
+      const resolved = await cpa.resolveEntity(owner_name, owner_address);
+      if (args.debug && i === 0) console.log('DEBUG first resolve:', JSON.stringify(resolved, null, 2));
+      const m = resolved.match;
       const rec = m?.record;
       const agent = rec?.registeredAgent;
       const officerName = rec?.officers?.[0]?.name;

@@ -4,22 +4,23 @@
  * LLC") into the people on public record behind it — registered agent, officers, status —
  * for FREE, before paying for skip-trace.
  *
- * Official public API (free, but key-gated — register for an x-api-key at
- * https://api-doc.comptroller.texas.gov/public-data/):
- *   GET https://api.comptroller.texas.gov/public-data/v1/public/franchise-tax?name=<NAME>
- *   GET https://api.comptroller.texas.gov/public-data/v1/public/franchise-tax/<taxpayerId>
+ * Official public API (free, self-service key — register for an x-api-key at
+ * https://data-secure.comptroller.texas.gov/main/my-profile?section=developer):
+ *   GET .../public-data/v1/public/franchise-tax-list?name=<NAME>   → search (list)
+ *   GET .../public-data/v1/public/franchise-tax/<taxpayerId>       → detail + officerInfo[]
  *   header: x-api-key: <TX_CPA_API_KEY>
  *
  * GATED + GRACEFUL: with no key, available() is false and callers no-op (like the skip-trace
- * stub) — ships now, lights up when the key is set. The response field mapping is defensive
- * (tries camel/snake/Title variants); run resolve_entities.js --debug once with a real key to
- * confirm the exact field names, then tighten extractRecord() if needed.
+ * stub) — ships now, lights up when the key is set. Field names verified against the official
+ * OpenAPI schema (FranchiseAccountWithOfficers / FranchiseAccountOfficer).
  */
 const https = require('https');
 const { normalizeName, classifyOwner, significantTokens } = require('./entity_resolution');
 
 const HOST = 'api.comptroller.texas.gov';
 const BASE = '/public-data/v1/public/franchise-tax';
+const SEARCH = `${BASE}-list`;     // GET ?name= | ?taxpayerId= | ?fileNumber=  → FTAS search (list)
+const DETAIL = BASE;               // GET /{id}  → franchise account + officerInfo[] (detail)
 const KEY = process.env.TX_CPA_API_KEY || '';
 
 function available() { return !!KEY; }
@@ -58,35 +59,44 @@ function pick(obj, ...keys) {
   return null;
 }
 
-// Normalize one FTAS record into our shape (defensive across field-name variants).
+// Join the API's split address fields (e.g. mailingAddress{Street,City,State,Zip}).
+function joinAddr(r, prefix) {
+  const parts = [pick(r, prefix + 'Street'), pick(r, prefix + 'City'), pick(r, prefix + 'State'), pick(r, prefix + 'Zip')].filter(Boolean);
+  return parts.length ? parts.join(', ') : null;
+}
+
+// Normalize one FTAS record into our shape. Field names verified against the official
+// OpenAPI schema (FranchiseAccountWithOfficers / FranchiseAccountOfficer). The list
+// endpoint omits officerInfo; the /{id} detail endpoint includes it.
 function extractRecord(r) {
-  const officersRaw = pick(r, 'officersDirectors', 'officers', 'officersAndDirectors', 'directors', 'management') || [];
+  if (!r) return null;
+  const officersRaw = r.officerInfo || r.officers || [];
   const officers = (Array.isArray(officersRaw) ? officersRaw : []).map(o => ({
-    name: pick(o, 'name', 'officerName', 'fullName', 'personName'),
-    title: pick(o, 'title', 'role', 'officerTitle', 'position'),
+    name: pick(o, 'AGNT_NM', 'name'),
+    title: pick(o, 'AGNT_TITL_TX', 'title'),
   })).filter(o => o.name);
-  const agentName = pick(r, 'registeredAgentName', 'registeredAgent', 'agentName', 'raName');
+  const agentName = pick(r, 'registeredAgentName');
   return {
-    taxpayerId: pick(r, 'taxpayerNumber', 'taxpayerId', 'taxpayerNbr', 'id'),
-    entityName: pick(r, 'taxpayerName', 'name', 'entityName', 'legalName', 'businessName'),
-    status: pick(r, 'rightToTransactBusiness', 'status', 'taxpayerStatus', 'accountStatus', 'rightToTransact'),
+    taxpayerId: pick(r, 'taxpayerId', 'taxpayerNumber'),
+    entityName: pick(r, 'name', 'taxpayerName'),
+    status: pick(r, 'rightToTransactTX', 'status'),                 // "ACTIVE" / "NOT ACTIVE" etc.
     registeredAgent: agentName ? {
       name: agentName,
-      address: pick(r, 'registeredOfficeAddress', 'registeredAgentAddress', 'agentAddress', 'raAddress'),
-      isLikelyPrincipal: classifyOwner(agentName) === 'person',   // a person agent ≈ the owner; a service ≠
+      address: joinAddr(r, 'registeredOfficeAddress'),
+      isLikelyPrincipal: classifyOwner(agentName) === 'person',     // a person agent ≈ the owner; a service ≠
     } : null,
     officers,
-    mailingAddress: pick(r, 'mailingAddress', 'address', 'taxpayerAddress'),
-    sosFileNumber: pick(r, 'sosFileNumber', 'fileNumber', 'sosNbr'),
+    mailingAddress: joinAddr(r, 'mailingAddress'),
+    sosFileNumber: pick(r, 'sosFileNumber'),
   };
 }
 
 async function searchByName(name) {
   if (!available()) return [];
-  const data = await httpGet(`${BASE}?name=${encodeURIComponent(name)}`);
-  // Response may be an array, or { results: [...] } / { data: [...] } — handle all.
-  const arr = Array.isArray(data) ? data : (data?.results || data?.data || (data ? [data] : []));
-  return arr.map(extractRecord).filter(r => r.entityName);
+  const data = await httpGet(`${SEARCH}?name=${encodeURIComponent(name)}`);
+  // Responses are wrapped: { success, data: [...] } (list) — handle array/object/data shapes.
+  const arr = Array.isArray(data) ? data : (data?.data || data?.results || (data ? [data] : []));
+  return (Array.isArray(arr) ? arr : []).map(extractRecord).filter(r => r && r.entityName);
 }
 
 // Choose the best candidate for OUR entity using the same confidence philosophy as the
@@ -128,11 +138,22 @@ function pickBestMatch(ourName, ourAddr, candidates) {
   };
 }
 
+async function getById(id) {
+  if (!available() || !id) return null;
+  const data = await httpGet(`${DETAIL}/${encodeURIComponent(id)}`);
+  return extractRecord(data?.data || data);                          // detail is wrapped too
+}
+
 async function resolveEntity(ownerName, ownerAddr) {
   if (!available()) return { configured: false };
   const candidates = await searchByName(ownerName);
   const match = pickBestMatch(ownerName, ownerAddr, candidates);
+  // The list endpoint omits officers; for a confident, non-ambiguous match fetch the
+  // /{id} detail to pull officerInfo[] (the actual people).
+  if (match && match.record?.taxpayerId && !match.ambiguous && match.matchConfidence >= 70) {
+    try { const detail = await getById(match.record.taxpayerId); if (detail) match.record = detail; } catch (_) { /* keep list record */ }
+  }
   return { configured: true, candidates: candidates.length, match };
 }
 
-module.exports = { available, searchByName, getById: (id) => httpGet(`${BASE}/${encodeURIComponent(id)}`).then(extractRecord), extractRecord, pickBestMatch, resolveEntity };
+module.exports = { available, searchByName, getById, extractRecord, pickBestMatch, resolveEntity };
