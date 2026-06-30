@@ -74,7 +74,13 @@ class MotivationScorer {
                                  // pre-foreclosure (a scheduled auction is more imminent than a filed suit).
 
       // Life-stage / ownership signals (added — see STRATEGY.md §2/§4)
-      absenteeOwner: 12,         // Mailing address != property: tired landlord / out-of-state heir
+      absenteeOwner: 18,         // Mailing address != property: tired landlord / out-of-state heir.
+                                 // RECALIBRATED 12→18 (2026-06-29): the back-trained sell-model puts
+                                 // absentee at OR 2.043 — the STRONGEST independent predictor by far
+                                 // (implied lift ~1.9x, large n; RESEARCH §G.1). The old weight of 12 was
+                                 // set to its UNIVARIATE lift (1.64x), which undersold it — multivariate it
+                                 // dominates. At the taxSuit anchor (2.45x→28) ~1.9x ≈ 18. Also brings the
+                                 // absentee+elderly total (18+6+14=38) in line with its measured 3.07x (~40).
       elderlyOwner: 6,           // Over-65/disability exemption (or voter age >= 65). NOTE: measured
                                  // standalone lift ~1.00x (none) on our own snapshot-diff backtest —
                                  // it's a *modifier*, not a trigger. Down-weighted from 10; most of its

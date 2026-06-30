@@ -2,6 +2,18 @@
 
 Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 5).
 
+## 2026-06-29 — Recalibrated the absentee weight from the measured OR (LIVE)
+
+- `[#072]` **Absentee owner weight 12 → 18** in `MotivationScorer`. The back-trained
+  sell-model (#071) put absentee at **OR 2.043 — the strongest independent predictor by
+  far** (implied lift ~1.9x, large n; RESEARCH §G.1). The old weight of 12 was set to its
+  *univariate* lift (1.64x), which undersold it — multivariate, controlling for confounds,
+  it dominates everything (next is recent/suit at OR ~1.2). At the taxSuit calibration anchor
+  (2.45x→28 pts), ~1.9x ≈ 18. Bonus: the absentee+elderly synergy total (18+6+14=38) now
+  lines up with its measured 3.07x (~40 implied) instead of undershooting at 32.
+  - **Live-verified before/after:** absentee-only leads 12 → 18; absentee+delinquent leads
+    +6 (e.g. Homeplace Dr). Synergy + estate/divorce weights left untouched (separate calls).
+
 ## 2026-06-29 — Back-trained recency + 311 into the sell-model (LIVE)
 
 - `[#071]` **Recency folded into the calibrated `sell_model.json`; 311 measured out.**
