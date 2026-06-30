@@ -88,9 +88,13 @@ function csvCell(v) {
   let offset = 0, col = null, kept = 0, scanned = 0;
   const outRows = [];
 
+  // Server-side: only rows created on/after the cutoff, NEWEST first — so --max caps
+  // to the most recent records (not the oldest) and we don't scan the whole dataset.
+  // gc4d-8a49 has a created_date column; if a future schema lacks it, drop $where/$order.
+  const where = encodeURIComponent(`created_date >= '${cutoff}T00:00:00'`);
   while (scanned < MAX) {
-    const qp = `$limit=${PAGE}&$offset=${offset}&$order=:id`;
-    const batch = await getJson(`/resource/${DATASET}.json?${qp}`);
+    const qp = `$limit=${PAGE}&$offset=${offset}&$order=created_date DESC&$where=${where}`;
+    const batch = await getJson(`/resource/${DATASET}.json?${qp.replace(/ /g, '%20')}`);
     if (!batch.length) break;
     if (!col) {
       const keys = Object.keys(batch[0]);
