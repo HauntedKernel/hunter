@@ -2,6 +2,23 @@
 
 Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 5).
 
+## 2026-06-29 — Situs address crosswalk → precise 311 matching (LIVE)
+
+- `[#066]`–`[#067]` **Situs crosswalk built + deployed; 311 now matches at 77% precision.**
+  The tax roll has no house numbers, so address-only feeds (311, foreclosures) couldn't
+  match a parcel. DCAD's ACCOUNT_INFO does have them — `build_situs_xref.py` turns
+  STREET_NUM+FULL_STREET_NAME+ZIP into a `situs_xref(addr_key→account_id)` crosswalk
+  (house|zip5|street-core; unique keys only; 649,054 keys). `ingest_311.js` uses it as
+  the primary precise matcher (JS `situsKeyFrom311` mirrors the python `situs_key`,
+  parity-tested). `fetch_311.js` fixed to filter/sort server-side by created_date.
+  - **Result on real data:** 354/459 open code-compliance requests matched precisely
+    (77%, vs ~0% before); 294 resolve to live tax-roll parcels.
+  - **Deployed live:** crosswalk + 311 loaded into the live DB; the `codeCompliance`
+    signal now fires through `api.hunter.living` (verified — e.g. an estate property
+    with an open code request surfaces as a neglected-inherited lead).
+  - The crosswalk + tenure both rebuild monthly in `refresh_tax_roll.sh` step 6b from
+    the same DCAD download (non-fatal). `ingest_311.js` honors `HUNTER_DB` for testing.
+
 ## 2026-06-29 — Reverse long-tenure → recency + recency×distress (measured)
 
 - `[#064]` **Wired the recency findings into the scorer (RESEARCH §G).** Acting on the

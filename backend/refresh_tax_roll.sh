@@ -94,6 +94,13 @@ if [ $(( $(date +%s) - $(cat "$TENURE_STAMP" 2>/dev/null || echo 0) )) -ge 21600
     else
       log "WARN: tenure load failed (keeping prior tenure in copy)"
     fi
+    # Rebuild the situs crosswalk from the same DCAD file (powers precise 311/address
+    # matching) — same monthly cadence, also non-fatal.
+    if nice -n 15 python3 build_situs_xref.py "$WORK/ACCOUNT_INFO.CSV" "$WORK/rebuild.db" >> "$LOG" 2>&1; then
+      log "situs crosswalk rebuilt from DCAD${ASOF}"
+    else
+      log "WARN: situs_xref rebuild failed (keeping prior)"
+    fi
     rm -f "$WORK/dcad.zip" "$WORK/ACCOUNT_INFO.CSV"
   else
     log "WARN: DCAD tenure download/unzip failed (keeping prior tenure in copy)"
