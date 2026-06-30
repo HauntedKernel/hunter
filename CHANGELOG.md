@@ -2,6 +2,26 @@
 
 Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 5).
 
+## 2026-06-30 — OSINT enrichment backbone (entity resolution + confidence tiers)
+
+- `[#074]` **Free, in-house owner-enrichment backbone** — identify a contact for a lead
+  before paying for skip-trace. `lib/entity_resolution.js` + `build_owner_enrichment.js`:
+  - **Classify** owner (entity / person / trust / institution). 27.8% of delinquent leads
+    are entity-owned → Texas puts their principals on public record (Comptroller PIR).
+  - **Name-rarity from our OWN 960k owner corpus** (IDF) — distinctive names resolve cleanly,
+    common ones don't. Validated: SMITH/GARCIA ≈ 0.38, TAPPER 0.90, NITILO 1.00. This is the
+    "John Smith" confidence problem, solved for free with data we already have.
+  - **Tier-0 embedded-contact parser** — pulls a principal already sitting in the mailing
+    address (`NITILO CORP → PRES BYSHINSKI`, `ZAIN AUTO → owner MUHSEN ALI`). Precision-first:
+    rejects generic dept/location lines (ATTN TAX DEPT, SUITE 650).
+  - **Confidence tiers** (Direct / High / Medium / Low / Skip) = how reliably we resolve a
+    real contact for free. Measured on the live delinquent set (84,335 leads):
+    **Direct 4.8% · High 24.6% · Medium 59.4% · Low 9.1% · Skip 2.0%** →
+    **~29% free-resolvable now; only ~9% truly needs paid skip-trace** (down from assuming all).
+  - Writes `owner_enrichment(account_id → type, rarity, embedded_name/role, conf_tier, reason)`.
+    Next: surface in the lead API; wire Tier-1 Comptroller lookup for the High tier.
+    (Table not yet rebuilt by the refresh — additive, regenerate with the script.)
+
 ## 2026-06-29 — Recalibrated the recency band to the leak-clean lift (LIVE)
 
 - `[#073]` **Recency band max 14 → 9** in `MotivationScorer`. The original 14 (and the
