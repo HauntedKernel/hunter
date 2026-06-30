@@ -96,12 +96,12 @@ class MotivationScorer {
       codeCompliance: 12,        // Open Dallas 311 code-compliance request (substandard structure,
                                  // junk/debris, tall grass) → a neglected / over-extended owner. Distress
                                  // proxy; free feed (ingest_311.js). Not yet backtested on our data.
-      recency: 14,               // RECENT purchase (short tenure) — MEASURED on our data (RESEARCH §G):
-                                 // 0-1yr tenure ≈ 2.98x lift even among owner-occupied individuals (real
-                                 // arm's-length resales, not flippers/paperwork). Owner forced out fast
-                                 // (relocation, remorse, divorce, overextension). NOTE: this REPLACES the
-                                 // old long-tenure prior, which measured NEGATIVE (0.72-0.90x) — the
-                                 // literature was wrong for our ~10-mo window. Banded in the scorer.
+      recency: 9,                // RECENT purchase (short tenure) → near-term resale. RECALIBRATED 14→9
+                                 // (2026-06-29): the original 14 used a LEAKED 2.98x (the "2025" DCAD
+                                 // archive captured deeds at/after the snapshot — RESEARCH §G.1). The
+                                 // leak-CLEAN lift is ~1.48x at 1yr (deed 2024) / 1.36x over 1-2yr / OR 1.20
+                                 // — modest but independent. At the taxSuit anchor (2.45x→28) ~1.48x ≈ 9.
+                                 // Still REPLACES the old long-tenure prior (measured NEGATIVE). Banded below.
 
       // Signal-synergy (interaction) bonuses — empirically derived from the
       // 2025-08 → 2026-06 snapshot-diff backtest on 675k Dallas real-property
@@ -517,28 +517,31 @@ class MotivationScorer {
 
   /**
    * RECENCY — a recent purchase (short tenure) predicts a near-term resale. MEASURED
-   * on our own data (RESEARCH.md §G): 0-1yr tenure ≈ 2.98x lift even among
-   * owner-occupied individuals (genuine arm's-length resales, not flippers/paperwork) —
-   * an owner forced out fast (relocation, remorse, divorce, overextension). This
-   * REPLACES the old long-tenure prior, which measured negative. Tenure comes from the
-   * DCAD appraisal file (appraisal_detail.tenure_years, current year − deed year);
-   * null until ingest_appraisal.js / load_dcad_tenure.py loads the free DCAD file.
+   * on our own data, LEAK-CORRECTED (RESEARCH.md §G.1): the early "≈3x at 0-1yr" was a
+   * leak (the 2025 DCAD archive captured deeds at/after the snapshot). The clean lift is
+   * modest but independent — ~1.48x at 1yr (deed 2024), 1.36x over 1-2yr, OR 1.20. An
+   * owner forced out fast (relocation, remorse, divorce, overextension). REPLACES the old
+   * long-tenure prior (measured negative). Tenure comes from the DCAD appraisal file
+   * (appraisal_detail.tenure_years, current year − deed year); null until load_dcad_tenure.py
+   * loads the free DCAD file. The standalone bump is small; the recency×distress synergies
+   * (recencyDelinquentSynergy / recencySuitSynergy) carry most of the recency value.
    */
   calculateRecencyScore(context) {
     const t = context.tenureYears;
     if (t == null || t >= 3) {
       return { score: 0, factor: 'Not a recent purchase (≥3 yr or unknown tenure)', category: 'ownership' };
     }
-    // Band by measured lift: bought this year ≈ 3x, 1 yr ≈ 1.5x, 2 yr ≈ 1.2x.
+    // Band by leak-clean measured lift: ~1yr ≈ 1.48x, 2yr ≈ 1.2x; 0yr unmeasurable
+    // (leaked) so treated like 1yr, NOT a spike. Max weight (9) ≈ 1.48x at the taxSuit anchor.
     let frac, band;
-    if (t <= 0) { frac = 1.0; band = 'bought <1 yr ago (~3x)'; }
-    else if (t === 1) { frac = 0.5; band = '~1 yr ago'; }
-    else { frac = 0.2; band = '~2 yr ago'; }
+    if (t <= 0) { frac = 1.0; band = 'bought <1 yr ago'; }
+    else if (t === 1) { frac = 0.85; band = '~1 yr ago'; }
+    else { frac = 0.45; band = '~2 yr ago'; }
     return {
       score: Math.round(this.scoringWeights.recency * frac),
       factor: `Recent purchase — ${band}`,
       category: 'ownership',
-      severity: t <= 0 ? 'high' : 'medium'
+      severity: t <= 0 ? 'medium' : 'low'
     };
   }
 

@@ -2,6 +2,17 @@
 
 Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 5).
 
+## 2026-06-29 — Recalibrated the recency band to the leak-clean lift (LIVE)
+
+- `[#073]` **Recency band max 14 → 9** in `MotivationScorer`. The original 14 (and the
+  sharp 0-year spike) used a LEAKED 2.98x — the "2025" DCAD archive captured deeds at/after
+  the snapshot (RESEARCH §G.1). The leak-clean lift is ~1.48x at 1yr / 1.36x over 1-2yr /
+  OR 1.20; at the taxSuit anchor (2.45x→28) ~1.48x ≈ 9. New band: 0yr→9, 1yr→8, 2yr→4
+  (was 14/7/3). Flattens the false 0-year spike; the 1-year band slightly *rose* (7→8) to
+  match the one clean per-year point. Severity high→medium. The sell-model side was already
+  leak-clean (#071); this aligns the heuristic. recency×distress synergies left as-is.
+  - **Live before/after:** Denham Dr (0yr) 14→9 (total 66→61); Homeplace (1yr) 7→8 (59→60).
+
 ## 2026-06-29 — Recalibrated the absentee weight from the measured OR (LIVE)
 
 - `[#072]` **Absentee owner weight 12 → 18** in `MotivationScorer`. The back-trained
