@@ -2,6 +2,27 @@
 
 Tracking numbered changes so they can be reviewed and rolled back (Handoff Rule 5).
 
+## 2026-06-30 — Tier-1: Texas Comptroller entity resolver (gated on free key)
+
+- `[#077]` **Resolve distinctive ENTITY owners to their registered people** — the structured
+  "Tapper Investments → Dino Tapper" link at scale, free. Uses the official Texas Comptroller
+  Franchise Tax Account Status public API (no bulk file exists; this is the sanctioned API,
+  not scraping). `lib/comptroller.js` (client + defensive parser + best-match picker) +
+  `resolve_entities.js` (batch resolver + `entity_registry` cache + writeback).
+  - **Gated + graceful:** needs a FREE `x-api-key` (register at
+    https://api-doc.comptroller.texas.gov/public-data/). With no key it no-ops (like the
+    skip-trace stub) — ships now, lights up when the key is set. **Live API untouched.**
+  - **Confidence-aware matching** (`pickBestMatch`, self-tested 3/3 offline): exact name +
+    active status + ZIP corroboration ⇒ confident; same-name/both-active/no-ZIP ⇒ flagged
+    *ambiguous* and NOT asserted (no false "Dino Tapper" on the wrong entity).
+  - **Writeback:** confident, non-ambiguous matches upgrade `owner_enrichment` to tier
+    `registry` with the resolved agent/officer name — so the lead's existing `contact` block
+    surfaces it automatically (no API change). Registered agents that are themselves a service
+    (CT Corporation, etc.) are flagged not-a-principal.
+  - Targets the high/direct entity slice (distinctive names) only; polite rate limit (800ms).
+  - ⏳ NEXT (needs key): run `--limit=20 --debug` once to confirm the API's exact field names
+    and tighten `extractRecord()`; then optionally surface the full officer list + status.
+
 ## 2026-06-30 — Surfaced owner enrichment in the lead API (LIVE)
 
 - `[#075]` **Every lead now returns a `contact` block** — the OSINT backbone (#074) wired
