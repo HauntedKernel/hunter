@@ -68,6 +68,38 @@ log "rebuilding enrichment (portfolios + clusters)..."
 nice -n 15 node build_portfolios.js >> "$LOG" 2>&1 || log "WARN: build_portfolios failed (continuing)"
 nice -n 15 node build_owner_clusters.js >> "$LOG" 2>&1 || log "WARN: build_owner_clusters failed (continuing)"
 
+# 6b. Refresh ownership TENURE from the latest DCAD annual appraisal file (powers the
+#     recency signal — recent buyers, RESEARCH §G). The deed dates only change yearly,
+#     so this is gated to run at most ~monthly even though the tax-roll refresh is
+#     weekly. NON-FATAL: tenure is enrichment, so any failure WARNs and keeps the prior
+#     tenure already present in the copy. Targets the COPY (rebuild.db) so it ships in
+#     the same atomic swap and stays fail-safe.
+TENURE_STAMP="$HOME/hunter/.tenure_last_reload"
+if [ $(( $(date +%s) - $(cat "$TENURE_STAMP" 2>/dev/null || echo 0) )) -ge 2160000 ]; then  # 25 days
+  log "refreshing DCAD tenure (monthly gate open)..."
+  UA="Mozilla/5.0 (X11; Linux aarch64) AppleWebKit/537.36"
+  ASOF=""; YR=$(date +%Y)
+  # Try this year's annual file, then last year's (the new file may not be posted yet early in a year).
+  for Y in "$YR" "$((YR-1))"; do
+    DURL="https://www.dallascad.org/ViewPDFs.aspx?type=3&id=%5C%5CDCAD.ORG%5CWEB%5CWEBDATA%5CWEBFORMS%5CDATA%20PRODUCTS%5CDCAD${Y}_CURRENT.ZIP"
+    if curl -fsS -A "$UA" --max-time 600 -o "$WORK/dcad.zip" "$DURL" \
+       && [ "$(stat -c%s "$WORK/dcad.zip" 2>/dev/null || echo 0)" -gt 50000000 ]; then
+      ASOF="$Y"; break
+    fi
+  done
+  if [ -n "$ASOF" ] && unzip -o -q "$WORK/dcad.zip" ACCOUNT_INFO.CSV -d "$WORK"; then
+    if nice -n 15 python3 load_dcad_tenure.py "$WORK/ACCOUNT_INFO.CSV" "$WORK/rebuild.db" "$ASOF" >> "$LOG" 2>&1; then
+      date +%s > "$TENURE_STAMP"
+      log "tenure refreshed from DCAD${ASOF}"
+    else
+      log "WARN: tenure load failed (keeping prior tenure in copy)"
+    fi
+    rm -f "$WORK/dcad.zip" "$WORK/ACCOUNT_INFO.CSV"
+  else
+    log "WARN: DCAD tenure download/unzip failed (keeping prior tenure in copy)"
+  fi
+fi
+
 if [ "$MODE" = "--dry-run" ]; then
   log "DRY-RUN OK: rebuilt+validated ${ROWS} rows in copy; live DB NOT swapped."
   exit 0

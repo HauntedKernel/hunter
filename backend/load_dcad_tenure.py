@@ -15,7 +15,10 @@ con = sqlite3.connect(dbp)
 con.execute("""CREATE TABLE IF NOT EXISTS appraisal_detail(
   account_id TEXT PRIMARY KEY, deed_transfer_date TEXT, deed_year INTEGER,
   tenure_years INTEGER, year_built INTEGER)""")
-con.execute("PRAGMA journal_mode=WAL"); con.execute("PRAGMA synchronous=OFF")
+# Keep the default rollback journal (NOT WAL): this db may be a refresh's rebuild.db
+# that gets atomically mv'd, and WAL would orphan its -wal/-shm sidecars. synchronous=OFF
+# is per-connection (not persisted) and just speeds the bulk load.
+con.execute("PRAGMA synchronous=OFF")
 
 def norm_acct(v):
     d = re.sub(r"\D", "", v or "")
