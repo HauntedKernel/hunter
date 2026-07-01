@@ -2,34 +2,40 @@
    Plain CSS with design tokens + responsive component classes. No framework. */
 
 :root {
-  /* Brand + neutrals */
-  --brand: #16a34a;
-  --brand-dark: #15803d;
-  --brand-soft: rgba(22, 163, 74, 0.10);
-  --brand-line: rgba(22, 163, 74, 0.25);
-  --ink: #0f172a;
-  --ink-2: #334155;
-  --muted: #64748b;
-  --faint: #94a3b8;
-  --line: #e2e8f0;
-  --line-2: #eef2f7;
-  --bg: #f8fafc;
-  --surface: #ffffff;
-  --surface-2: #f1f5f9;
+  /* Ivory-editorial luxury theme — warm off-white, charcoal ink, brass accents. */
+  /* "Brand" now reads as brass; kept var names so the whole app retints from here. */
+  --brand: #9a7b43;            /* brass */
+  --brand-dark: #7c6234;       /* deep brass */
+  --brand-soft: rgba(154, 123, 67, 0.10);
+  --brand-line: rgba(154, 123, 67, 0.32);
+  --gold: #b08d4c;             /* champagne highlight */
+  --ink: #211d17;              /* warm near-black */
+  --ink-2: #453e34;
+  --muted: #6f665a;
+  --faint: #9c9488;
+  --line: #e6ddcd;             /* warm hairline */
+  --line-2: #efe8db;
+  --bg: #f6f2ea;               /* ivory canvas */
+  --surface: #fffdf8;          /* warm white card */
+  --surface-2: #f0eadd;
 
-  /* Score / status */
-  --score-high: #dc2626;
-  --score-med: #f59e0b;
-  --score-low: #6b7280;
-  --danger: #dc2626;
-  --danger-soft: #fef2f2;
+  /* Score / status — warmed for the editorial palette */
+  --score-high: #a3341f;       /* terracotta (urgent) */
+  --score-med: #b7822c;
+  --score-low: #8b8377;
+  --danger: #a3341f;
+  --danger-soft: #f6ece5;
+
+  /* Type */
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
 
   /* Spacing / radius / shadow */
   --s1: 4px;  --s2: 8px;  --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px;
-  --r-sm: 8px; --r: 12px; --r-lg: 16px; --r-pill: 999px;
-  --sh-1: 0 1px 2px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.08);
-  --sh-2: 0 4px 16px rgba(15, 23, 42, 0.10);
-  --app-bar-h: 56px;
+  --r-sm: 6px; --r: 10px; --r-lg: 14px; --r-pill: 999px;
+  --sh-1: 0 1px 2px rgba(60, 46, 20, 0.05), 0 1px 3px rgba(60, 46, 20, 0.06);
+  --sh-2: 0 8px 30px rgba(60, 46, 20, 0.10);
+  --app-bar-h: 64px;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -40,14 +46,15 @@ html, body, #root {
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   color: var(--ink);
   background: var(--bg);
   font-size: 14px;
-  line-height: 1.45;
+  line-height: 1.5;
 }
+h1, h2, h3, .display { font-family: var(--font-display); font-weight: 600; letter-spacing: 0.2px; }
 
 /* ---- Shell ---- */
 .app-shell { display: flex; flex-direction: column; min-height: 100vh; }
@@ -66,22 +73,33 @@ body {
   border-bottom: 1px solid var(--line);
 }
 .brand {
-  font-size: 20px;
-  font-weight: 800;
-  letter-spacing: -0.4px;
-  color: var(--brand-dark);
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: var(--ink);
   cursor: pointer;
   user-select: none;
 }
 .scope-chip {
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
   color: var(--brand-dark);
   background: var(--brand-soft);
   border: 1px solid var(--brand-line);
   border-radius: var(--r-pill);
-  padding: 4px 12px;
+  padding: 5px 13px;
 }
+.app-bar-right { display: flex; align-items: center; gap: var(--s4); }
+.nav-link {
+  font-size: 13px; font-weight: 600; letter-spacing: 0.3px; color: var(--ink-2);
+  background: none; border: none; cursor: pointer; padding: 6px 4px;
+  border-bottom: 1.5px solid transparent; transition: color .15s, border-color .15s;
+}
+.nav-link:hover { color: var(--ink); }
+.nav-link.active { color: var(--brand-dark); border-bottom-color: var(--gold); }
 .app-main { flex: 1; width: 100%; }
 .container {
   width: 100%;
@@ -414,4 +432,105 @@ body {
   .lp-sample-row { grid-template-columns: 28px 64px 1.2fr; }
   .lp-sample-row > .lp-why, .lp-sample-head > :nth-child(4) { display: none; }
   .lp-sample-row > .lp-num, .lp-sample-head > :nth-child(5) { display: none; }
+}
+
+/* ============================================================
+   TERRITORY MARKETPLACE — Ivory editorial
+   ============================================================ */
+.mkt { max-width: 1240px; margin: 0 auto; padding: var(--s6) var(--s5) 80px; }
+
+/* Editorial masthead */
+.mkt-head { text-align: center; padding: 28px 0 8px; border-bottom: 1px solid var(--line); }
+.mkt-eyebrow { font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color: var(--brand-dark); font-weight: 600; }
+.mkt-title { font-family: var(--font-display); font-size: 52px; font-weight: 600; line-height: 1.05; color: var(--ink); margin: 12px 0 6px; letter-spacing: 0.3px; }
+.mkt-sub { color: var(--muted); font-size: 15px; max-width: 640px; margin: 0 auto; }
+.mkt-stats { display: flex; justify-content: center; gap: 48px; margin-top: 22px; padding-bottom: 26px; }
+.mkt-stat { text-align: center; }
+.mkt-stat-n { font-family: var(--font-display); font-size: 34px; font-weight: 600; color: var(--ink); }
+.mkt-stat-l { font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--faint); margin-top: 2px; }
+
+/* Filter bar */
+.mkt-controls { display: flex; flex-wrap: wrap; gap: var(--s3); align-items: center; justify-content: space-between; margin: 26px 0 6px; }
+.mkt-filters { display: flex; gap: var(--s2); flex-wrap: wrap; }
+.mkt-filter { font-size: 12px; font-weight: 600; letter-spacing: 0.4px; color: var(--muted); background: transparent; border: 1px solid var(--line); border-radius: var(--r-pill); padding: 7px 16px; cursor: pointer; transition: all .15s; }
+.mkt-filter:hover { border-color: var(--brand-line); color: var(--ink-2); }
+.mkt-filter.active { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+.mkt-search { font-family: var(--font-body); font-size: 14px; padding: 9px 14px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); min-width: 180px; }
+
+/* Grid of ZIP cards */
+.mkt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 22px; margin-top: 26px; }
+
+.terr-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 22px 22px 18px; transition: box-shadow .2s, transform .2s, border-color .2s; display: flex; flex-direction: column; }
+.terr-card:hover { box-shadow: var(--sh-2); transform: translateY(-2px); border-color: var(--brand-line); }
+.terr-card.is-taken { opacity: 0.92; }
+
+.terr-top { display: flex; align-items: baseline; justify-content: space-between; }
+.terr-zip { font-family: var(--font-display); font-size: 32px; font-weight: 600; color: var(--ink); letter-spacing: 0.5px; }
+.terr-leads { font-size: 12px; color: var(--muted); }
+.terr-leads b { color: var(--ink-2); font-weight: 600; }
+.terr-rule { height: 1px; background: linear-gradient(90deg, var(--gold), transparent); margin: 14px 0 12px; }
+
+/* Category sublist */
+.terr-cats { display: flex; flex-direction: column; gap: 2px; }
+.terr-cat { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 12px; padding: 9px 0; border-bottom: 1px dotted var(--line); }
+.terr-cat:last-child { border-bottom: none; }
+.terr-cat-name { font-size: 13px; font-weight: 600; color: var(--ink-2); letter-spacing: 0.2px; }
+.terr-cat-name small { display: block; font-weight: 400; color: var(--faint); font-size: 11px; letter-spacing: 0.3px; }
+.terr-cat-price { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.terr-cat-price b { color: var(--ink); font-weight: 600; }
+
+.pill { font-size: 10.5px; font-weight: 600; letter-spacing: 0.6px; text-transform: uppercase; padding: 4px 10px; border-radius: var(--r-pill); white-space: nowrap; }
+.pill-available { color: var(--brand-dark); background: var(--brand-soft); border: 1px solid var(--brand-line); }
+.pill-sold { color: var(--muted); background: var(--surface-2); border: 1px solid var(--line); }
+.pill-sold b { color: var(--ink-2); font-weight: 600; }
+.pill-full { color: #8a6d1f; background: rgba(183, 130, 44, 0.12); border: 1px solid rgba(183, 130, 44, 0.3); }
+.pill-na { color: var(--faint); background: transparent; border: 1px solid var(--line); }
+
+/* Card footer: shared + zip exclusive + CTA */
+.terr-foot { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+.terr-tiers { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.terr-tier { display: flex; align-items: center; justify-content: space-between; font-size: 12.5px; }
+.terr-tier-label { color: var(--muted); }
+.terr-tier-label b { color: var(--ink-2); font-weight: 600; }
+.terr-cta { display: flex; gap: 8px; }
+
+/* Buttons — luxe */
+.btn-primary { background: var(--brand); border-color: var(--brand); color: #fff; }
+.btn-primary:hover { background: var(--brand-dark); }
+.btn-lux { flex: 1; font-family: var(--font-body); font-size: 12.5px; font-weight: 600; letter-spacing: 0.8px; text-transform: uppercase; padding: 11px 14px; border-radius: var(--r-sm); cursor: pointer; transition: all .18s; border: 1px solid var(--ink); background: var(--ink); color: var(--surface); }
+.btn-lux:hover { background: var(--brand-dark); border-color: var(--brand-dark); }
+.btn-lux.ghost { background: transparent; color: var(--ink-2); border-color: var(--line); }
+.btn-lux.ghost:hover { border-color: var(--ink); color: var(--ink); background: transparent; }
+.btn-lux:disabled { opacity: 0.45; cursor: not-allowed; background: var(--surface-2); color: var(--faint); border-color: var(--line); }
+
+/* Sold banner on fully-claimed exclusives */
+.terr-sold-note { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); font-style: italic; }
+.terr-sold-note .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--gold); }
+
+/* Checkout modal */
+.mkt-modal-back { position: fixed; inset: 0; background: rgba(33, 29, 23, 0.5); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
+.mkt-modal { background: var(--surface); border-radius: var(--r-lg); max-width: 460px; width: 100%; padding: 32px; box-shadow: var(--sh-2); }
+.mkt-modal h3 { font-family: var(--font-display); font-size: 28px; font-weight: 600; color: var(--ink); }
+.mkt-modal-sub { color: var(--muted); font-size: 14px; margin: 6px 0 22px; }
+.mkt-field { margin-bottom: 14px; }
+.mkt-field label { display: block; font-size: 11px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--faint); margin-bottom: 6px; font-weight: 600; }
+.mkt-field input { width: 100%; font-family: var(--font-body); font-size: 15px; padding: 11px 14px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--bg); }
+.mkt-field input:focus { outline: none; border-color: var(--brand); }
+.mkt-modal-line { display: flex; justify-content: space-between; align-items: baseline; padding: 14px 0; border-top: 1px solid var(--line); margin-top: 8px; }
+.mkt-modal-line .amt { font-family: var(--font-display); font-size: 26px; font-weight: 600; color: var(--ink); }
+.mkt-note { font-size: 12px; color: var(--muted); margin-top: 10px; line-height: 1.5; }
+
+.spin { animation: spin 0.9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Purchase-return banner */
+.app-banner { display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 12px 24px; font-size: 14px; font-weight: 500; }
+.app-banner-ok { background: var(--brand-soft); color: var(--brand-dark); border-bottom: 1px solid var(--brand-line); }
+.app-banner-info { background: var(--surface-2); color: var(--ink-2); border-bottom: 1px solid var(--line); }
+
+@media (max-width: 720px) {
+  .mkt-title { font-size: 38px; }
+  .mkt-stats { gap: 26px; }
+  .mkt-grid { grid-template-columns: 1fr; }
 }

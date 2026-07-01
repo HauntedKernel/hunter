@@ -9,6 +9,7 @@ const path = require('path');
 
 // Import API routes
 const propertyIntelligenceRouter = require('./src/api/propertyIntelligence');
+const catalogRouter = require('./src/api/catalog');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -31,6 +32,10 @@ app.use(cors({
   credentials: true
 }));
 
+// Stripe webhook needs the RAW body for signature verification — mount it before the JSON
+// parser so express.json() doesn't consume the stream.
+app.use('/api/catalog/webhook', express.raw({ type: '*/*' }));
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
@@ -43,6 +48,7 @@ app.use((req, res, next) => {
 
 // API Routes
 app.use('/api/property', propertyIntelligenceRouter);
+app.use('/api/catalog', catalogRouter);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
