@@ -1,20 +1,22 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Lock, Check, X, ArrowRight, Loader2 } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Lock, X, ArrowRight, Loader2, BellRing } from 'lucide-react'
 import CatalogService from '../../services/CatalogService'
+import RegionMap from '../RegionMap'
 
-// Territory Marketplace — the "page": which ZIPs (and which category lists within them) are
-// available vs sold-exclusive, with a Stripe checkout. Ivory-editorial luxury styling.
+// Territory Marketplace — service-region map + ZIP × category availability with Stripe checkout,
+// waitlist for claimed territories, and a request form for markets we don't serve yet.
 const CATEGORY_LABEL = { residential: 'Residential', land: 'Land', commercial: 'Commercial' }
 const CATEGORY_SUB = { residential: 'Houses & condos', land: 'Lots & acreage', commercial: 'Retail, office, industrial' }
 const money = (n) => `$${Number(n || 0).toLocaleString()}`
 
-export default function MarketplaceScreen({ onNavigate }) {
+export default function MarketplaceScreen() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [cat, setCat] = useState('all')
   const [q, setQ] = useState('')
-  const [modal, setModal] = useState(null)   // { tier, zip, category, price, label }
+  const [modal, setModal] = useState(null)   // { kind:'checkout'|'waitlist', tier, zip, category, price, label }
+  const gridRef = useRef(null)
 
   useEffect(() => {
     let live = true
@@ -30,6 +32,11 @@ export default function MarketplaceScreen({ onNavigate }) {
     if (q.trim()) list = list.filter(z => z.zip.startsWith(q.trim()))
     return list
   }, [data, cat, q])
+
+  const selectFromMap = (zip) => {
+    setQ(zip)
+    setTimeout(() => gridRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60)
+  }
 
   return (
     <div className="mkt">
@@ -49,6 +56,8 @@ export default function MarketplaceScreen({ onNavigate }) {
         )}
       </header>
 
+      {data && <RegionMap zips={data.zips} onSelectZip={selectFromMap} />}
+
       <div className="mkt-controls">
         <div className="mkt-filters">
           {['all', 'residential', 'land', 'commercial'].map(c => (
@@ -65,28 +74,26 @@ export default function MarketplaceScreen({ onNavigate }) {
       {error && <div style={{ padding: 40, textAlign: 'center', color: 'var(--danger)' }}>Couldn&rsquo;t load the catalog: {error}</div>}
 
       {!loading && !error && (
-        <div className="mkt-grid">
-          {zips.map(z => (
-            <TerritoryCard key={z.zip} z={z} cat={cat} onClaim={setModal} />
-          ))}
+        <div className="mkt-grid" ref={gridRef}>
+          {zips.map(z => <TerritoryCard key={z.zip} z={z} cat={cat} onOpen={setModal} />)}
           {zips.length === 0 && <div style={{ color: 'var(--muted)', padding: 30 }}>No territories match that filter.</div>}
         </div>
       )}
 
-      {modal && <CheckoutModal sel={modal} paymentsEnabled={data?.paymentsEnabled} onClose={() => setModal(null)} />}
+      <RegionRequest />
+
+      {modal?.kind === 'checkout' && <CheckoutModal sel={modal} paymentsEnabled={data?.paymentsEnabled} onClose={() => setModal(null)} />}
+      {modal?.kind === 'waitlist' && <WaitlistModal sel={modal} onClose={() => setModal(null)} />}
     </div>
   )
 }
 
-function StatusPill({ ex }) {
-  if (ex.status === 'sold') return <span className="pill pill-sold">Sold · <b>{ex.owner}</b></span>
-  if (ex.status === 'unavailable') return <span className="pill pill-na">Unavailable</span>
-  return <span className="pill pill-available">Available</span>
-}
-
-function TerritoryCard({ z, cat, onClaim }) {
+function TerritoryCard({ z, cat, onOpen }) {
   const shown = cat === 'all' ? z.categories : z.categories.filter(c => c.category === cat)
   const taken = z.categories.some(c => c.exclusive.status === 'sold')
+  const claim = (tier, category, price, label) => onOpen({ kind: 'checkout', tier, zip: z.zip, category, price, label })
+  const wait = (tier, category, label) => onOpen({ kind: 'waitlist', tier, zip: z.zip, category, label })
+
   return (
     <div className={`terr-card ${taken ? 'is-taken' : ''}`}>
       <div className="terr-top">
@@ -102,26 +109,25 @@ function TerritoryCard({ z, cat, onClaim }) {
             {c.exclusive.status === 'available'
               ? <div className="terr-cat-price"><b>{money(c.exclusive.price)}</b>/mo</div>
               : <div className="terr-cat-price">&nbsp;</div>}
-            {c.exclusive.status === 'available'
-              ? <button className="pill pill-available" style={{ cursor: 'pointer' }}
-                  onClick={() => onClaim({ tier: 'category', zip: z.zip, category: c.category, price: c.exclusive.price, label: `Exclusive ${CATEGORY_LABEL[c.category]} — ${z.zip}` })}>
-                  Claim
-                </button>
-              : <StatusPill ex={c.exclusive} />}
+            {c.exclusive.status === 'available' ? (
+              <button className="pill pill-available" style={{ cursor: 'pointer' }}
+                onClick={() => claim('category', c.category, c.exclusive.price, `Exclusive ${CATEGORY_LABEL[c.category]} — ${z.zip}`)}>Claim</button>
+            ) : c.exclusive.status === 'sold' ? (
+              <button className="pill pill-sold" style={{ cursor: 'pointer' }} title="Join the waitlist"
+                onClick={() => wait('category', c.category, `Waitlist · ${CATEGORY_LABEL[c.category]} — ${z.zip}`)}>Sold · <b>{c.exclusive.owner}</b></button>
+            ) : <span className="pill pill-na">Unavailable</span>}
           </div>
         ))}
       </div>
 
       <div className="terr-foot">
         <div className="terr-tiers">
-          {/* Shared on-ramp */}
           <div className="terr-tier">
             <span className="terr-tier-label">Shared list · <b>{money(z.shared.price)}</b>/mo
               {z.shared.status === 'available' && ` · ${z.shared.seatsLeft} of ${z.shared.cap} seats`}
-              {z.shared.status === 'full' && ' · waitlist'}
+              {z.shared.status === 'full' && ' · full'}
             </span>
           </div>
-          {/* Whole-ZIP exclusive */}
           <div className="terr-tier">
             <span className="terr-tier-label">Own all of {z.zip} · <b>{money(z.zipExclusive.price)}</b>/mo</span>
             {z.zipExclusive.status === 'sold' && <span className="pill pill-sold">Held · <b>{z.zipExclusive.owner}</b></span>}
@@ -131,68 +137,120 @@ function TerritoryCard({ z, cat, onClaim }) {
 
         <div className="terr-cta">
           {z.shared.status === 'available'
-            ? <button className="btn-lux ghost" onClick={() => onClaim({ tier: 'shared', zip: z.zip, price: z.shared.price, label: `Shared Territory — ${z.zip}` })}>Join Shared</button>
-            : <button className="btn-lux ghost" disabled>Shared Full</button>}
+            ? <button className="btn-lux ghost" onClick={() => claim('shared', null, z.shared.price, `Shared Territory — ${z.zip}`)}>Join Shared</button>
+            : <button className="btn-lux ghost" onClick={() => wait('shared', null, `Waitlist · Shared — ${z.zip}`)}><BellRing size={12} style={{ marginRight: 5 }} />Waitlist</button>}
           {z.zipExclusive.status === 'available'
-            ? <button className="btn-lux" onClick={() => onClaim({ tier: 'zip', zip: z.zip, price: z.zipExclusive.price, label: `Exclusive ZIP — ${z.zip}` })}>Own {z.zip}</button>
-            : <button className="btn-lux" disabled><Lock size={12} style={{ marginRight: 5 }} />{z.zipExclusive.status === 'sold' ? 'Claimed' : 'Locked'}</button>}
+            ? <button className="btn-lux" onClick={() => claim('zip', null, z.zipExclusive.price, `Exclusive ZIP — ${z.zip}`)}>Own {z.zip}</button>
+            : <button className="btn-lux" onClick={() => wait('zip', null, `Waitlist · Exclusive ${z.zip}`)}><BellRing size={12} style={{ marginRight: 5 }} />Waitlist</button>}
         </div>
       </div>
     </div>
   )
 }
 
-function CheckoutModal({ sel, paymentsEnabled, onClose }) {
-  const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [err, setErr] = useState(null)
-  const [done, setDone] = useState(false)
+function Field({ label, ...props }) {
+  return <div className="mkt-field"><label>{label}</label><input {...props} /></div>
+}
 
+function CheckoutModal({ sel, paymentsEnabled, onClose }) {
+  const [name, setName] = useState(''); const [email, setEmail] = useState('')
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState(null); const [done, setDone] = useState(false)
   const submit = async () => {
     setErr(null); setBusy(true)
     try {
       const r = await CatalogService.checkout({ tier: sel.tier, zip: sel.zip, category: sel.category, name, email })
-      if (r.url) { window.location.href = r.url; return }   // → Stripe Checkout
+      if (r.url) { window.location.href = r.url; return }
       setDone(true)
     } catch (e) { setErr(e.message) } finally { setBusy(false) }
   }
+  return (
+    <Modal title={done ? 'Request received' : 'Reserve territory'} onClose={onClose}>
+      {done ? <p className="mkt-modal-sub">Thank you — we&rsquo;ll finalize <b>{sel.label}</b> shortly. Your seat is held.</p> : (
+        <>
+          <p className="mkt-modal-sub">{sel.label}</p>
+          <Field label="Full name" value={name} onChange={e => setName(e.target.value)} placeholder="Jane Agent" />
+          <Field label="Email" value={email} onChange={e => setEmail(e.target.value)} placeholder="jane@brokerage.com" type="email" />
+          <div className="mkt-modal-line"><span style={{ color: 'var(--muted)', fontSize: 13 }}>Monthly</span>
+            <span className="amt">{money(sel.price)}<span style={{ fontSize: 14, color: 'var(--muted)' }}>/mo</span></span></div>
+          {err && <div style={{ color: 'var(--danger)', fontSize: 13, marginTop: 10 }}>{err}</div>}
+          <button className="btn-lux" style={{ width: '100%', marginTop: 16 }} onClick={submit} disabled={busy || !email}>
+            {busy ? <Loader2 size={14} className="spin" /> : <>Continue to secure checkout <ArrowRight size={14} style={{ marginLeft: 6 }} /></>}
+          </button>
+          <p className="mkt-note">{paymentsEnabled
+            ? <><Lock size={11} style={{ verticalAlign: -1 }} /> Secured by Stripe. Cancel anytime. First-month performance guarantee on exclusives.</>
+            : 'Concierge onboarding — submit your details and our team will confirm availability by hand.'}</p>
+        </>
+      )}
+    </Modal>
+  )
+}
 
+function WaitlistModal({ sel, onClose }) {
+  const [name, setName] = useState(''); const [email, setEmail] = useState('')
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState(null); const [done, setDone] = useState(false)
+  const submit = async () => {
+    setErr(null); setBusy(true)
+    try { await CatalogService.joinWaitlist({ zip: sel.zip, category: sel.category, tier: sel.tier, name, email }); setDone(true) }
+    catch (e) { setErr(e.message) } finally { setBusy(false) }
+  }
+  return (
+    <Modal title={done ? 'You&rsquo;re on the list' : 'Join the waitlist'} onClose={onClose}>
+      {done ? <p className="mkt-modal-sub">We&rsquo;ll notify you the moment <b>{sel.label.replace(/^Waitlist · /, '')}</b> frees up — first in line, no obligation.</p> : (
+        <>
+          <p className="mkt-modal-sub">{sel.label} is currently held. Be first in line when it reopens.</p>
+          <Field label="Full name" value={name} onChange={e => setName(e.target.value)} placeholder="Jane Agent" />
+          <Field label="Email" value={email} onChange={e => setEmail(e.target.value)} placeholder="jane@brokerage.com" type="email" />
+          {err && <div style={{ color: 'var(--danger)', fontSize: 13, marginTop: 10 }}>{err}</div>}
+          <button className="btn-lux" style={{ width: '100%', marginTop: 16 }} onClick={submit} disabled={busy || !email}>
+            {busy ? <Loader2 size={14} className="spin" /> : 'Notify me when it opens'}
+          </button>
+        </>
+      )}
+    </Modal>
+  )
+}
+
+function RegionRequest() {
+  const [region, setRegion] = useState(''); const [email, setEmail] = useState(''); const [note, setNote] = useState('')
+  const [busy, setBusy] = useState(false); const [done, setDone] = useState(false); const [err, setErr] = useState(null)
+  const submit = async (e) => {
+    e.preventDefault(); setErr(null); setBusy(true)
+    try { await CatalogService.requestRegion({ region, email, note }); setDone(true) }
+    catch (e) { setErr(e.message) } finally { setBusy(false) }
+  }
+  return (
+    <section className="region-req">
+      <div className="region-req-inner">
+        <div>
+          <div className="mkt-eyebrow">Expanding</div>
+          <h2 className="region-req-title">Don&rsquo;t see your market?</h2>
+          <p className="mkt-sub" style={{ margin: '8px 0 0' }}>We&rsquo;re live in Dallas County and opening new regions by demand. Tell us where you sell — you&rsquo;ll get first claim when it launches.</p>
+        </div>
+        {done ? (
+          <div className="region-req-done">Thank you — you&rsquo;re first in line for <b>{region}</b>. We&rsquo;ll be in touch when it opens.</div>
+        ) : (
+          <form className="region-req-form" onSubmit={submit}>
+            <input className="mkt-search" placeholder="County / metro (e.g. Tarrant County)" value={region} onChange={e => setRegion(e.target.value)} required />
+            <input className="mkt-search" placeholder="Email" type="email" value={email} onChange={e => setEmail(e.target.value)} required />
+            <input className="mkt-search" placeholder="Anything specific? (optional)" value={note} onChange={e => setNote(e.target.value)} />
+            <button className="btn-lux" disabled={busy || !region || !email}>{busy ? <Loader2 size={14} className="spin" /> : 'Request my region'}</button>
+            {err && <div style={{ color: 'var(--danger)', fontSize: 13 }}>{err}</div>}
+          </form>
+        )}
+      </div>
+    </section>
+  )
+}
+
+function Modal({ title, onClose, children }) {
   return (
     <div className="mkt-modal-back" onClick={onClose}>
       <div className="mkt-modal" onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <h3>{done ? 'Request received' : 'Reserve territory'}</h3>
+          <h3 dangerouslySetInnerHTML={{ __html: title }} />
           <button className="btn-ghost" onClick={onClose} style={{ padding: 4 }}><X size={18} /></button>
         </div>
-
-        {done ? (
-          <p className="mkt-modal-sub">Thank you — we&rsquo;ll be in touch shortly to finalize <b>{sel.label}</b>. Your seat is held.</p>
-        ) : (
-          <>
-            <p className="mkt-modal-sub">{sel.label}</p>
-            <div className="mkt-field"><label>Full name</label>
-              <input value={name} onChange={e => setName(e.target.value)} placeholder="Jane Agent" /></div>
-            <div className="mkt-field"><label>Email</label>
-              <input value={email} onChange={e => setEmail(e.target.value)} placeholder="jane@brokerage.com" type="email" /></div>
-
-            <div className="mkt-modal-line">
-              <span style={{ color: 'var(--muted)', fontSize: 13 }}>Monthly</span>
-              <span className="amt">{money(sel.price)}<span style={{ fontSize: 14, color: 'var(--muted)' }}>/mo</span></span>
-            </div>
-
-            {err && <div style={{ color: 'var(--danger)', fontSize: 13, marginTop: 10 }}>{err}</div>}
-
-            <button className="btn-lux" style={{ width: '100%', marginTop: 16 }} onClick={submit} disabled={busy || !email}>
-              {busy ? <Loader2 size={14} className="spin" /> : <>Continue to secure checkout <ArrowRight size={14} style={{ marginLeft: 6 }} /></>}
-            </button>
-            <p className="mkt-note">
-              {paymentsEnabled
-                ? <><Lock size={11} style={{ verticalAlign: -1 }} /> Secured by Stripe. Cancel anytime. First-month performance guarantee on exclusives.</>
-                : 'Concierge onboarding — submit your details and our team will confirm availability and complete your subscription by hand.'}
-            </p>
-          </>
-        )}
+        {children}
       </div>
     </div>
   )

@@ -34,13 +34,19 @@ async function db() {
     await _db.exec(`CREATE TABLE IF NOT EXISTS territory_zips (
       zip TEXT PRIMARY KEY, lead_count INTEGER, shared_price INTEGER, shared_cap INTEGER,
       shared_count INTEGER DEFAULT 0, zip_excl_price INTEGER, zip_excl_owner TEXT, zip_excl_since TEXT,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP);
+      lat REAL, lng REAL, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP);
       CREATE TABLE IF NOT EXISTS territory_units (
       zip TEXT, category TEXT, lead_count INTEGER, excl_price INTEGER, excl_owner TEXT, excl_since TEXT,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (zip, category));
       CREATE TABLE IF NOT EXISTS territory_orders (
       id TEXT PRIMARY KEY, zip TEXT, category TEXT, tier TEXT, customer_name TEXT, customer_email TEXT,
       amount INTEGER, stripe_session TEXT, stripe_subscription TEXT, status TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP);
+      CREATE TABLE IF NOT EXISTS waitlist (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, zip TEXT, category TEXT, tier TEXT, name TEXT, email TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP);
+      CREATE TABLE IF NOT EXISTS region_requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, region TEXT, name TEXT, email TEXT, note TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`);
   }
   return _db;
@@ -74,6 +80,8 @@ function shapeZip(z, units) {
   return {
     zip: z.zip,
     leadCount: z.lead_count,
+    lat: z.lat ?? null,
+    lng: z.lng ?? null,
     shared: {
       price: z.shared_price, cap: z.shared_cap, count: z.shared_count,
       status: zipTaken ? 'unavailable' : (z.shared_count >= z.shared_cap ? 'full' : 'available'),
@@ -123,6 +131,32 @@ router.get('/zip/:zip', async (req, res) => {
     const z = await loadZip(await db(), String(req.params.zip).slice(0, 5));
     if (!z) return res.status(404).json({ success: false, error: 'ZIP not in catalog' });
     res.json({ success: true, zip: z, paymentsEnabled: stripeConfigured() });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// POST /api/catalog/waitlist  { zip, category?, tier?, name?, email }  → join the waitlist for a
+// claimed/full territory. No payment — we notify when it frees up.
+router.post('/waitlist', async (req, res) => {
+  try {
+    const { zip, category, tier, name, email } = req.body || {};
+    if (!email || !zip) return res.status(400).json({ success: false, error: 'zip and email required' });
+    const d = await db();
+    await d.run(`INSERT INTO waitlist (zip, category, tier, name, email) VALUES (?,?,?,?,?)`,
+      [String(zip).slice(0, 5), category || null, tier || null, name || null, email]);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// POST /api/catalog/region-request  { region, name?, email, note? }  → request a market we don't
+// serve yet (outside Dallas County).
+router.post('/region-request', async (req, res) => {
+  try {
+    const { region, name, email, note } = req.body || {};
+    if (!email || !region) return res.status(400).json({ success: false, error: 'region and email required' });
+    const d = await db();
+    await d.run(`INSERT INTO region_requests (region, name, email, note) VALUES (?,?,?,?)`,
+      [String(region).slice(0, 200), name || null, email, String(note || '').slice(0, 1000)]);
+    res.json({ success: true });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 

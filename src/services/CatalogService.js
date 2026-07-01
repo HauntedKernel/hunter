@@ -41,6 +41,28 @@ const CatalogService = {
     if (!res.ok) throw new Error(data.error || `confirm ${res.status}`);
     return data; // { success, paid, tier, category, zip }
   },
+
+  // Join the waitlist for a claimed/full territory.
+  async joinWaitlist({ zip, category, tier, name, email }) {
+    const res = await fetch(`${API_BASE}/api/catalog/waitlist`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ zip, category, tier, name, email }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `waitlist ${res.status}`);
+    return data;
+  },
+
+  // Request a market we don't serve yet.
+  async requestRegion({ region, name, email, note }) {
+    const res = await fetch(`${API_BASE}/api/catalog/region-request`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ region, name, email, note }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `region-request ${res.status}`);
+    return data;
+  },
 };
 
 export default CatalogService;

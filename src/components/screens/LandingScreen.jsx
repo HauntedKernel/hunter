@@ -228,31 +228,40 @@ export default function LandingScreen({ onNavigate }) {
           </div>
           <div className="lp-pricing">
             <div className="lp-price-card">
-              <div className="lp-price-name">Territory list</div>
-              <div className="lp-price"><span>$200</span>/mo</div>
+              <div className="lp-price-name">Shared Territory</div>
+              <div className="lp-price"><span>$249</span>/mo</div>
               <ul>
-                <li>Ranked, curated list for your ZIPs</li>
-                <li>Contacts + the "why" on every lead</li>
-                <li>Capped subscribers per territory</li>
+                <li>One ZIP · all categories</li>
+                <li>Ranked list + contacts + the "why"</li>
+                <li>Capped at 3 agents per ZIP</li>
               </ul>
             </div>
             <div className="lp-price-card lp-price-feature">
               <div className="lp-price-badge">Most popular</div>
-              <div className="lp-price-name">Exclusive territory</div>
-              <div className="lp-price"><span>$500</span>/mo</div>
+              <div className="lp-price-name">Exclusive Category</div>
+              <div className="lp-price"><span>$799</span>/mo</div>
               <ul>
-                <li>Your territory, <strong>nobody else's</strong></li>
-                <li>Fresh sellers each month (new distress only)</li>
-                <li>Family-decision-maker routing for seniors</li>
+                <li>One category — Residential, Land, or Commercial</li>
+                <li><strong>Yours alone</strong> — nobody else gets that list</li>
+                <li>Fresh distress each month · contacts included</li>
                 <li>First-month performance guarantee</li>
+              </ul>
+            </div>
+            <div className="lp-price-card">
+              <div className="lp-price-name">Exclusive ZIP</div>
+              <div className="lp-price"><span>$1,899</span>/mo</div>
+              <ul>
+                <li>The whole ZIP — every category</li>
+                <li>Sole owner · nobody else works it</li>
+                <li>Family-decision-maker routing for seniors</li>
               </ul>
             </div>
           </div>
           <div className="lp-offer-cta">
-            <a className="btn btn-primary lp-cta" href={`mailto:${CONTACT_EMAIL}?subject=Hunter%20territory%20—%20interested&body=Which%20area%20do%20you%20farm%3F`}>
-              Claim a territory
-            </a>
-            <span className="lp-faint">No card to start. Reply and tell me your farm area.</span>
+            <button className="btn btn-primary lp-cta" onClick={() => onNavigate && onNavigate('marketplace')}>
+              See live availability →
+            </button>
+            <span className="lp-faint">Browse the map, check what's open, claim in minutes.</span>
           </div>
         </div>
       </section>
