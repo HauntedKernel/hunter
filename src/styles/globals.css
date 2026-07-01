@@ -552,6 +552,32 @@ h1, h2, h3, .display { font-family: var(--font-display); font-weight: 600; lette
 .cart-sum-total { border-top: 1px solid var(--line); margin-top: 6px; padding-top: 10px !important; align-items: baseline; }
 .cart-sum-total > span:first-child { font-weight: 600; color: var(--ink); }
 
+/* Collapsible Dallas County → ZIP accordion */
+.terr-group-head { display: flex; align-items: baseline; justify-content: space-between; margin: 28px 0 12px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.terr-group-name { font-family: var(--font-display); font-size: 27px; color: var(--ink); }
+.terr-group-count { font-size: 11px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--faint); }
+.terr-list { display: flex; flex-direction: column; gap: 10px; }
+.terr-row { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; transition: box-shadow .2s, border-color .2s; }
+.terr-row.is-open { box-shadow: var(--sh-1); border-color: var(--brand-line); }
+.terr-row-head { width: 100%; display: flex; align-items: center; gap: 16px; padding: 15px 20px; background: none; border: none; cursor: pointer; text-align: left; font-family: var(--font-body); }
+.terr-row-head:hover { background: var(--surface-2); }
+.terr-row-zip { font-family: var(--font-display); font-size: 25px; color: var(--ink); min-width: 68px; }
+.terr-row-leads { font-size: 13px; color: var(--muted); }
+.terr-row-leads b { color: var(--ink-2); font-weight: 600; }
+.terr-row-avail { display: flex; gap: 6px; margin-left: auto; }
+.terr-row-chev { color: var(--faint); transition: transform .2s; flex-shrink: 0; }
+.terr-row.is-open .terr-row-chev { transform: rotate(180deg); }
+.terr-row-body { padding: 2px 20px 20px; border-top: 1px solid var(--line-2); }
+.terr-insights { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 14px 0 6px; }
+.terr-ins-label { font-size: 10.5px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--faint); font-weight: 600; margin-right: 2px; }
+.ins-chip { font-size: 12px; color: var(--ink-2); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-pill); padding: 4px 11px; }
+.ins-chip b { color: var(--ink); font-weight: 600; }
+.trend-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; letter-spacing: 0.3px; padding: 4px 10px; border-radius: var(--r-pill); white-space: nowrap; }
+.trend-rising { color: #a3341f; background: rgba(163,52,31,0.09); border: 1px solid rgba(163,52,31,0.25); }
+.trend-cooling { color: #43647f; background: rgba(67,100,127,0.09); border: 1px solid rgba(67,100,127,0.22); }
+.trend-steady { color: var(--muted); background: var(--surface-2); border: 1px solid var(--line); }
+@media (max-width: 620px) { .terr-row-avail { display: none; } .terr-row-zip { font-size: 22px; min-width: 56px; } }
+
 /* Landing — signal-science myth/math cards */
 .lp-grid.lp-grid-3 { grid-template-columns: repeat(3, 1fr); }
 .lp-myth { text-align: left; }
@@ -561,6 +587,12 @@ h1, h2, h3, .display { font-family: var(--font-display); font-weight: 600; lette
 .lp-math-line { font-size: 14px; color: var(--ink-2); line-height: 1.55; margin-top: 6px; }
 .lp-signal-foot { max-width: 800px; margin: 28px auto 0; text-align: center; font-size: 15.5px; color: var(--ink-2); line-height: 1.6; }
 @media (max-width: 860px) { .lp-grid.lp-grid-3 { grid-template-columns: 1fr; } }
+
+/* Landing — market-intelligence cards */
+.lp-intel { text-align: left; }
+.lp-intel-stat { font-family: var(--font-display); font-size: 46px; font-weight: 600; color: var(--brand-dark); line-height: 1; letter-spacing: -0.5px; }
+.lp-intel-stat span { display: inline-block; font-size: 14px; font-style: italic; color: var(--faint); margin-left: 8px; letter-spacing: 0; vertical-align: middle; }
+.lp-intel h3 { margin-top: 12px; }
 
 /* Service-region map */
 .region-map { position: relative; height: 440px; margin: 28px 0 6px; border: 1px solid var(--line);

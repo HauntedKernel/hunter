@@ -82,6 +82,12 @@ function shapeZip(z, units) {
     leadCount: z.lead_count,
     lat: z.lat ?? null,
     lng: z.lng ?? null,
+    // Per-ZIP market intelligence (compute_zip_stats.js). trend = fresh-distress vs county median.
+    insights: (z.new_distress_pct != null) ? {
+      elderly: z.elderly_pct ?? null,
+      freshDistress: z.new_distress_pct ?? null,
+      trend: z.trend ?? null,
+    } : null,
     shared: {
       price: z.shared_price, cap: z.shared_cap, count: z.shared_count,
       status: zipTaken ? 'unavailable' : (z.shared_count >= z.shared_cap ? 'full' : 'available'),

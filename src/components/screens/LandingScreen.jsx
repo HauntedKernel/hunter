@@ -220,30 +220,68 @@ export default function LandingScreen({ onNavigate }) {
         </div>
       </section>
 
-      {/* WHAT ONLY HUNTER DOES */}
+      {/* DOSSIER, NOT A LIST */}
       <section className="lp-section lp-section-alt">
         <div className="container">
-          <div className="lp-section-head"><h2 className="lp-h2">What only Hunter brings to the table</h2></div>
+          <div className="lp-section-head">
+            <h2 className="lp-h2">Every lead is a dossier — not a row in a spreadsheet</h2>
+            <p className="lp-section-sub">
+              Competitors sell you a name and an address and wish you luck. We hand you <strong>who
+              you&rsquo;re actually dealing with</strong> — so you walk in knowing the person, the pressure,
+              and the play.
+            </p>
+          </div>
           <div className="lp-grid">
-            <div className="lp-card">
-              <div className="lp-card-ico">🔒</div>
-              <h3>Truly exclusive — not resold</h3>
-              <p>Claim a list and it&rsquo;s <strong>yours alone</strong>. The big predictive vendors sell the same &ldquo;likely sellers&rdquo; to every agent in your ZIP — you&rsquo;re racing five people to the same door. Here, one owner per territory. Full stop.</p>
-            </div>
             <div className="lp-card">
               <div className="lp-card-ico">🕵️</div>
               <h3>The human behind the LLC</h3>
-              <p>Many of the best leads hide behind a holding company. Competitors hand you &ldquo;SMITH HOLDINGS LLC&rdquo; and a shrug. We surface the <strong>actual person</strong> — and every other distressed property they quietly own.</p>
+              <p>Half the best leads hide behind a holding company. Others hand you &ldquo;SMITH HOLDINGS LLC&rdquo; and a shrug. We <strong>crack the shell</strong> — the real person, and every other distressed property they quietly own across the county.</p>
             </div>
             <div className="lp-card">
-              <div className="lp-card-ico">🎯</div>
-              <h3>Off-market, before the sign</h3>
-              <p>Not &ldquo;might sell someday.&rdquo; Real pre-market distress — <strong>tax suits, pre-foreclosure, estates, divorce, absentee fatigue</strong> — so you&rsquo;re the first call, not the fiftieth after they list.</p>
+              <div className="lp-card-ico">📇</div>
+              <h3>Reachable — not just listed</h3>
+              <p><strong>Multiple, verified contact points</strong>, not one stale skip-trace number everyone else already dialed. For senior owners, the adult-child decision-maker too. Scrubbed against DNC before anything is marked callable.</p>
             </div>
             <div className="lp-card">
-              <div className="lp-card-ico">📈</div>
-              <h3>A probability, not a vanity score</h3>
-              <p>Calibrated against real outcomes and checked for leakage — an 80% means 80%. No inflated &ldquo;99/100&rdquo; on every row to make the list look busy.</p>
+              <div className="lp-card-ico">🧭</div>
+              <h3>The &ldquo;why now&rdquo;, spelled out</h3>
+              <p>Every lead carries the <strong>signals that fired</strong> and the story they tell — a tax suit, an estate, a divorce, an out-of-state landlord done with the calls. You open the conversation already knowing the pressure.</p>
+            </div>
+            <div className="lp-card">
+              <div className="lp-card-ico">🔒</div>
+              <h3>Yours alone — never resold</h3>
+              <p>Claim a list and it&rsquo;s exclusively yours. The big predictive vendors resell the same &ldquo;likely sellers&rdquo; to every agent in your ZIP. Here, one owner per territory — you&rsquo;re not racing five people to the same door.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* MARKET INTELLIGENCE — the moat */}
+      <section className="lp-section">
+        <div className="container">
+          <div className="lp-section-head">
+            <h2 className="lp-h2">Edges you&rsquo;d need a data scientist on staff to even find</h2>
+            <p className="lp-section-sub">
+              The real moat isn&rsquo;t the data — everyone can pull the county records. It&rsquo;s knowing
+              <strong> what to study, how to model it, and where to look</strong>. A few of the things
+              baked into your ranking that you&rsquo;d never think to test:
+            </p>
+          </div>
+          <div className="lp-grid lp-grid-3">
+            <div className="lp-card lp-intel">
+              <div className="lp-intel-stat">60<span>not 65</span></div>
+              <h3>Texans start moving at 60</h3>
+              <p>The median Texas seller is <strong>63–64</strong> — below the 65 exemption line every other list anchors on. We catch the downsizing wave <strong>years earlier</strong>, before your competition even flags the household.</p>
+            </div>
+            <div className="lp-card lp-intel">
+              <div className="lp-intel-stat">▲▼<span>per ZIP</span></div>
+              <h3>Momentum, block by block</h3>
+              <p>We benchmark each ZIP&rsquo;s <strong>fresh distress against the county</strong> — so you can claim the territory that&rsquo;s <strong>heating up</strong>, not the one that already peaked. Rising, steady, or cooling, shown on every card.</p>
+            </div>
+            <div className="lp-card lp-intel">
+              <div className="lp-intel-stat">30+<span>signals</span></div>
+              <h3>Kept only what moves the needle</h3>
+              <p>Name rarity, tenure direction, absentee fatigue, estate patterns — we&rsquo;ve <strong>tested dozens</strong> against real sales and <strong>discarded the ones that only look smart</strong>. You get the survivors, weighted by how much they actually matter.</p>
             </div>
           </div>
         </div>

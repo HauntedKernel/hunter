@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Lock, X, ArrowRight, Loader2, BellRing, Check, ShoppingBag } from 'lucide-react'
+import { Lock, X, ArrowRight, Loader2, BellRing, Check, ShoppingBag, ChevronDown, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import CatalogService from '../../services/CatalogService'
 import RegionMap from '../RegionMap'
 
-// Territory Marketplace — service-region map + ZIP × category availability. Multi-select into a
-// portfolio "selection" with a volume discount (10/15/20, capped), Stripe checkout, waitlist, and
-// a region-request form.
+// Territory Marketplace — service-region map + a Dallas County → ZIP → expanded-card accordion.
+// Multi-select into a portfolio (volume discount), Stripe checkout, waitlist, region requests.
 const CATEGORY_LABEL = { residential: 'Residential', land: 'Land', commercial: 'Commercial' }
 const CATEGORY_SUB = { residential: 'Houses & condos', land: 'Lots & acreage', commercial: 'Retail, office, industrial' }
 const money = (n) => `$${Number(n || 0).toLocaleString()}`
@@ -19,9 +18,9 @@ export default function MarketplaceScreen() {
   const [cat, setCat] = useState('all')
   const [q, setQ] = useState('')
   const [cart, setCart] = useState([])
-  const [waitlist, setWaitlist] = useState(null)   // single-item waitlist modal
+  const [waitlist, setWaitlist] = useState(null)
   const [checkoutOpen, setCheckoutOpen] = useState(false)
-  const gridRef = useRef(null)
+  const listRef = useRef(null)
 
   useEffect(() => {
     let live = true
@@ -48,7 +47,7 @@ export default function MarketplaceScreen() {
 
   const selectFromMap = (zip) => {
     setQ(zip)
-    setTimeout(() => gridRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60)
+    setTimeout(() => listRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60)
   }
 
   return (
@@ -87,9 +86,18 @@ export default function MarketplaceScreen() {
       {error && <div style={{ padding: 40, textAlign: 'center', color: 'var(--danger)' }}>Couldn&rsquo;t load the catalog: {error}</div>}
 
       {!loading && !error && (
-        <div className="mkt-grid" ref={gridRef}>
-          {zips.map(z => <TerritoryCard key={z.zip} z={z} cat={cat} cartKeys={cartKeys} onToggle={toggleCart} onWaitlist={setWaitlist} />)}
-          {zips.length === 0 && <div style={{ color: 'var(--muted)', padding: 30 }}>No territories match that filter.</div>}
+        <div ref={listRef}>
+          <div className="terr-group-head">
+            <span className="terr-group-name">Dallas County</span>
+            <span className="terr-group-count">{zips.length} ZIP {zips.length === 1 ? 'territory' : 'territories'}</span>
+          </div>
+          <div className="terr-list">
+            {zips.map(z => (
+              <TerritoryRow key={z.zip} z={z} cat={cat} cartKeys={cartKeys}
+                onToggle={toggleCart} onWaitlist={setWaitlist} defaultOpen={zips.length === 1} />
+            ))}
+            {zips.length === 0 && <div style={{ color: 'var(--muted)', padding: 30 }}>No territories match that filter.</div>}
+          </div>
         </div>
       )}
 
@@ -118,9 +126,23 @@ export default function MarketplaceScreen() {
   )
 }
 
-function TerritoryCard({ z, cat, cartKeys, onToggle, onWaitlist }) {
+function TrendChip({ trend }) {
+  if (!trend) return null
+  const map = {
+    rising: { Ico: TrendingUp, cls: 'trend-rising', label: 'Distress rising' },
+    cooling: { Ico: TrendingDown, cls: 'trend-cooling', label: 'Cooling' },
+    steady: { Ico: Minus, cls: 'trend-steady', label: 'Steady' },
+  }[trend]
+  if (!map) return null
+  const { Ico, cls, label } = map
+  return <span className={`trend-chip ${cls}`}><Ico size={12} />{label}</span>
+}
+
+function TerritoryRow({ z, cat, cartKeys, onToggle, onWaitlist, defaultOpen }) {
+  const [open, setOpen] = useState(!!defaultOpen)
   const shown = cat === 'all' ? z.categories : z.categories.filter(c => c.category === cat)
-  const taken = z.categories.some(c => c.exclusive.status === 'sold')
+  const openN = z.categories.filter(c => c.exclusive.status === 'available').length
+  const soldN = z.categories.filter(c => c.exclusive.status === 'sold').length
   const add = (tier, category, price, label) => onToggle({ tier, zip: z.zip, category, price, label })
   const wait = (tier, category, label) => onWaitlist({ tier, zip: z.zip, category, label })
   const inCart = (tier, category) => cartKeys.has(`${tier}:${z.zip}:${category || ''}`)
@@ -132,54 +154,71 @@ function TerritoryCard({ z, cat, cartKeys, onToggle, onWaitlist }) {
   )
 
   return (
-    <div className={`terr-card ${taken ? 'is-taken' : ''}`}>
-      <div className="terr-top">
-        <div className="terr-zip">{z.zip}</div>
-        <div className="terr-leads"><b>{z.leadCount.toLocaleString()}</b> sellers</div>
-      </div>
-      <div className="terr-rule" />
+    <div className={`terr-row ${open ? 'is-open' : ''} ${soldN ? 'is-taken' : ''}`}>
+      <button className="terr-row-head" onClick={() => setOpen(o => !o)}>
+        <span className="terr-row-zip">{z.zip}</span>
+        <span className="terr-row-leads"><b>{z.leadCount.toLocaleString()}</b> sellers</span>
+        <span className="terr-row-avail">
+          {openN > 0 && <span className="pill pill-available">{openN} open</span>}
+          {soldN > 0 && <span className="pill pill-sold">{soldN} held</span>}
+        </span>
+        <TrendChip trend={z.insights?.trend} />
+        <ChevronDown size={18} className="terr-row-chev" />
+      </button>
 
-      <div className="terr-cats">
-        {shown.map(c => (
-          <div className="terr-cat" key={c.category}>
-            <div className="terr-cat-name">{CATEGORY_LABEL[c.category]}<small>{c.leadCount} leads · {CATEGORY_SUB[c.category]}</small></div>
-            {c.exclusive.status === 'available'
-              ? <div className="terr-cat-price"><b>{money(c.exclusive.price)}</b>/mo</div>
-              : <div className="terr-cat-price">&nbsp;</div>}
-            {c.exclusive.status === 'available' ? (
-              <SelectBtn tier="category" category={c.category} price={c.exclusive.price}
-                label={`Exclusive ${CATEGORY_LABEL[c.category]} — ${z.zip}`} cls="pill pill-available" >Claim</SelectBtn>
-            ) : c.exclusive.status === 'sold' ? (
-              <button className="pill pill-sold" style={{ cursor: 'pointer' }} title="Join the waitlist"
-                onClick={() => wait('category', c.category, `Waitlist · ${CATEGORY_LABEL[c.category]} — ${z.zip}`)}>Sold · <b>{c.exclusive.owner}</b></button>
-            ) : <span className="pill pill-na">Unavailable</span>}
-          </div>
-        ))}
-      </div>
+      {open && (
+        <div className="terr-row-body">
+          {z.insights && (
+            <div className="terr-insights">
+              <span className="terr-ins-label">Market intelligence</span>
+              {z.insights.trend && <TrendChip trend={z.insights.trend} />}
+              {z.insights.freshDistress != null && <span className="ins-chip"><b>{z.insights.freshDistress}%</b> fresh distress (&lt;1yr)</span>}
+              {z.insights.elderly != null && <span className="ins-chip"><b>{z.insights.elderly}%</b> downsizer-age owners</span>}
+            </div>
+          )}
 
-      <div className="terr-foot">
-        <div className="terr-tiers">
-          <div className="terr-tier">
-            <span className="terr-tier-label">Shared list · <b>{money(z.shared.price)}</b>/mo
-              {z.shared.status === 'available' && ` · ${z.shared.seatsLeft} of ${z.shared.cap} seats`}
-              {z.shared.status === 'full' && ' · full'}</span>
+          <div className="terr-cats">
+            {shown.map(c => (
+              <div className="terr-cat" key={c.category}>
+                <div className="terr-cat-name">{CATEGORY_LABEL[c.category]}<small>{c.leadCount} leads · {CATEGORY_SUB[c.category]}</small></div>
+                {c.exclusive.status === 'available'
+                  ? <div className="terr-cat-price"><b>{money(c.exclusive.price)}</b>/mo</div>
+                  : <div className="terr-cat-price">&nbsp;</div>}
+                {c.exclusive.status === 'available' ? (
+                  <SelectBtn tier="category" category={c.category} price={c.exclusive.price}
+                    label={`Exclusive ${CATEGORY_LABEL[c.category]} — ${z.zip}`} cls="pill pill-available">Claim</SelectBtn>
+                ) : c.exclusive.status === 'sold' ? (
+                  <button className="pill pill-sold" style={{ cursor: 'pointer' }} title="Join the waitlist"
+                    onClick={() => wait('category', c.category, `Waitlist · ${CATEGORY_LABEL[c.category]} — ${z.zip}`)}>Sold · <b>{c.exclusive.owner}</b></button>
+                ) : <span className="pill pill-na">Unavailable</span>}
+              </div>
+            ))}
           </div>
-          <div className="terr-tier">
-            <span className="terr-tier-label">Own all of {z.zip} · <b>{money(z.zipExclusive.price)}</b>/mo</span>
-            {z.zipExclusive.status === 'sold' && <span className="pill pill-sold">Held · <b>{z.zipExclusive.owner}</b></span>}
-            {z.zipExclusive.status === 'unavailable' && <span className="pill pill-na">Partially claimed</span>}
+
+          <div className="terr-foot">
+            <div className="terr-tiers">
+              <div className="terr-tier">
+                <span className="terr-tier-label">Shared list · <b>{money(z.shared.price)}</b>/mo
+                  {z.shared.status === 'available' && ` · ${z.shared.seatsLeft} of ${z.shared.cap} seats`}
+                  {z.shared.status === 'full' && ' · full'}</span>
+              </div>
+              <div className="terr-tier">
+                <span className="terr-tier-label">Own all of {z.zip} · <b>{money(z.zipExclusive.price)}</b>/mo</span>
+                {z.zipExclusive.status === 'sold' && <span className="pill pill-sold">Held · <b>{z.zipExclusive.owner}</b></span>}
+                {z.zipExclusive.status === 'unavailable' && <span className="pill pill-na">Partially claimed</span>}
+              </div>
+            </div>
+            <div className="terr-cta">
+              {z.shared.status === 'available'
+                ? <SelectBtn tier="shared" price={z.shared.price} label={`Shared Territory — ${z.zip}`} cls="btn-lux ghost">Join Shared</SelectBtn>
+                : <button className="btn-lux ghost" onClick={() => wait('shared', null, `Waitlist · Shared — ${z.zip}`)}><BellRing size={12} style={{ marginRight: 5 }} />Waitlist</button>}
+              {z.zipExclusive.status === 'available'
+                ? <SelectBtn tier="zip" price={z.zipExclusive.price} label={`Exclusive ZIP — ${z.zip}`} cls="btn-lux">Own {z.zip}</SelectBtn>
+                : <button className="btn-lux" onClick={() => wait('zip', null, `Waitlist · Exclusive ${z.zip}`)}><BellRing size={12} style={{ marginRight: 5 }} />Waitlist</button>}
+            </div>
           </div>
         </div>
-
-        <div className="terr-cta">
-          {z.shared.status === 'available'
-            ? <SelectBtn tier="shared" price={z.shared.price} label={`Shared Territory — ${z.zip}`} cls="btn-lux ghost">Join Shared</SelectBtn>
-            : <button className="btn-lux ghost" onClick={() => wait('shared', null, `Waitlist · Shared — ${z.zip}`)}><BellRing size={12} style={{ marginRight: 5 }} />Waitlist</button>}
-          {z.zipExclusive.status === 'available'
-            ? <SelectBtn tier="zip" price={z.zipExclusive.price} label={`Exclusive ZIP — ${z.zip}`} cls="btn-lux">Own {z.zip}</SelectBtn>
-            : <button className="btn-lux" onClick={() => wait('zip', null, `Waitlist · Exclusive ${z.zip}`)}><BellRing size={12} style={{ marginRight: 5 }} />Waitlist</button>}
-        </div>
-      </div>
+      )}
     </div>
   )
 }
