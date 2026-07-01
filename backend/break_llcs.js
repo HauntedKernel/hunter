@@ -21,6 +21,7 @@ const sqlite3 = require('sqlite3');
 const serp = require('./lib/serp');
 const breaker = require('./lib/llc_breaker');
 const reverse = require('./lib/agent_reverse');
+const { classifyOwner } = require('./lib/entity_resolution');
 
 const args = Object.fromEntries(process.argv.slice(2).map(a => {
   const m = a.match(/^--([^=]+)=(.*)$/); return m ? [m[1], m[2]] : [a.replace(/^--/, ''), true];
@@ -119,7 +120,7 @@ const WRITEBACK = !args['no-writeback'];
   const catFilter = `AND substr(COALESCE(t.category_code,''),1,1) IN (${QUEUE_CATS})`;
   // TARGETED QUEUE: distinctive residential/land entities still unresolved (registry/web/linked are
   // already cracked), ranked by DOLLARS OWED within the prospect value band. Resumable; cap via --limit.
-  const targets = await all(`
+  const targetsRaw = await all(`
     SELECT oe.owner_name, MIN(t.owner_address) AS owner_address, COUNT(*) AS parcels,
            SUM(COALESCE(t.delinquent_amount,0)) AS owed,
            (SELECT officers_json FROM entity_registry e WHERE e.query_name = oe.owner_name) AS officers_json
@@ -127,13 +128,18 @@ const WRITEBACK = !args['no-writeback'];
     WHERE oe.owner_type='entity' AND oe.conf_tier IN ('high','medium') ${delqFilter} ${catFilter}
       AND oe.owner_name NOT IN (SELECT owner_name FROM llc_breaks)
     GROUP BY oe.owner_name HAVING owed >= ${VALUE_MIN} AND owed <= ${VALUE_MAX}
-    ORDER BY owed DESC LIMIT ?`, [LIMIT]);
+    ORDER BY owed DESC LIMIT ?`, [Math.max(LIMIT * 2, LIMIT + 200)]);
+  // Drop institutions the classifier catches but a stored tier may predate (churches, HOAs,
+  // schools, hospitals, municipalities) — they won't sell. Then cap to the requested LIMIT.
+  const targets = targetsRaw.filter(t => classifyOwner(t.owner_name) !== 'institution').slice(0, LIMIT);
+  const droppedInst = targetsRaw.length - targets.length;
 
   // Preview the queue (no searches, no key needed) so spend can be authorized deliberately.
   if (args.preview) {
     const totalOwed = targets.reduce((s, t) => s + (t.owed || 0), 0);
-    console.log(`\nQUEUE PREVIEW — top ${targets.length} unresolved entities by dollars owed (VALUE_MIN ${VALUE_MIN}):`);
+    console.log(`\nQUEUE PREVIEW — top ${targets.length} unresolved residential/land entities by dollars owed:`);
     console.log(`  would run ${targets.length} searches; total owed across them $${Math.round(totalOwed).toLocaleString()}`);
+    if (droppedInst) console.log(`  (excluded ${droppedInst} institutions — churches / HOAs / schools / hospitals / gov)`);
     targets.slice(0, 20).forEach((t, i) => console.log(`   ${String(i + 1).padStart(3)}. ${(t.owner_name || '').slice(0, 38).padEnd(39)} $${Math.round(t.owed || 0).toLocaleString().padStart(9)}  (${t.parcels} parcels)`));
     if (targets.length > 20) console.log(`   … +${targets.length - 20} more`);
     await new Promise(res => db.close(res));
