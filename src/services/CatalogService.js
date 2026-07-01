@@ -21,13 +21,14 @@ const CatalogService = {
     return res.json();
   },
 
-  // Start a Stripe Checkout for a tier. Returns { url } to redirect to, or throws with the
-  // server's reason (e.g. 501 when payments aren't configured yet, 409 if just-sold).
-  async checkout({ tier, zip, category, email, name }) {
+  // Start a Stripe Checkout. Pass { items:[{tier,zip,category}], name, email } for a portfolio,
+  // or a single { tier, zip, category }. Returns { url, discountPct }, or throws the server reason
+  // (501 when payments aren't configured, 409 if a territory was just claimed).
+  async checkout({ items, tier, zip, category, email, name }) {
     const res = await fetch(`${API_BASE}/api/catalog/checkout`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tier, zip, category, email, name }),
+      body: JSON.stringify({ items, tier, zip, category, email, name }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || `checkout ${res.status}`);

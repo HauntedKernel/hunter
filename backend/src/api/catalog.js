@@ -174,36 +174,65 @@ async function checkAvailable(d, tier, zip, category) {
   return { ok: false, reason: 'unknown tier' };
 }
 
-// POST /api/catalog/checkout  { tier, zip, category?, email, name }  → Stripe Checkout URL
+// Portfolio (multi-territory) discount ladder — premium-safe, hard-capped at 20% so exclusivity
+// never reads as a clearance sale. Applied as a recurring Stripe coupon (rides every month).
+function bundleDiscountPct(n) { return n >= 4 ? 20 : n === 3 ? 15 : n === 2 ? 10 : 0; }
+async function ensureCoupon(s, pct) {
+  const id = `bundle_${pct}`;
+  try { return (await s.coupons.retrieve(id)).id; }
+  catch {
+    try { return (await s.coupons.create({ id, percent_off: pct, duration: 'forever', name: `Portfolio ${pct}% off` })).id; }
+    catch { return null; }
+  }
+}
+function itemLabel(it) {
+  return it.tier === 'category'
+    ? `Exclusive ${it.category[0].toUpperCase() + it.category.slice(1)} — ${it.zip}`
+    : `${PRICING[it.tier].label} — ${it.zip}`;
+}
+
+// POST /api/catalog/checkout  { items:[{tier,zip,category?}], email, name }  (also accepts a single
+// {tier,zip,category}). Validates every item is still available, then one subscription Checkout
+// with all line items + the portfolio discount. → { url, discountPct }
 router.post('/checkout', async (req, res) => {
   try {
     const s = stripe();
     if (!s) return res.status(501).json({ success: false, error: 'Payments not configured (set STRIPE_SECRET_KEY).' });
-    const { tier, zip, category, email, name } = req.body || {};
-    if (!PRICING[tier]) return res.status(400).json({ success: false, error: 'bad tier' });
-    if (tier === 'category' && !category) return res.status(400).json({ success: false, error: 'category required' });
+    const body = req.body || {};
+    const raw = Array.isArray(body.items) && body.items.length ? body.items
+      : (body.tier ? [{ tier: body.tier, zip: body.zip, category: body.category }] : []);
+    const { email, name } = body;
+    if (!raw.length) return res.status(400).json({ success: false, error: 'no items' });
+    if (raw.length > 8) return res.status(400).json({ success: false, error: 'max 8 territories per order' });
     const d = await db();
-    const avail = await checkAvailable(d, tier, String(zip).slice(0, 5), category);
-    if (!avail.ok) return res.status(409).json({ success: false, error: `not available (${avail.reason})` });
-    const p = PRICING[tier];
-    const label = tier === 'category'
-      ? `Exclusive ${category[0].toUpperCase() + category.slice(1)} — ${zip}`
-      : `${p.label} — ${zip}`;
+    const items = [];
+    for (const it of raw) {
+      if (!PRICING[it.tier]) return res.status(400).json({ success: false, error: `bad tier ${it.tier}` });
+      if (it.tier === 'category' && !it.category) return res.status(400).json({ success: false, error: 'category required' });
+      const zip = String(it.zip).slice(0, 5);
+      const avail = await checkAvailable(d, it.tier, zip, it.category);
+      if (!avail.ok) return res.status(409).json({ success: false, error: `${itemLabel({ ...it, zip })} not available (${avail.reason})` });
+      items.push({ tier: it.tier, zip, category: it.category || '' });
+    }
+    const line_items = items.map(it => ({
+      quantity: 1,
+      price_data: {
+        currency: 'usd', unit_amount: PRICING[it.tier].amount * 100, recurring: { interval: 'month' },
+        product_data: { name: itemLabel(it), metadata: { zip: it.zip, category: it.category, tier: it.tier } },
+      },
+    }));
+    const pct = bundleDiscountPct(items.length);
+    const discounts = [];
+    if (pct > 0) { const cid = await ensureCoupon(s, pct); if (cid) discounts.push({ coupon: cid }); }
+    const itemsJson = JSON.stringify(items.map(it => ({ t: it.tier, z: it.zip, c: it.category })));
     const session = await s.checkout.sessions.create({
-      mode: 'subscription',
-      line_items: [{
-        quantity: 1,
-        price_data: {
-          currency: 'usd', unit_amount: p.amount * 100, recurring: { interval: 'month' },
-          product_data: { name: label, metadata: { zip: String(zip), category: category || '', tier } },
-        },
-      }],
+      mode: 'subscription', line_items, discounts,
       customer_email: email || undefined,
-      metadata: { tier, zip: String(zip), category: category || '', name: name || '' },
+      metadata: { items: itemsJson, name: name || '' },
+      subscription_data: { metadata: { items: itemsJson } },
       success_url: SUCCESS_URL, cancel_url: CANCEL_URL,
-      subscription_data: { metadata: { tier, zip: String(zip), category: category || '' } },
     });
-    res.json({ success: true, url: session.url, id: session.id });
+    res.json({ success: true, url: session.url, id: session.id, discountPct: pct });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -221,12 +250,10 @@ router.post('/webhook', async (req, res) => {
   }
   try {
     if (event.type === 'checkout.session.completed') {
-      const m = event.data.object.metadata || {};
-      await fulfil(await db(), {
-        tier: m.tier, zip: m.zip, category: m.category, name: m.name,
-        email: event.data.object.customer_email,
-        session: event.data.object.id, subscription: event.data.object.subscription,
-        amount: event.data.object.amount_total,
+      const obj = event.data.object; const m = obj.metadata || {};
+      await fulfilOrder(await db(), {
+        items: parseItems(m), name: m.name, email: obj.customer_email,
+        session: obj.id, subscription: obj.subscription, amount: obj.amount_total,
       });
     }
     res.json({ received: true });
@@ -247,34 +274,47 @@ router.get('/confirm', async (req, res) => {
     if (!paid) return res.json({ success: true, paid: false, status: session.status });
     const m = session.metadata || {};
     const d = await db();
-    await fulfil(d, {
-      tier: m.tier, zip: m.zip, category: m.category, name: m.name,
+    const affected = await fulfilOrder(d, {
+      items: parseItems(m), name: m.name,
       email: session.customer_details?.email || session.customer_email,
       session: session.id, subscription: session.subscription, amount: session.amount_total,
     });
-    res.json({ success: true, paid: true, tier: m.tier, category: m.category || null, zip: await loadZip(d, m.zip) });
+    const zips = await Promise.all(affected.map(z => loadZip(d, z)));
+    res.json({ success: true, paid: true, count: affected.length, zips, zip: zips[0] || null });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// Apply a completed purchase to the inventory (the ratchet: category-exclusive removes that
-// category from shared + blocks the ZIP-wide exclusive; ZIP-exclusive locks the whole ZIP).
-async function fulfil(d, o) {
+// Apply ONE line item to the inventory (the ratchet: category-exclusive removes that category from
+// shared + blocks the ZIP-wide exclusive; ZIP-exclusive locks the whole ZIP; shared adds a seat).
+async function fulfilOne(d, tier, zip, category, owner) {
   const now = new Date().toISOString().slice(0, 10);
-  const owner = o.name || o.email || 'New subscriber';
-  if (o.tier === 'category') {
+  if (tier === 'category') {
     await d.run(`UPDATE territory_units SET excl_owner=?, excl_since=? WHERE zip=? AND category=? AND excl_owner IS NULL`,
-      [owner, now, o.zip, o.category]);
-  } else if (o.tier === 'zip') {
+      [owner, now, zip, category]);
+  } else if (tier === 'zip') {
     await d.run(`UPDATE territory_zips SET zip_excl_owner=?, zip_excl_since=? WHERE zip=? AND zip_excl_owner IS NULL`,
-      [owner, now, o.zip]);
-  } else if (o.tier === 'shared') {
-    await d.run(`UPDATE territory_zips SET shared_count=MIN(shared_cap, shared_count+1) WHERE zip=?`, [o.zip]);
+      [owner, now, zip]);
+  } else if (tier === 'shared') {
+    await d.run(`UPDATE territory_zips SET shared_count=MIN(shared_cap, shared_count+1) WHERE zip=?`, [zip]);
   }
-  await d.run(`INSERT OR REPLACE INTO territory_orders
-    (id, zip, category, tier, customer_name, customer_email, amount, stripe_session, stripe_subscription, status)
-    VALUES (?,?,?,?,?,?,?,?,?,?)`,
-    [o.session || ('ord_' + now + '_' + o.zip), o.zip, o.category || null, o.tier, o.name || null,
-     o.email || null, o.amount || null, o.session || null, o.subscription || null, 'active']);
 }
+
+// Fulfil a whole order (1+ items). Idempotent per (session,index). Returns the affected ZIPs.
+async function fulfilOrder(d, o) {
+  const owner = o.name || o.email || 'New subscriber';
+  const items = o.items || [];
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    await fulfilOne(d, it.t, it.z, it.c, owner);
+    await d.run(`INSERT OR REPLACE INTO territory_orders
+      (id, zip, category, tier, customer_name, customer_email, amount, stripe_session, stripe_subscription, status)
+      VALUES (?,?,?,?,?,?,?,?,?,?)`,
+      [(o.session || 'ord') + ':' + i, it.z, it.c || null, it.t, o.name || null,
+       o.email || null, o.amount || null, o.session || null, o.subscription || null, 'active']);
+  }
+  return [...new Set(items.map(i => i.z))];
+}
+
+function parseItems(m) { try { return JSON.parse(m.items || '[]'); } catch { return []; } }
 
 module.exports = router;

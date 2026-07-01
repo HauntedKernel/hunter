@@ -180,6 +180,75 @@ export default function LandingScreen({ onNavigate }) {
         </div>
       </section>
 
+      {/* SIGNAL SCIENCE — the counter-intuitive edge */}
+      <section className="lp-section">
+        <div className="container">
+          <div className="lp-section-head">
+            <h2 className="lp-h2">Some of what &ldquo;everyone knows&rdquo; about motivated sellers is quietly costing you</h2>
+            <p className="lp-section-sub">
+              Where people will sell is often intuitive — and that intuition is a real edge. But some
+              of the criteria you&rsquo;d swear give you an advantage are, measured against actual sales,
+              putting you at a <strong>mathematical disadvantage</strong>. We tested the folklore against
+              hundreds of thousands of real ownership changes. Here&rsquo;s where it breaks.
+            </p>
+          </div>
+          <div className="lp-grid lp-grid-3">
+            <div className="lp-card lp-myth">
+              <div className="lp-myth-tag">The instinct</div>
+              <p className="lp-myth-line">&ldquo;They&rsquo;ve owned it for decades — they must be ready to sell.&rdquo;</p>
+              <div className="lp-math-tag">What the data says</div>
+              <p className="lp-math-line">Long tenure is <strong>negatively</strong> predictive. The owners who actually move are <strong>recent buyers who hit distress</strong> — the opposite of the classic farming list. Chase decades-held homes and you&rsquo;re fishing where the fish aren&rsquo;t.</p>
+            </div>
+            <div className="lp-card lp-myth">
+              <div className="lp-myth-tag">The instinct</div>
+              <p className="lp-myth-line">&ldquo;Open code violations mean a distressed, motivated owner.&rdquo;</p>
+              <div className="lp-math-tag">What the data says</div>
+              <p className="lp-math-line">Once you account for delinquency and absentee ownership, open code cases add <strong>almost zero</strong> extra lift. It <em>feels</em> like blood in the water — it&rsquo;s mostly noise you&rsquo;d burn weeks chasing.</p>
+            </div>
+            <div className="lp-card lp-myth">
+              <div className="lp-myth-tag">The instinct</div>
+              <p className="lp-myth-line">&ldquo;Free-and-clear owners can afford to sell, so they will.&rdquo;</p>
+              <div className="lp-math-tag">What the data says</div>
+              <p className="lp-math-line">Equity isn&rsquo;t motivation. What moves people is <strong>distress plus a life event</strong> — a tax suit, an estate, a divorce, an absentee landlord tired of the calls. We weight what precedes a sale, not what looks tidy.</p>
+            </div>
+          </div>
+          <p className="lp-signal-foot">
+            That&rsquo;s the difference between a <em>filter</em> and a <em>model</em>: a filter treats every
+            &ldquo;distress&rdquo; signal as equal. Ours knows which ones <strong>lie</strong> — and re-weights
+            them against what actually happened on the ground.
+          </p>
+        </div>
+      </section>
+
+      {/* WHAT ONLY HUNTER DOES */}
+      <section className="lp-section lp-section-alt">
+        <div className="container">
+          <div className="lp-section-head"><h2 className="lp-h2">What only Hunter brings to the table</h2></div>
+          <div className="lp-grid">
+            <div className="lp-card">
+              <div className="lp-card-ico">🔒</div>
+              <h3>Truly exclusive — not resold</h3>
+              <p>Claim a list and it&rsquo;s <strong>yours alone</strong>. The big predictive vendors sell the same &ldquo;likely sellers&rdquo; to every agent in your ZIP — you&rsquo;re racing five people to the same door. Here, one owner per territory. Full stop.</p>
+            </div>
+            <div className="lp-card">
+              <div className="lp-card-ico">🕵️</div>
+              <h3>The human behind the LLC</h3>
+              <p>Many of the best leads hide behind a holding company. Competitors hand you &ldquo;SMITH HOLDINGS LLC&rdquo; and a shrug. We surface the <strong>actual person</strong> — and every other distressed property they quietly own.</p>
+            </div>
+            <div className="lp-card">
+              <div className="lp-card-ico">🎯</div>
+              <h3>Off-market, before the sign</h3>
+              <p>Not &ldquo;might sell someday.&rdquo; Real pre-market distress — <strong>tax suits, pre-foreclosure, estates, divorce, absentee fatigue</strong> — so you&rsquo;re the first call, not the fiftieth after they list.</p>
+            </div>
+            <div className="lp-card">
+              <div className="lp-card-ico">📈</div>
+              <h3>A probability, not a vanity score</h3>
+              <p>Calibrated against real outcomes and checked for leakage — an 80% means 80%. No inflated &ldquo;99/100&rdquo; on every row to make the list look busy.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* HOW IT WORKS (the resume layer) */}
       <section className="lp-section">
         <div className="container">

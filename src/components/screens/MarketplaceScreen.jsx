@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Lock, X, ArrowRight, Loader2, BellRing } from 'lucide-react'
+import { Lock, X, ArrowRight, Loader2, BellRing, Check, ShoppingBag } from 'lucide-react'
 import CatalogService from '../../services/CatalogService'
 import RegionMap from '../RegionMap'
 
-// Territory Marketplace — service-region map + ZIP × category availability with Stripe checkout,
-// waitlist for claimed territories, and a request form for markets we don't serve yet.
+// Territory Marketplace — service-region map + ZIP × category availability. Multi-select into a
+// portfolio "selection" with a volume discount (10/15/20, capped), Stripe checkout, waitlist, and
+// a region-request form.
 const CATEGORY_LABEL = { residential: 'Residential', land: 'Land', commercial: 'Commercial' }
 const CATEGORY_SUB = { residential: 'Houses & condos', land: 'Lots & acreage', commercial: 'Retail, office, industrial' }
 const money = (n) => `$${Number(n || 0).toLocaleString()}`
+const discountPct = (n) => (n >= 4 ? 20 : n === 3 ? 15 : n === 2 ? 10 : 0)
+const keyOf = (it) => `${it.tier}:${it.zip}:${it.category || ''}`
 
 export default function MarketplaceScreen() {
   const [data, setData] = useState(null)
@@ -15,7 +18,9 @@ export default function MarketplaceScreen() {
   const [error, setError] = useState(null)
   const [cat, setCat] = useState('all')
   const [q, setQ] = useState('')
-  const [modal, setModal] = useState(null)   // { kind:'checkout'|'waitlist', tier, zip, category, price, label }
+  const [cart, setCart] = useState([])
+  const [waitlist, setWaitlist] = useState(null)   // single-item waitlist modal
+  const [checkoutOpen, setCheckoutOpen] = useState(false)
   const gridRef = useRef(null)
 
   useEffect(() => {
@@ -33,19 +38,27 @@ export default function MarketplaceScreen() {
     return list
   }, [data, cat, q])
 
+  const cartKeys = useMemo(() => new Set(cart.map(keyOf)), [cart])
+  const toggleCart = (it) => setCart(c => c.some(x => keyOf(x) === keyOf(it)) ? c.filter(x => keyOf(x) !== keyOf(it)) : [...c, it])
+  const removeCart = (k) => setCart(c => c.filter(x => keyOf(x) !== k))
+
+  const subtotal = cart.reduce((s, it) => s + it.price, 0)
+  const pct = discountPct(cart.length)
+  const total = Math.round(subtotal * (1 - pct / 100))
+
   const selectFromMap = (zip) => {
     setQ(zip)
     setTimeout(() => gridRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60)
   }
 
   return (
-    <div className="mkt">
+    <div className="mkt" style={{ paddingBottom: cart.length ? 110 : 80 }}>
       <header className="mkt-head">
         <div className="mkt-eyebrow">By Invitation · Dallas County</div>
         <h1 className="mkt-title">Claim Your Territory</h1>
         <p className="mkt-sub">
-          Off-market motivated sellers, delivered monthly. One agent per exclusive list —
-          when a territory is claimed, it&rsquo;s yours alone. Browse what remains open.
+          Off-market motivated sellers, delivered monthly. One agent per exclusive list — when a
+          territory is claimed, it&rsquo;s yours alone. Build a portfolio and save up to 20%.
         </p>
         {data && (
           <div className="mkt-stats">
@@ -75,24 +88,48 @@ export default function MarketplaceScreen() {
 
       {!loading && !error && (
         <div className="mkt-grid" ref={gridRef}>
-          {zips.map(z => <TerritoryCard key={z.zip} z={z} cat={cat} onOpen={setModal} />)}
+          {zips.map(z => <TerritoryCard key={z.zip} z={z} cat={cat} cartKeys={cartKeys} onToggle={toggleCart} onWaitlist={setWaitlist} />)}
           {zips.length === 0 && <div style={{ color: 'var(--muted)', padding: 30 }}>No territories match that filter.</div>}
         </div>
       )}
 
       <RegionRequest />
 
-      {modal?.kind === 'checkout' && <CheckoutModal sel={modal} paymentsEnabled={data?.paymentsEnabled} onClose={() => setModal(null)} />}
-      {modal?.kind === 'waitlist' && <WaitlistModal sel={modal} onClose={() => setModal(null)} />}
+      {cart.length > 0 && (
+        <div className="cart-bar">
+          <div className="cart-bar-info">
+            <ShoppingBag size={18} />
+            <span><b>{cart.length}</b> territ{cart.length > 1 ? 'ories' : 'ory'} selected</span>
+            {pct > 0 && <span className="cart-save">Portfolio discount −{pct}%</span>}
+            <span className="cart-total">{money(total)}<span className="cart-per">/mo</span>
+              {pct > 0 && <span className="cart-strike">{money(subtotal)}</span>}</span>
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button className="btn-lux ghost" onClick={() => setCart([])}>Clear</button>
+            <button className="btn-lux" onClick={() => setCheckoutOpen(true)}>Review &amp; checkout <ArrowRight size={14} style={{ marginLeft: 6 }} /></button>
+          </div>
+        </div>
+      )}
+
+      {checkoutOpen && <CheckoutModal cart={cart} subtotal={subtotal} pct={pct} total={total}
+        paymentsEnabled={data?.paymentsEnabled} onRemove={removeCart} onClose={() => setCheckoutOpen(false)} />}
+      {waitlist && <WaitlistModal sel={waitlist} onClose={() => setWaitlist(null)} />}
     </div>
   )
 }
 
-function TerritoryCard({ z, cat, onOpen }) {
+function TerritoryCard({ z, cat, cartKeys, onToggle, onWaitlist }) {
   const shown = cat === 'all' ? z.categories : z.categories.filter(c => c.category === cat)
   const taken = z.categories.some(c => c.exclusive.status === 'sold')
-  const claim = (tier, category, price, label) => onOpen({ kind: 'checkout', tier, zip: z.zip, category, price, label })
-  const wait = (tier, category, label) => onOpen({ kind: 'waitlist', tier, zip: z.zip, category, label })
+  const add = (tier, category, price, label) => onToggle({ tier, zip: z.zip, category, price, label })
+  const wait = (tier, category, label) => onWaitlist({ tier, zip: z.zip, category, label })
+  const inCart = (tier, category) => cartKeys.has(`${tier}:${z.zip}:${category || ''}`)
+
+  const SelectBtn = ({ tier, category, price, label, cls, children }) => (
+    <button className={`${cls} ${inCart(tier, category) ? 'in-cart' : ''}`} onClick={() => add(tier, category, price, label)}>
+      {inCart(tier, category) ? <><Check size={12} style={{ marginRight: 4 }} />Selected</> : children}
+    </button>
+  )
 
   return (
     <div className={`terr-card ${taken ? 'is-taken' : ''}`}>
@@ -110,8 +147,8 @@ function TerritoryCard({ z, cat, onOpen }) {
               ? <div className="terr-cat-price"><b>{money(c.exclusive.price)}</b>/mo</div>
               : <div className="terr-cat-price">&nbsp;</div>}
             {c.exclusive.status === 'available' ? (
-              <button className="pill pill-available" style={{ cursor: 'pointer' }}
-                onClick={() => claim('category', c.category, c.exclusive.price, `Exclusive ${CATEGORY_LABEL[c.category]} — ${z.zip}`)}>Claim</button>
+              <SelectBtn tier="category" category={c.category} price={c.exclusive.price}
+                label={`Exclusive ${CATEGORY_LABEL[c.category]} — ${z.zip}`} cls="pill pill-available" >Claim</SelectBtn>
             ) : c.exclusive.status === 'sold' ? (
               <button className="pill pill-sold" style={{ cursor: 'pointer' }} title="Join the waitlist"
                 onClick={() => wait('category', c.category, `Waitlist · ${CATEGORY_LABEL[c.category]} — ${z.zip}`)}>Sold · <b>{c.exclusive.owner}</b></button>
@@ -125,8 +162,7 @@ function TerritoryCard({ z, cat, onOpen }) {
           <div className="terr-tier">
             <span className="terr-tier-label">Shared list · <b>{money(z.shared.price)}</b>/mo
               {z.shared.status === 'available' && ` · ${z.shared.seatsLeft} of ${z.shared.cap} seats`}
-              {z.shared.status === 'full' && ' · full'}
-            </span>
+              {z.shared.status === 'full' && ' · full'}</span>
           </div>
           <div className="terr-tier">
             <span className="terr-tier-label">Own all of {z.zip} · <b>{money(z.zipExclusive.price)}</b>/mo</span>
@@ -137,10 +173,10 @@ function TerritoryCard({ z, cat, onOpen }) {
 
         <div className="terr-cta">
           {z.shared.status === 'available'
-            ? <button className="btn-lux ghost" onClick={() => claim('shared', null, z.shared.price, `Shared Territory — ${z.zip}`)}>Join Shared</button>
+            ? <SelectBtn tier="shared" price={z.shared.price} label={`Shared Territory — ${z.zip}`} cls="btn-lux ghost">Join Shared</SelectBtn>
             : <button className="btn-lux ghost" onClick={() => wait('shared', null, `Waitlist · Shared — ${z.zip}`)}><BellRing size={12} style={{ marginRight: 5 }} />Waitlist</button>}
           {z.zipExclusive.status === 'available'
-            ? <button className="btn-lux" onClick={() => claim('zip', null, z.zipExclusive.price, `Exclusive ZIP — ${z.zip}`)}>Own {z.zip}</button>
+            ? <SelectBtn tier="zip" price={z.zipExclusive.price} label={`Exclusive ZIP — ${z.zip}`} cls="btn-lux">Own {z.zip}</SelectBtn>
             : <button className="btn-lux" onClick={() => wait('zip', null, `Waitlist · Exclusive ${z.zip}`)}><BellRing size={12} style={{ marginRight: 5 }} />Waitlist</button>}
         </div>
       </div>
@@ -152,32 +188,43 @@ function Field({ label, ...props }) {
   return <div className="mkt-field"><label>{label}</label><input {...props} /></div>
 }
 
-function CheckoutModal({ sel, paymentsEnabled, onClose }) {
+function CheckoutModal({ cart, subtotal, pct, total, paymentsEnabled, onRemove, onClose }) {
   const [name, setName] = useState(''); const [email, setEmail] = useState('')
   const [busy, setBusy] = useState(false); const [err, setErr] = useState(null); const [done, setDone] = useState(false)
   const submit = async () => {
     setErr(null); setBusy(true)
     try {
-      const r = await CatalogService.checkout({ tier: sel.tier, zip: sel.zip, category: sel.category, name, email })
+      const items = cart.map(it => ({ tier: it.tier, zip: it.zip, category: it.category }))
+      const r = await CatalogService.checkout({ items, name, email })
       if (r.url) { window.location.href = r.url; return }
       setDone(true)
     } catch (e) { setErr(e.message) } finally { setBusy(false) }
   }
   return (
-    <Modal title={done ? 'Request received' : 'Reserve territory'} onClose={onClose}>
-      {done ? <p className="mkt-modal-sub">Thank you — we&rsquo;ll finalize <b>{sel.label}</b> shortly. Your seat is held.</p> : (
+    <Modal title={done ? 'Request received' : 'Your selection'} onClose={onClose}>
+      {done ? <p className="mkt-modal-sub">Thank you — we&rsquo;ll finalize your territories shortly. Your seats are held.</p> : (
         <>
-          <p className="mkt-modal-sub">{sel.label}</p>
+          <div className="cart-list">
+            {cart.map(it => (
+              <div className="cart-item" key={keyOf(it)}>
+                <span>{it.label}</span>
+                <span className="cart-item-r">{money(it.price)}<button className="cart-x" onClick={() => onRemove(keyOf(it))}><X size={13} /></button></span>
+              </div>
+            ))}
+          </div>
+          <div className="cart-sum">
+            <div><span>Subtotal</span><span>{money(subtotal)}/mo</span></div>
+            {pct > 0 && <div className="cart-sum-disc"><span>Portfolio discount ({cart.length} territories)</span><span>−{pct}%</span></div>}
+            <div className="cart-sum-total"><span>Total</span><span className="amt">{money(total)}<span style={{ fontSize: 14, color: 'var(--muted)' }}>/mo</span></span></div>
+          </div>
           <Field label="Full name" value={name} onChange={e => setName(e.target.value)} placeholder="Jane Agent" />
           <Field label="Email" value={email} onChange={e => setEmail(e.target.value)} placeholder="jane@brokerage.com" type="email" />
-          <div className="mkt-modal-line"><span style={{ color: 'var(--muted)', fontSize: 13 }}>Monthly</span>
-            <span className="amt">{money(sel.price)}<span style={{ fontSize: 14, color: 'var(--muted)' }}>/mo</span></span></div>
           {err && <div style={{ color: 'var(--danger)', fontSize: 13, marginTop: 10 }}>{err}</div>}
-          <button className="btn-lux" style={{ width: '100%', marginTop: 16 }} onClick={submit} disabled={busy || !email}>
+          <button className="btn-lux" style={{ width: '100%', marginTop: 16 }} onClick={submit} disabled={busy || !email || !cart.length}>
             {busy ? <Loader2 size={14} className="spin" /> : <>Continue to secure checkout <ArrowRight size={14} style={{ marginLeft: 6 }} /></>}
           </button>
           <p className="mkt-note">{paymentsEnabled
-            ? <><Lock size={11} style={{ verticalAlign: -1 }} /> Secured by Stripe. Cancel anytime. First-month performance guarantee on exclusives.</>
+            ? <><Lock size={11} style={{ verticalAlign: -1 }} /> Secured by Stripe. The portfolio discount applies every month. Cancel anytime.</>
             : 'Concierge onboarding — submit your details and our team will confirm availability by hand.'}</p>
         </>
       )}

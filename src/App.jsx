@@ -32,8 +32,8 @@ function App() {
       if (sid) {
         CatalogService.confirm(sid)
           .then(r => setBanner(r.paid
-            ? { kind: 'ok', text: `Welcome aboard — ${r.category ? r.category + ' in ' : ''}${r.zip?.zip || ''} is now yours. Your first list is on the way.` }
-            : { kind: 'info', text: 'Payment is processing — your territory will lock in momentarily.' }))
+            ? { kind: 'ok', text: `Welcome aboard — ${r.count > 1 ? `${r.count} territories are` : `${r.zip?.zip || 'your territory'} is`} now yours. Your first ${r.count > 1 ? 'lists are' : 'list is'} on the way.` }
+            : { kind: 'info', text: 'Payment is processing — your territories will lock in momentarily.' }))
           .catch(() => setBanner({ kind: 'ok', text: 'Thank you — your subscription is confirmed.' }))
       } else setBanner({ kind: 'ok', text: 'Thank you — your subscription is confirmed.' })
       clean()
