@@ -181,8 +181,21 @@ async function checkAvailable(d, tier, zip, category) {
 }
 
 // Portfolio (multi-territory) discount ladder — premium-safe, hard-capped at 20% so exclusivity
-// never reads as a clearance sale. Applied as a recurring Stripe coupon (rides every month).
+// never reads as a clearance sale. Applied as a recurring Stripe coupon (rides every period).
 function bundleDiscountPct(n) { return n >= 4 ? 20 : n === 3 ? 15 : n === 2 ? 10 : 0; }
+// Term-commitment discount. Combined with the volume discount but the TOTAL is capped at 25% so
+// the two levers never stack into a fire-sale.
+const TERM_PCT = { 1: 0, 3: 5, 6: 10, 12: 15 };
+const DISCOUNT_CAP = 25;
+function combinedDiscountPct(itemCount, term) {
+  return Math.min(DISCOUNT_CAP, bundleDiscountPct(itemCount) + (TERM_PCT[term] || 0));
+}
+// Stripe billing interval for a term in months (billed once per term at term × monthly price).
+function termInterval(term) {
+  if (term === 12) return { interval: 'year' };
+  if (term === 1) return { interval: 'month' };
+  return { interval: 'month', interval_count: term };
+}
 async function ensureCoupon(s, pct) {
   const id = `bundle_${pct}`;
   try { return (await s.coupons.retrieve(id)).id; }
@@ -208,6 +221,7 @@ router.post('/checkout', async (req, res) => {
     const raw = Array.isArray(body.items) && body.items.length ? body.items
       : (body.tier ? [{ tier: body.tier, zip: body.zip, category: body.category }] : []);
     const { email, name } = body;
+    const term = [1, 3, 6, 12].includes(Number(body.term)) ? Number(body.term) : 1;
     if (!raw.length) return res.status(400).json({ success: false, error: 'no items' });
     if (raw.length > 8) return res.status(400).json({ success: false, error: 'max 8 territories per order' });
     const d = await db();
@@ -220,25 +234,27 @@ router.post('/checkout', async (req, res) => {
       if (!avail.ok) return res.status(409).json({ success: false, error: `${itemLabel({ ...it, zip })} not available (${avail.reason})` });
       items.push({ tier: it.tier, zip, category: it.category || '' });
     }
+    // Bill once per term (term × monthly price); the combined discount coupon rides every cycle.
+    const recurring = termInterval(term);
     const line_items = items.map(it => ({
       quantity: 1,
       price_data: {
-        currency: 'usd', unit_amount: PRICING[it.tier].amount * 100, recurring: { interval: 'month' },
+        currency: 'usd', unit_amount: PRICING[it.tier].amount * term * 100, recurring,
         product_data: { name: itemLabel(it), metadata: { zip: it.zip, category: it.category, tier: it.tier } },
       },
     }));
-    const pct = bundleDiscountPct(items.length);
+    const pct = combinedDiscountPct(items.length, term);
     const discounts = [];
     if (pct > 0) { const cid = await ensureCoupon(s, pct); if (cid) discounts.push({ coupon: cid }); }
     const itemsJson = JSON.stringify(items.map(it => ({ t: it.tier, z: it.zip, c: it.category })));
     const session = await s.checkout.sessions.create({
       mode: 'subscription', line_items, discounts,
       customer_email: email || undefined,
-      metadata: { items: itemsJson, name: name || '' },
-      subscription_data: { metadata: { items: itemsJson } },
+      metadata: { items: itemsJson, name: name || '', term: String(term) },
+      subscription_data: { metadata: { items: itemsJson, term: String(term) } },
       success_url: SUCCESS_URL, cancel_url: CANCEL_URL,
     });
-    res.json({ success: true, url: session.url, id: session.id, discountPct: pct });
+    res.json({ success: true, url: session.url, id: session.id, discountPct: pct, term });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 

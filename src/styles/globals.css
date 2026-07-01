@@ -551,6 +551,21 @@ h1, h2, h3, .display { font-family: var(--font-display); font-weight: 600; lette
 .cart-sum-disc { color: var(--brand-dark) !important; font-weight: 600; }
 .cart-sum-total { border-top: 1px solid var(--line); margin-top: 6px; padding-top: 10px !important; align-items: baseline; }
 .cart-sum-total > span:first-child { font-weight: 600; color: var(--ink); }
+.cart-sum-cap { color: var(--muted) !important; font-size: 12px; font-style: italic; }
+.cart-billed { text-align: right; font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+/* Term / commitment selector */
+.term-block { margin: 16px 0 4px; }
+.term-label { font-size: 11px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--faint); font-weight: 600; margin-bottom: 8px; }
+.term-save { color: var(--brand-dark); }
+.term-seg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.term-opt { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 9px 4px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--ink-2); border-radius: var(--r-sm); cursor: pointer; font-family: var(--font-body);
+  font-size: 13px; font-weight: 600; transition: all .15s; }
+.term-opt small { font-size: 10.5px; font-weight: 600; color: var(--brand-dark); }
+.term-opt:hover { border-color: var(--brand-line); }
+.term-opt.active { background: var(--ink); border-color: var(--ink); color: #fff; }
+.term-opt.active small { color: #e9d9a8; }
 
 /* Collapsible Dallas County → ZIP accordion */
 .terr-group-head { display: flex; align-items: baseline; justify-content: space-between; margin: 28px 0 12px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }

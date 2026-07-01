@@ -24,11 +24,11 @@ const CatalogService = {
   // Start a Stripe Checkout. Pass { items:[{tier,zip,category}], name, email } for a portfolio,
   // or a single { tier, zip, category }. Returns { url, discountPct }, or throws the server reason
   // (501 when payments aren't configured, 409 if a territory was just claimed).
-  async checkout({ items, tier, zip, category, email, name }) {
+  async checkout({ items, tier, zip, category, email, name, term }) {
     const res = await fetch(`${API_BASE}/api/catalog/checkout`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items, tier, zip, category, email, name }),
+      body: JSON.stringify({ items, tier, zip, category, email, name, term }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || `checkout ${res.status}`);

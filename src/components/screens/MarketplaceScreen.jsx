@@ -10,6 +10,14 @@ const CATEGORY_SUB = { residential: 'Houses & condos', land: 'Lots & acreage', c
 const money = (n) => `$${Number(n || 0).toLocaleString()}`
 const discountPct = (n) => (n >= 4 ? 20 : n === 3 ? 15 : n === 2 ? 10 : 0)
 const keyOf = (it) => `${it.tier}:${it.zip}:${it.category || ''}`
+// Term-commitment options. Combined with the volume discount, capped at 25%.
+const TERMS = [
+  { m: 1, label: 'Monthly', pct: 0, note: 'billed monthly' },
+  { m: 3, label: '3 months', pct: 5, note: 'billed quarterly' },
+  { m: 6, label: '6 months', pct: 10, note: 'billed every 6 months' },
+  { m: 12, label: 'Annual', pct: 15, note: 'billed annually' },
+]
+const DISCOUNT_CAP = 25
 
 export default function MarketplaceScreen() {
   const [data, setData] = useState(null)
@@ -119,7 +127,7 @@ export default function MarketplaceScreen() {
         </div>
       )}
 
-      {checkoutOpen && <CheckoutModal cart={cart} subtotal={subtotal} pct={pct} total={total}
+      {checkoutOpen && <CheckoutModal cart={cart} subtotal={subtotal}
         paymentsEnabled={data?.paymentsEnabled} onRemove={removeCart} onClose={() => setCheckoutOpen(false)} />}
       {waitlist && <WaitlistModal sel={waitlist} onClose={() => setWaitlist(null)} />}
     </div>
@@ -227,18 +235,29 @@ function Field({ label, ...props }) {
   return <div className="mkt-field"><label>{label}</label><input {...props} /></div>
 }
 
-function CheckoutModal({ cart, subtotal, pct, total, paymentsEnabled, onRemove, onClose }) {
+function CheckoutModal({ cart, subtotal, paymentsEnabled, onRemove, onClose }) {
   const [name, setName] = useState(''); const [email, setEmail] = useState('')
+  const [term, setTerm] = useState(1)
   const [busy, setBusy] = useState(false); const [err, setErr] = useState(null); const [done, setDone] = useState(false)
+
+  const volumePct = discountPct(cart.length)
+  const t = TERMS.find(x => x.m === term) || TERMS[0]
+  const rawPct = volumePct + t.pct
+  const combined = Math.min(DISCOUNT_CAP, rawPct)
+  const capped = rawPct > DISCOUNT_CAP
+  const effMonthly = Math.round(subtotal * (1 - combined / 100))
+  const billed = effMonthly * term
+
   const submit = async () => {
     setErr(null); setBusy(true)
     try {
       const items = cart.map(it => ({ tier: it.tier, zip: it.zip, category: it.category }))
-      const r = await CatalogService.checkout({ items, name, email })
+      const r = await CatalogService.checkout({ items, name, email, term })
       if (r.url) { window.location.href = r.url; return }
       setDone(true)
     } catch (e) { setErr(e.message) } finally { setBusy(false) }
   }
+
   return (
     <Modal title={done ? 'Request received' : 'Your selection'} onClose={onClose}>
       {done ? <p className="mkt-modal-sub">Thank you — we&rsquo;ll finalize your territories shortly. Your seats are held.</p> : (
@@ -251,11 +270,30 @@ function CheckoutModal({ cart, subtotal, pct, total, paymentsEnabled, onRemove, 
               </div>
             ))}
           </div>
+
+          <div className="term-block">
+            <div className="term-label">Commitment{t.pct > 0 && <span className="term-save"> · save {t.pct}%</span>}</div>
+            <div className="term-seg">
+              {TERMS.map(x => (
+                <button key={x.m} className={`term-opt ${term === x.m ? 'active' : ''}`} onClick={() => setTerm(x.m)}>
+                  {x.label}{x.pct > 0 && <small>−{x.pct}%</small>}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="cart-sum">
             <div><span>Subtotal</span><span>{money(subtotal)}/mo</span></div>
-            {pct > 0 && <div className="cart-sum-disc"><span>Portfolio discount ({cart.length} territories)</span><span>−{pct}%</span></div>}
-            <div className="cart-sum-total"><span>Total</span><span className="amt">{money(total)}<span style={{ fontSize: 14, color: 'var(--muted)' }}>/mo</span></span></div>
+            {volumePct > 0 && <div className="cart-sum-disc"><span>Portfolio discount ({cart.length} territories)</span><span>−{volumePct}%</span></div>}
+            {t.pct > 0 && <div className="cart-sum-disc"><span>{t.label} commitment</span><span>−{t.pct}%</span></div>}
+            {capped && <div className="cart-sum-cap"><span>Combined discount capped</span><span>−{DISCOUNT_CAP}%</span></div>}
+            <div className="cart-sum-total">
+              <span>Total</span>
+              <span className="amt">{money(effMonthly)}<span style={{ fontSize: 14, color: 'var(--muted)' }}>/mo</span></span>
+            </div>
+            <div className="cart-billed">{term === 1 ? 'billed monthly' : `${money(billed)} ${t.note}`}</div>
           </div>
+
           <Field label="Full name" value={name} onChange={e => setName(e.target.value)} placeholder="Jane Agent" />
           <Field label="Email" value={email} onChange={e => setEmail(e.target.value)} placeholder="jane@brokerage.com" type="email" />
           {err && <div style={{ color: 'var(--danger)', fontSize: 13, marginTop: 10 }}>{err}</div>}
@@ -263,7 +301,7 @@ function CheckoutModal({ cart, subtotal, pct, total, paymentsEnabled, onRemove, 
             {busy ? <Loader2 size={14} className="spin" /> : <>Continue to secure checkout <ArrowRight size={14} style={{ marginLeft: 6 }} /></>}
           </button>
           <p className="mkt-note">{paymentsEnabled
-            ? <><Lock size={11} style={{ verticalAlign: -1 }} /> Secured by Stripe. The portfolio discount applies every month. Cancel anytime.</>
+            ? <><Lock size={11} style={{ verticalAlign: -1 }} /> Secured by Stripe. Discounts apply every cycle. {term === 1 ? 'Cancel anytime.' : 'First-month performance guarantee — money back if the leads don’t beat your current source.'}</>
             : 'Concierge onboarding — submit your details and our team will confirm availability by hand.'}</p>
         </>
       )}
