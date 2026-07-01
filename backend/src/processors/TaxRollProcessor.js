@@ -257,6 +257,23 @@ class TaxRollProcessor {
         );
       `);
 
+      // LLC-breaker outputs (break_llcs.js) — created here so discovery's LEFT JOINs always
+      // resolve even before the breaker has run. entity_portfolio: person → entities they're
+      // behind (reverse Comptroller index, lib/agent_reverse.js; distinct from the account-keyed
+      // owner_portfolio built by build_portfolios.js). llc_breaks: sourced, low-confidence web
+      // hints for entities the Comptroller couldn't pin down (lib/llc_breaker.js).
+      await this.db.exec(`
+        CREATE TABLE IF NOT EXISTS entity_portfolio (
+          person_key TEXT PRIMARY KEY, name TEXT, entity_count INTEGER, entities_json TEXT,
+          built_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS llc_breaks (
+          owner_name TEXT PRIMARY KEY, query TEXT, candidates_json TEXT, phones_json TEXT,
+          litigation_json TEXT, ambiguous INTEGER, top_name TEXT, top_role TEXT, top_score INTEGER,
+          resolved_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+
       this.logger.info('Database initialized successfully');
       
     } catch (error) {
@@ -905,7 +922,13 @@ class TaxRollProcessor {
           LEFT JOIN (
             SELECT account_id, owner_type, name_rarity, embedded_name, embedded_role,
                    conf_tier, conf_score, reason FROM owner_enrichment
-          ) oe ON oe.account_id = t.account_id`;
+          ) oe ON oe.account_id = t.account_id
+          LEFT JOIN (
+            SELECT name, entity_count, entities_json FROM entity_portfolio
+          ) op ON op.name = oe.embedded_name
+          LEFT JOIN (
+            SELECT owner_name AS lb_owner_name, candidates_json, phones_json, litigation_json, ambiguous FROM llc_breaks
+          ) lb ON lb.lb_owner_name = t.owner_name`;
       const SELECT = `t.*, le.event_type AS legal_event_type, le.sale_date AS legal_sale_date,
             (le.account_id IS NOT NULL) AS has_preforeclosure,
             vd.owner_age AS owner_age, vd.empty_nester AS empty_nester,
@@ -915,7 +938,10 @@ class TaxRollProcessor {
             (cv.account_id IS NOT NULL) AS has_code_violation, cv.request_type AS code_request_type,
             oe.owner_type AS owner_type, oe.name_rarity AS name_rarity,
             oe.embedded_name AS contact_name, oe.embedded_role AS contact_role,
-            oe.conf_tier AS contact_tier, oe.conf_score AS contact_confidence, oe.reason AS contact_reason`;
+            oe.conf_tier AS contact_tier, oe.conf_score AS contact_confidence, oe.reason AS contact_reason,
+            op.entity_count AS portfolio_count, op.entities_json AS portfolio_entities,
+            lb.candidates_json AS web_candidates, lb.phones_json AS web_phones,
+            lb.litigation_json AS web_litigation, lb.ambiguous AS web_ambiguous`;
 
       // Elderly fires on the tax exemption OR an age-data age >= 60. The county
       // grants the over-65 exemption at a hard 65, but where we have ACTUAL age
@@ -1083,6 +1109,8 @@ class TaxRollProcessor {
    * Format property result for API response
    */
   formatPropertyResult(record) {
+    // Parse a JSON column defensively — the LLC-breaker tables store arrays as TEXT.
+    const safeJson = (s, fallback) => { try { return s ? JSON.parse(s) : fallback; } catch { return fallback; } };
     // Absentee-owner signal is precomputed into the DB (migrate_signal_columns.js)
     // so it can be filtered/ranked in SQL. Same street-token definition.
     const isAbsentee = !!record.is_absentee;
@@ -1188,6 +1216,20 @@ class TaxRollProcessor {
         name: record.contact_name || null,                                      // principal from mailing addr (Tier-0)
         role: record.contact_role || null,                                      // PRES|OWNER|ATTN|C/O|...
         reason: record.contact_reason || null,
+        // Reverse Comptroller index (break_llcs.js LEG 1): other entities this person is behind
+        // — a multi-property seller is a hotter lead than a one-off LLC.
+        portfolio: (record.portfolio_count >= 2)
+          ? { count: record.portfolio_count, entities: safeJson(record.portfolio_entities, []) }
+          : null,
+        // Open-web hints (break_llcs.js LEG 2) — SOURCED, low-confidence, UNVERIFIED. Per our
+        // privacy posture these are leads to confirm, never asserted facts. Only present when
+        // the breaker found something the Comptroller couldn't (agent-service / holding-co shells).
+        webHints: record.web_candidates ? {
+          ambiguous: !!record.web_ambiguous,                                     // multiple plausible people → verify
+          candidates: safeJson(record.web_candidates, []),                       // [{name, role, score, sources[], signals[]}]
+          phones: safeJson(record.web_phones, []),
+          litigation: safeJson(record.web_litigation, []),                       // court-record URLs = bonus distress signal
+        } : null,
       } : null,
       source: 'dallas_county_tax_roll',
       taxYear: record.tax_year,

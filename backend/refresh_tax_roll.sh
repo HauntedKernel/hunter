@@ -117,6 +117,17 @@ else
   log "WARN: owner enrichment rebuild failed (continuing)"
 fi
 
+# 6d. Rebuild the entity portfolio (LLC-breaker LEG 1 — person->entities reverse index from the
+#     cached Comptroller registry, lib/agent_reverse.js). entity_registry is preserved in the copy
+#     (cp'd from live), so LEG 1 has its input. LEG 2 (web) stays gated OFF — no SERP_API_KEY in
+#     cron, so it no-ops and keeps the refresh free + side-effect-light. Non-fatal — enrichment only.
+log "rebuilding entity portfolio (LLC-breaker reverse index)..."
+if HUNTER_DB="$WORK/rebuild.db" nice -n 15 node break_llcs.js >> "$LOG" 2>&1; then
+  log "entity portfolio rebuilt"
+else
+  log "WARN: entity portfolio rebuild failed (continuing)"
+fi
+
 if [ "$MODE" = "--dry-run" ]; then
   log "DRY-RUN OK: rebuilt+validated ${ROWS} rows in copy; live DB NOT swapped."
   exit 0
