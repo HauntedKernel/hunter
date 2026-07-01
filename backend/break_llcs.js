@@ -94,7 +94,8 @@ const WRITEBACK = !args['no-writeback'];
   }
 
   // ---- LEG 2: open-web breaker for UNRESOLVED distinctive entities (gated) ----
-  if (!serp.available()) {
+  // --preview needs no key (it only reads the queue), so let it through the gate.
+  if (!serp.available() && !args.preview) {
     console.log(`\nLEG 2 (web breaker): SERP_API_KEY not set — OFF (no-op).`);
     console.log('  Enable a cheap search provider, then re-run:');
     console.log('    Brave (free tier):  https://brave.com/search/api/   → SERP_PROVIDER=brave  SERP_API_KEY=<token>');
@@ -109,15 +110,36 @@ const WRITEBACK = !args['no-writeback'];
     resolved_at DATETIME DEFAULT CURRENT_TIMESTAMP)`);
 
   const delqFilter = process.env.ALL_ENTITIES === '1' ? '' : 'AND t.is_delinquent = 1';
-  // Distinctive entities the Comptroller did NOT pin down (skip tiers 'registry'/'direct').
+  const VALUE_MIN = Number(process.env.VALUE_MIN || 0);
+  const VALUE_MAX = Number(process.env.VALUE_MAX || 40000);   // above this ≈ big commercial, not a realtor prospect
+  // Realtor's market only: residential + land (Dallas CAD category A/B res, C/D/E land). Excludes
+  // pure commercial/industrial (F) + business personal property (L) — where the miner wastes spend
+  // on national corps that never crack to a person. Override with QUEUE_CATS.
+  const QUEUE_CATS = (process.env.QUEUE_CATS || 'A,B,C,D,E').split(',').map(c => `'${c.trim()}'`).join(',');
+  const catFilter = `AND substr(COALESCE(t.category_code,''),1,1) IN (${QUEUE_CATS})`;
+  // TARGETED QUEUE: distinctive residential/land entities still unresolved (registry/web/linked are
+  // already cracked), ranked by DOLLARS OWED within the prospect value band. Resumable; cap via --limit.
   const targets = await all(`
     SELECT oe.owner_name, MIN(t.owner_address) AS owner_address, COUNT(*) AS parcels,
+           SUM(COALESCE(t.delinquent_amount,0)) AS owed,
            (SELECT officers_json FROM entity_registry e WHERE e.query_name = oe.owner_name) AS officers_json
     FROM owner_enrichment oe JOIN tax_roll t ON t.account_id = oe.account_id
-    WHERE oe.owner_type='entity' AND oe.conf_tier IN ('high','medium') ${delqFilter}
+    WHERE oe.owner_type='entity' AND oe.conf_tier IN ('high','medium') ${delqFilter} ${catFilter}
       AND oe.owner_name NOT IN (SELECT owner_name FROM llc_breaks)
-    GROUP BY oe.owner_name ORDER BY parcels DESC LIMIT ?`, [LIMIT]);
-  console.log(`\nLEG 2 (web breaker via ${serp.PROVIDER}): ${targets.length} unresolved entities, rate ${RATE_MS}ms…`);
+    GROUP BY oe.owner_name HAVING owed >= ${VALUE_MIN} AND owed <= ${VALUE_MAX}
+    ORDER BY owed DESC LIMIT ?`, [LIMIT]);
+
+  // Preview the queue (no searches, no key needed) so spend can be authorized deliberately.
+  if (args.preview) {
+    const totalOwed = targets.reduce((s, t) => s + (t.owed || 0), 0);
+    console.log(`\nQUEUE PREVIEW — top ${targets.length} unresolved entities by dollars owed (VALUE_MIN ${VALUE_MIN}):`);
+    console.log(`  would run ${targets.length} searches; total owed across them $${Math.round(totalOwed).toLocaleString()}`);
+    targets.slice(0, 20).forEach((t, i) => console.log(`   ${String(i + 1).padStart(3)}. ${(t.owner_name || '').slice(0, 38).padEnd(39)} $${Math.round(t.owed || 0).toLocaleString().padStart(9)}  (${t.parcels} parcels)`));
+    if (targets.length > 20) console.log(`   … +${targets.length - 20} more`);
+    await new Promise(res => db.close(res));
+    return;
+  }
+  console.log(`\nLEG 2 (web breaker via ${serp.PROVIDER}): ${targets.length} unresolved entities by value, rate ${RATE_MS}ms…`);
 
   let mined = 0, withHint = 0, promoted = 0, ambiguous = 0, errors = 0;
   for (let i = 0; i < targets.length; i++) {
