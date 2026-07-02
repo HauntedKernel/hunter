@@ -16,6 +16,7 @@ const _ = require('lodash');
 const moment = require('moment');
 const Logger = require('../utils/Logger');
 const SellProbabilityModel = require('./SellProbabilityModel');
+const { classifyOwner } = require('../../lib/entity_resolution');
 
 class MotivationScorer {
   constructor(options = {}) {
@@ -280,6 +281,10 @@ class MotivationScorer {
       // Owner data - enhanced with new structure
       processedOwners: propertyData.processedOwners || {},
       ownerType: propertyData.ownership?.ownershipType || propertyData.processedOwners?.ownerType || 'individual',
+      // Owner NAME + entity flag (classifyOwner is authoritative for LLC/Corp/LP; CAD ownershipType
+      // is unreliable). Drives the hold-time model feature + the "stuck flip" driver.
+      ownerName: propertyData.ownerName || null,
+      isEntity: classifyOwner(propertyData.ownerName) === 'entity',
 
       // Life-stage / legal signals (see STRATEGY.md). `signals.arrest` is null
       // until an arrest data feed is wired.
@@ -1033,8 +1038,22 @@ class MotivationScorer {
       recent: scoringContext.tenureYears != null && scoringContext.tenureYears <= 2,
       dyears: scoringContext.yearsDelinquent,
       totalAmountDue: scoringContext.totalAmountDue,
-      totalValue: scoringContext.currentValue
+      totalValue: scoringContext.currentValue,
+      // Owner-type-segmented hold-time (backtrain_holdtime.js): is_entity is the 2nd-strongest
+      // feature; entity_fresh (≤1yr) captures the flipper churn.
+      isEntity: scoringContext.isEntity,
+      tenureYears: scoringContext.tenureYears
     });
+
+    // "Stuck flip" DRIVER (not a model feature — its lift is already in is_entity+delinquent, but
+    // it's the compelling *why* for the agent): an entity held PAST its flip window (2-6yr) that's
+    // now delinquent — a forced sale (measured 2.8-4.2x univariate; see hold-time analysis).
+    const stuckFlip = scoringContext.isEntity
+      && scoringContext.tenureYears != null && scoringContext.tenureYears >= 2 && scoringContext.tenureYears <= 6
+      && (scoringContext.delinquentAmount || 0) > 0;
+    if (sell && stuckFlip) {
+      sell.drivers = ['Stuck flip (held past window + delinquent)', ...(sell.drivers || [])].slice(0, 4);
+    }
 
     return {
       // Core Results

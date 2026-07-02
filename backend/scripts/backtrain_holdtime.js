@@ -47,7 +47,8 @@ const FN = {
   entity_mid_x_delinq: r => (r.is_entity && r.deed_year >= ASOF_YEAR - 6 && r.deed_year <= ASOF_YEAR - 2 && r.delinq) ? 1 : 0,
 };
 const BASE = ['delinq', 'absentee', 'elderly', 'suit', 'estate', 'recent', 'dyears', 'logdue', 'logval', 'absentee_x_elderly', 'delinq_x_suit', 'recent_x_delinq'];
-const HOLD = ['is_entity', 'entity_fresh', 'entity_mid', 'entity_mid_x_delinq'];
+// Full diagnostic set by default; promote just the earners with HOLD_FEATS=is_entity,entity_fresh.
+const HOLD = (process.env.HOLD_FEATS || 'is_entity,entity_fresh,entity_mid,entity_mid_x_delinq').split(',').map(s => s.trim()).filter(Boolean);
 const CONT = ['dyears', 'logdue', 'logval'];
 
 function trainAndAuc(rows, FEATS) {

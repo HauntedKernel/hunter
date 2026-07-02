@@ -24,7 +24,9 @@ const LABELS = {
   logval: 'Property value',
   absentee_x_elderly: 'Absentee + elderly',
   delinq_x_suit: 'Delinquent + suit',
-  recent_x_delinq: 'Recent buyer + delinquent'
+  recent_x_delinq: 'Recent buyer + delinquent',
+  is_entity: 'Entity-owned (LLC / Corp / LP)',
+  entity_fresh: 'Entity, recently acquired (flip)'
 };
 
 class SellProbabilityModel {
@@ -58,6 +60,10 @@ class SellProbabilityModel {
     const b = (v) => (v ? 1 : 0);
     const delinq = b(f.delinq), absentee = b(f.absentee), elderly = b(f.elderly),
       suit = b(f.suit), estate = b(f.estate), recent = b(f.recent);
+    // Owner-type-segmented hold-time (measured moat, backtrain_holdtime.js): entities sell ~1.5x
+    // more, and a freshly-acquired entity (a flip in motion) more still.
+    const is_entity = b(f.isEntity);
+    const entity_fresh = (is_entity && f.tenureYears != null && f.tenureYears <= 1) ? 1 : 0;
     const raw = {
       delinq, absentee, elderly, suit, estate, recent,
       dyears: f.dyears || 0,
@@ -65,7 +71,8 @@ class SellProbabilityModel {
       logval: Math.log((f.totalValue || 0) + 1),
       absentee_x_elderly: absentee * elderly,
       delinq_x_suit: delinq * suit,
-      recent_x_delinq: recent * delinq
+      recent_x_delinq: recent * delinq,
+      is_entity, entity_fresh
     };
 
     let logit = this.bias;
