@@ -13,6 +13,7 @@ const cors = require('cors');
 const path = require('path');
 const sqlite3 = require('sqlite3');
 const { open } = require('sqlite');
+const { execFile } = require('child_process');
 
 const router = express.Router();
 router.use(cors());
@@ -164,6 +165,36 @@ router.post('/region-request', async (req, res) => {
       [String(region).slice(0, 200), name || null, email, String(note || '').slice(0, 1000)]);
     res.json({ success: true });
   } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// POST /api/catalog/dossier  { entity }  → run the multi-hop web dossier (web_dossier.js) for an
+// entity-owned lead: principal, portfolio, contacts, context/PI, motivation read. Cached 24h +
+// concurrency-guarded so it can't be hammered (each run = ~20 web searches). Gated on SERP_API_KEY.
+const _dossierCache = new Map();
+let _dossierRunning = 0;
+router.post('/dossier', (req, res) => {
+  const entity = String((req.body || {}).entity || '').slice(0, 120).trim();
+  if (!entity) return res.status(400).json({ success: false, error: 'entity required' });
+  if (!process.env.SERP_API_KEY) return res.status(501).json({ success: false, error: 'Deep dossier not configured (set SERP_API_KEY).' });
+  const key = entity.toUpperCase();
+  const hit = _dossierCache.get(key);
+  if (hit && Date.now() - hit.at < 24 * 3600 * 1000) return res.json({ success: true, cached: true, dossier: hit.data });
+  if (_dossierRunning >= 2) return res.status(429).json({ success: false, error: 'Busy — another dossier is running. Try again shortly.' });
+  _dossierRunning++;
+  execFile('node', [path.join(__dirname, '..', '..', 'web_dossier.js'), entity, '--json'], {
+    env: { ...process.env, SERP_PROVIDER: process.env.SERP_PROVIDER || 'brave', MAX_SEARCHES: process.env.DOSSIER_MAX || '20', SERP_RATE_MS: '1100' },
+    timeout: 75000, maxBuffer: 8 * 1024 * 1024,
+  }, (err, stdout) => {
+    _dossierRunning--;
+    if (err) return res.status(500).json({ success: false, error: err.killed ? 'dossier timed out' : err.message });
+    try {
+      const line = String(stdout).trim().split('\n').filter(Boolean).pop();
+      const d = JSON.parse(line);
+      if (d.error) return res.status(501).json({ success: false, error: d.error });
+      _dossierCache.set(key, { at: Date.now(), data: d });
+      res.json({ success: true, dossier: d });
+    } catch (e) { res.status(500).json({ success: false, error: 'dossier parse failed' }); }
+  });
 });
 
 // Validate a purchase is still available (server-side truth — never trust the client tile).

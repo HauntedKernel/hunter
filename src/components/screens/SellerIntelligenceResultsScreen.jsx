@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import SellerIntelligenceService from '../../services/SellerIntelligenceService';
+import DossierModal from '../DossierModal';
+
+// An entity-owned lead (LLC/Corp/LP) — the ones the deep web dossier can crack to a person.
+const isEntityOwner = (name) => /\b(LLC|L\.L\.C|INC\b|INCORPORATED|LP\b|L\.P|LTD|CORP|COMPANY|HOLDINGS|PARTNERS|INVESTMENTS|PROPERTIES|GROUP|TRUST|ENTERPRISES)\b/i.test(name || '');
 
 const prettifySignal = (t) => String(t || '').replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 
@@ -40,6 +44,7 @@ const SellerIntelligenceResultsScreen = ({ onNavigate, searchParams }) => {
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedLead, setSelectedLead] = useState(null);
+  const [dossierEntity, setDossierEntity] = useState(null);
   const [sortBy, setSortBy] = useState('probability');
   const [filterBy, setFilterBy] = useState('all');
   const [signalFilter, setSignalFilter] = useState('all');
@@ -579,6 +584,11 @@ const SellerIntelligenceResultsScreen = ({ onNavigate, searchParams }) => {
                               : 'No contact on file. Load skip-trace results or configure a provider.'}
                           </div>
                         )}
+                        {isEntityOwner(lead.ownerName) && (
+                          <button className="btn btn-sm" style={{ marginTop: 10 }} onClick={() => setDossierEntity(lead.ownerName)}>
+                            🔍 Deep dossier — who&rsquo;s behind this LLC?
+                          </button>
+                        )}
                       </div>
                     </div>
                   )}
@@ -588,6 +598,8 @@ const SellerIntelligenceResultsScreen = ({ onNavigate, searchParams }) => {
           </section>
         </div>
       </div>
+
+      {dossierEntity && <DossierModal entity={dossierEntity} onClose={() => setDossierEntity(null)} />}
 
       {/* Sticky action bar */}
       <div className="action-bar">

@@ -54,6 +54,18 @@ const CatalogService = {
     return data;
   },
 
+  // Deep multi-hop web dossier for an entity-owned lead (principal, portfolio, contacts, context,
+  // motivation). Takes ~20s server-side; results are cached 24h.
+  async dossier(entity) {
+    const res = await fetch(`${API_BASE}/api/catalog/dossier`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ entity }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `dossier ${res.status}`);
+    return data; // { success, cached, dossier }
+  },
+
   // Request a market we don't serve yet.
   async requestRegion({ region, name, email, note }) {
     const res = await fetch(`${API_BASE}/api/catalog/region-request`, {
